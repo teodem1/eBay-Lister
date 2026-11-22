@@ -402,6 +402,30 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 />
               </label>
 
+              <label className="block">
+                <span className="label">Best Offer: lowest offer allowed, % of price (0 = off)</span>
+                <input
+                  className={input}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="99"
+                  step="1"
+                  placeholder="Server default"
+                  value={draft.bestOfferMinPercent ?? ""}
+                  onChange={(e) =>
+                    update("bestOfferMinPercent", e.target.value === "" ? undefined : Number(e.target.value))
+                  }
+                />
+                {!!draft.bestOfferMinPercent && draft.price !== undefined && (
+                  <span className="mt-1 block text-xs text-muted">
+                    Offers under{" "}
+                    {formatMoney(Math.floor(draft.price * (draft.bestOfferMinPercent / 100) * 100) / 100, "CAD")} are declined
+                    automatically; the rest wait for you to accept, counter or decline.
+                  </span>
+                )}
+              </label>
+
               <fieldset>
                 <legend className="label">
                   Package (packed, for calculated shipping){isGuess("package") && <GuessBadge />}

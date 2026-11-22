@@ -122,6 +122,8 @@ export interface OfferInput {
   price: number;
   quantity: number;
   descriptionHtml: string;
+  /** Best Offer: offers under this % of the price are declined automatically. Unset or 0 = no Best Offer. */
+  bestOfferMinPercent?: number;
 }
 
 export interface CategorySuggestion {
@@ -270,6 +272,7 @@ export class EbaySellClient {
         fulfillmentPolicyId: c.fulfillmentPolicyId,
         paymentPolicyId: c.paymentPolicyId,
         returnPolicyId: c.returnPolicyId,
+        bestOfferTerms: bestOfferTerms(offer.price, offer.bestOfferMinPercent, c.currency),
       },
       pricingSummary: { price: { value: offer.price.toFixed(2), currency: c.currency } },
       merchantLocationKey: locationKey,
@@ -464,6 +467,20 @@ export class EbaySellClient {
       .slice(0, 25)
       .map((a) => ({ name: a.localizedAspectName, required: Boolean(a.aspectConstraint?.aspectRequired) }));
   }
+}
+
+/**
+ * Best Offer with no auto-accept: every offer waits for the seller, except offers
+ * under `minPercent`% of the price, which eBay declines automatically
+ * (e.g. 75 on $10.00 declines anything under $7.50).
+ */
+export function bestOfferTerms(price: number, minPercent: number | undefined, currency: string) {
+  if (!minPercent || minPercent <= 0 || minPercent >= 100) return undefined;
+  const decline = Math.floor(price * (minPercent / 100) * 100) / 100;
+  return {
+    bestOfferEnabled: true,
+    autoDeclinePrice: { value: decline.toFixed(2), currency },
+  };
 }
 
 export function promotedCampaignName(percent: number): string {
