@@ -9,7 +9,19 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * For phone testing against your laptop, use your LAN address:
  *   CAP_SERVER_URL=http://192.168.1.20:3000 npm run cap:sync
  */
-const serverUrl = process.env.CAP_SERVER_URL;
+// Accept a bare host ("my-app.vercel.app") and assume HTTPS.
+function normaliseServerUrl(raw: string | undefined): string | undefined {
+  const v = raw?.trim().replace(/\/+$/, "");
+  if (!v) return undefined;
+  const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    return new URL(withScheme).origin;
+  } catch {
+    throw new Error(`CAP_SERVER_URL is not a valid web address: "${raw}"`);
+  }
+}
+
+const serverUrl = normaliseServerUrl(process.env.CAP_SERVER_URL);
 
 // Hosts the in-app web view may open without leaving the app:
 // the server itself plus eBay's sign-in pages (OAuth consent).
