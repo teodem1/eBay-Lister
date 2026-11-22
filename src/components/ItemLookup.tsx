@@ -126,7 +126,7 @@ export default function ItemLookup() {
             type="button"
             disabled={busy}
             onClick={startScan}
-            className="flex min-h-24 items-center gap-4 rounded-2xl bg-brand p-4 text-left text-brand-fg transition-transform active:scale-[0.98] disabled:opacity-50"
+            className="flex min-h-24 items-center gap-4 rounded-2xl bg-brand p-4 text-left text-brand-fg shadow-lift transition-transform active:scale-[0.98] disabled:opacity-50"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-fg/10">
               <Icon name="scan" size={26} strokeWidth={1.8} />

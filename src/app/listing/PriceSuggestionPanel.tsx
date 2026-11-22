@@ -135,7 +135,7 @@ function PriceStrip({ values, selected, currency }: { values: number[]; selected
         ))}
         {selected !== undefined && (
           <span
-            className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-brand ring-2 ring-surface"
+            className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-brand-ink ring-2 ring-surface"
             style={{ left: `${pos(selected)}%` }}
           />
         )}
@@ -277,7 +277,7 @@ function ConfidenceDots({ level }: { level: "low" | "medium" | "high" }) {
   return (
     <span className="flex gap-0.5" aria-hidden>
       {[1, 2, 3].map((i) => (
-        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? "bg-brand" : "bg-line-strong"}`} />
+        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? "bg-brand-ink" : "bg-line-strong"}`} />
       ))}
     </span>
   );
