@@ -32,7 +32,13 @@ export function listingHref(data: LookupResponse): string {
   return qs ? `/listing?${qs}` : "/listing";
 }
 
-/** The item name the listing screen starts from (its ?q=). */
+/**
+ * The item name the listing screen starts from (its ?q=). A CD uses the album
+ * from MusicBrainz ("Artist Album"), not an eBay seller's listing title.
+ * No " - " between them: eBay keyword search reads "-" as "exclude".
+ */
 export function listingQuery(data: LookupResponse): string {
+  const album = data.album;
+  if (album?.title) return [album.artist, album.title].filter(Boolean).join(" ");
   return data.identification?.title || data.query || data.results.items[0]?.title || "";
 }
