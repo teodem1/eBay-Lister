@@ -150,6 +150,9 @@ export class EbaySellClient {
         Accept: "application/json",
         "Content-Type": "application/json",
         "Content-Language": this.config.contentLanguage,
+        // Node's fetch sends "Accept-Language: *" by default, which the Inventory API
+        // rejects (25709 Invalid value for header Accept-Language).
+        "Accept-Language": this.config.contentLanguage,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

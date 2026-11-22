@@ -140,6 +140,15 @@ describe("publishListing", () => {
     expect(calls[0].headers.Authorization).toBe("Bearer DIRECT");
   });
 
+  it("sends an explicit Accept-Language (Node's default '*' is rejected by eBay)", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/inventory/v1/location/default-location": () => [200, {}],
+    });
+    await new EbaySellClient(config, fetchImpl).ensureLocation();
+    expect(calls[1].headers["Accept-Language"]).toBe("en-CA");
+  });
+
   it("prefers the refresh token over a leftover EBAY_USER_TOKEN", async () => {
     const { calls, fetchImpl } = fakeEbay({
       "POST /identity/v1/oauth2/token": token,
