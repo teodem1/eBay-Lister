@@ -18,6 +18,13 @@ export const PhotoIdentificationSchema = z.object({
     .string()
     .describe("UPC/EAN/ISBN digits only if a barcode number is clearly readable, else empty string"),
   conditionNotes: z.string().describe("Visible wear, damage or missing parts; empty if none seen"),
+  music: z
+    .object({
+      artist: z.string().describe("Artist or group name"),
+      album: z.string().describe("Album title"),
+      year: z.string().describe("Original release year (4 digits) if printed or well known, else empty"),
+    })
+    .describe("For a music CD, vinyl or cassette: what is on the cover. All empty strings for anything else"),
   searchQuery: z
     .string()
     .describe("3 to 8 keywords that would find the same item on eBay"),

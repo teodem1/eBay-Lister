@@ -45,6 +45,13 @@ Screens (phone first):
   `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
 
+- `/collection` — `src/app/collection/CollectionScreen.tsx`: every CD looked up on `/` is saved
+  here (cover, album, artist, year, CAD price, user categories), with search, category filter,
+  sort, total inventory value and a JSON backup. Logic in `src/lib/collection/collection.ts`,
+  storage in `src/lib/collection/store.ts` (localStorage on the device, no server DB). Album
+  details come from MusicBrainz + Cover Art Archive (`src/lib/music/musicbrainz.ts`, no key),
+  added to lookup responses as `album`. `TabBar` in `ui.tsx` switches Scan / Collection.
+
 Look and feel: design tokens (light + dark) and component classes (`.page`, `.card`, `.field`,
 `.btn btn-primary`, `.notice`, `.skeleton`...) live in `src/app/globals.css`; shared pieces
 (`AppBar`, `Spinner`, `StepHeading`, `Logo`) in `src/components/ui.tsx`. Use the token colours

@@ -2,6 +2,7 @@ import { getEbayClient } from "@/lib/ebay";
 import { errorResponse } from "@/lib/api-errors";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import type { LookupResponse } from "@/lib/lookup";
+import { albumByBarcode, safely } from "@/lib/music/musicbrainz";
 
 /** POST { code: "0045496453435" } -> eBay listings for that barcode. */
 export async function POST(request: Request) {
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
   try {
     const ebay = getEbayClient();
     const notes: string[] = [];
+    // Album details (for the Collection) load alongside the eBay search.
+    const album = safely(albumByBarcode(gtin));
     let results = await ebay.searchItems({ gtin });
     let query: string | undefined;
     if (results.items.length === 0) {
@@ -30,7 +33,7 @@ export async function POST(request: Request) {
       results = await ebay.searchItems({ q: gtin });
       notes.push("No listing is tagged with this barcode, so these are keyword matches.");
     }
-    const payload: LookupResponse = { source: "barcode", gtin, query, results, notes };
+    const payload: LookupResponse = { source: "barcode", gtin, query, results, album: (await album) ?? undefined, notes };
     return Response.json(payload);
   } catch (err) {
     return errorResponse(err);

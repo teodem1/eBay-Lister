@@ -10,7 +10,9 @@ import type { ItemSummary } from "@/lib/ebay/client";
 import { takeItemPhoto } from "@/lib/native/camera";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
-import { AppBar, Spinner } from "./ui";
+import { itemFromLookup, type CollectionItem } from "@/lib/collection/collection";
+import { collectionStore } from "@/lib/collection/store";
+import { AppBar, Spinner, TabBar } from "./ui";
 
 const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
 
@@ -20,12 +22,36 @@ type Status =
   | { kind: "done"; data: LookupResponse; preview?: string }
   | { kind: "error"; message: string };
 
+/** What the last lookup saved to the Collection, so it can be undone. */
+type Saved = { item: CollectionItem; isNew: boolean; before: CollectionItem[] };
+
 export default function ItemLookup() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [saved, setSaved] = useState<Saved | null>(null);
 
-  async function run(label: string, request: () => Promise<Response>, preview?: string) {
+  /** Every identified item goes into the Collection (a rescan refreshes its entry). */
+  function saveToCollection(data: LookupResponse, thumb?: Promise<string | undefined>) {
+    const item = itemFromLookup(data);
+    if (!item) return;
+    const before = collectionStore.all();
+    const result = collectionStore.save(item);
+    setSaved({ item: result.saved, isNew: result.isNew, before });
+    // No cover from MusicBrainz or eBay: use a small copy of the user's photo.
+    if (!result.saved.coverUrl && thumb) {
+      thumb.then((url) => url && collectionStore.update(result.saved.id, { coverUrl: url }));
+    }
+  }
+
+  function undoSave() {
+    if (!saved) return;
+    collectionStore.restore(saved.before);
+    setSaved(null);
+  }
+
+  async function run(label: string, request: () => Promise<Response>, preview?: string, thumb?: Promise<string | undefined>) {
+    setSaved(null);
     setStatus({ kind: "loading", label, preview });
     try {
       const res = await request();
@@ -35,6 +61,7 @@ export default function ItemLookup() {
         return;
       }
       setStatus({ kind: "done", data: json, preview });
+      saveToCollection(json, thumb);
     } catch {
       setStatus({ kind: "error", message: "Network error. Check your connection and try again." });
     }
@@ -99,7 +126,12 @@ export default function ItemLookup() {
     }
     const form = new FormData();
     form.append("image", blob, "photo.jpg");
-    run("Identifying the item…", () => fetch("/api/lookup/photo", { method: "POST", body: form }), preview);
+    run(
+      "Identifying the item…",
+      () => fetch("/api/lookup/photo", { method: "POST", body: form }),
+      preview,
+      thumbnailDataUrl(file),
+    );
   }
 
   const busy = status.kind === "loading";
@@ -108,7 +140,7 @@ export default function ItemLookup() {
   return (
     <>
       <AppBar title="eBay Lister" />
-      <main className="page">
+      <main className="page page-tabs">
         <header className="pt-2">
           <h1 className="text-[1.75rem] font-bold leading-tight tracking-tight">What are you selling?</h1>
           <p className="mt-1.5 text-[0.9375rem] text-muted">
@@ -185,12 +217,51 @@ export default function ItemLookup() {
           </p>
         )}
 
+        {status.kind === "done" && saved && <SavedNotice saved={saved} onUndo={undoSave} />}
+
         {status.kind === "done" && <Results data={status.data} preview={status.preview} />}
 
         {scanning && <BarcodeScanner onDetected={lookupBarcode} onClose={() => setScanning(false)} />}
       </main>
+      <TabBar active="scan" />
     </>
   );
+}
+
+function SavedNotice({ saved, onUndo }: { saved: Saved; onUndo: () => void }) {
+  const { item } = saved;
+  return (
+    <div className="notice notice-ok fade-in flex items-center gap-3" role="status">
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold">{saved.isNew ? "Added to your Collection" : "Updated in your Collection"}</span>
+        <span className="block truncate text-xs opacity-90">
+          {item.artist ? `${item.artist} · ` : ""}
+          {item.title}
+        </span>
+      </span>
+      <button type="button" onClick={onUndo} className="link px-1 text-sm">
+        Undo
+      </button>
+      <Link href="/collection" className="link px-1 text-sm">
+        View
+      </Link>
+    </div>
+  );
+}
+
+/** ~200px JPEG data URL of the photo, small enough to keep in local storage. */
+async function thumbnailDataUrl(file: File): Promise<string | undefined> {
+  try {
+    const blob = await resizeImage(file, 200, 0.7);
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : undefined);
+      reader.onerror = () => resolve(undefined);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 function HowItWorks() {
@@ -271,6 +342,13 @@ function Results({ data, preview }: { data: LookupResponse; preview?: string }) 
             {id.category && <Row label="Category" value={id.category} />}
             {data.gtin && <Row label="Barcode" value={data.gtin} />}
             {id.conditionNotes && <Row label="Condition" value={id.conditionNotes} />}
+          </dl>
+        )}
+        {data.album && (
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
+            <Row label="Album" value={data.album.title} />
+            {data.album.artist && <Row label="Artist" value={data.album.artist} />}
+            {data.album.year && <Row label="Released" value={String(data.album.year)} />}
           </dl>
         )}
         {data.query && <p className="mt-3 text-xs text-subtle">Searched eBay for “{data.query}”</p>}
