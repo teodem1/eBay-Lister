@@ -6,7 +6,7 @@ const config = {
   env: "sandbox" as const,
   clientId: "id",
   clientSecret: "secret",
-  marketplaceId: "EBAY_FR",
+  marketplaceId: "EBAY_CA",
 };
 
 function json(status: number, body: unknown): Response {
@@ -16,24 +16,24 @@ function json(status: number, body: unknown): Response {
 const soldItem = {
   itemId: "v1|1|0",
   title: "Nintendo Switch OLED",
-  lastSoldPrice: { value: "250.00", currency: "EUR" },
+  lastSoldPrice: { value: "250.00", currency: "CAD" },
   lastSoldDate: "2026-11-01T10:00:00.000Z",
   totalSoldQuantity: 2,
   condition: "Used",
-  itemLocation: { country: "FR", postalCode: "750**" },
+  itemLocation: { country: "CA", postalCode: "M5V" },
   shippingOptions: [
-    { shippingCost: { value: "9.99", currency: "EUR" } },
-    { shippingCost: { value: "6.50", currency: "EUR" } },
+    { shippingCost: { value: "9.99", currency: "CAD" } },
+    { shippingCost: { value: "6.50", currency: "CAD" } },
   ],
-  itemWebUrl: "https://www.ebay.fr/itm/1",
+  itemWebUrl: "https://www.ebay.ca/itm/1",
 };
 
 describe("request building", () => {
   it("builds the filter and end-user context", () => {
-    const q = { conditionIds: ["1000", "3000"], itemLocationCountries: ["FR"], destinationCountry: "FR" };
-    expect(buildFilter(q)).toBe("conditionIds:{1000|3000},itemLocationCountry:FR,deliveryCountry:FR");
-    expect(buildEndUserCtx({ destinationCountry: "FR", destinationPostalCode: "75001" })).toBe(
-      "contextualLocation=country%3DFR%2Czip%3D75001",
+    const q = { conditionIds: ["1000", "3000"], itemLocationCountries: ["CA"], destinationCountry: "CA" };
+    expect(buildFilter(q)).toBe("conditionIds:{1000|3000},itemLocationCountry:CA,deliveryCountry:CA");
+    expect(buildEndUserCtx({ destinationCountry: "CA", destinationPostalCode: "M5V3L9" })).toBe(
+      "contextualLocation=country%3DCA%2Czip%3DM5V3L9",
     );
   });
 });
@@ -49,23 +49,23 @@ describe("findComparables", () => {
     const res = await findComparables(new EbayClient(config, fetchMock), {
       gtin: "0045496453435",
       keywords: "ignored when gtin set",
-      destinationCountry: "FR",
+      destinationCountry: "CA",
     });
 
     expect(res.source).toBe("marketplace_insights");
     expect(res.items).toHaveLength(1);
     expect(res.items[0]).toMatchObject({
-      price: { value: 250, currency: "EUR" },
-      shippingCost: { value: 6.5, currency: "EUR" },
-      itemLocation: { country: "FR", postalCode: "750**" },
-      shippingDestination: "FR",
+      price: { value: 250, currency: "CAD" },
+      shippingCost: { value: 6.5, currency: "CAD" },
+      itemLocation: { country: "CA", postalCode: "M5V" },
+      shippingDestination: "CA",
       quantitySold: 2,
     });
     const searchUrl = new URL(String(fetchMock.mock.calls[1][0]));
     expect(searchUrl.searchParams.get("gtin")).toBe("0045496453435");
     expect(searchUrl.searchParams.get("q")).toBeNull();
     const headers = fetchMock.mock.calls[1][1]!.headers as Record<string, string>;
-    expect(headers["X-EBAY-C-MARKETPLACE-ID"]).toBe("EBAY_FR");
+    expect(headers["X-EBAY-C-MARKETPLACE-ID"]).toBe("EBAY_CA");
   });
 
   it("falls back to Browse active listings when Insights scope is refused", async () => {
@@ -79,7 +79,7 @@ describe("findComparables", () => {
       }
       if (u.includes("/buy/browse/")) {
         return json(200, {
-          itemSummaries: [{ ...soldItem, lastSoldPrice: undefined, price: { value: "280.00", currency: "EUR" } }],
+          itemSummaries: [{ ...soldItem, lastSoldPrice: undefined, price: { value: "280.00", currency: "CAD" } }],
         });
       }
       throw new Error("unexpected " + u);

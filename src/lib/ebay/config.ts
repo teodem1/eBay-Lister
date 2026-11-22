@@ -6,7 +6,7 @@ export interface EbayConfig {
   env: EbayEnv;
   clientId: string;
   clientSecret: string;
-  /** e.g. EBAY_FR, EBAY_US, EBAY_GB, EBAY_DE. */
+  /** e.g. EBAY_CA, EBAY_US, EBAY_GB, EBAY_DE. */
   marketplaceId: string;
 }
 
@@ -30,7 +30,7 @@ export function loadEbayConfig(
     env: env.EBAY_ENV === "production" ? "production" : "sandbox",
     clientId,
     clientSecret,
-    // GUESS: default marketplace. Change EBAY_MARKETPLACE_ID if you sell elsewhere.
-    marketplaceId: env.EBAY_MARKETPLACE_ID || "EBAY_FR",
+    // Guillaume sells on eBay.ca. Override with EBAY_MARKETPLACE_ID.
+    marketplaceId: env.EBAY_MARKETPLACE_ID || "EBAY_CA",
   };
 }

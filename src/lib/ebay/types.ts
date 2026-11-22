@@ -54,7 +54,7 @@ export interface ComparableQuery {
   categoryId?: string;
   /** eBay condition ids, e.g. ["1000"] for New, ["3000"] for Used. */
   conditionIds?: string[];
-  /** Country the buyer is in, ISO 3166 alpha-2 (e.g. "FR"). Used to quote shipping. */
+  /** Country the buyer is in, ISO 3166 alpha-2 (e.g. "CA"). Used to quote shipping. */
   destinationCountry?: string;
   /** Postal code at the destination, for more accurate calculated shipping. */
   destinationPostalCode?: string;

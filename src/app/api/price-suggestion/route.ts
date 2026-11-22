@@ -2,7 +2,7 @@
  * POST /api/price-suggestion
  *
  * Body (JSON): ComparableQuery plus optional `myShippingCost`, e.g.
- *   { "gtin": "0045496590093", "destinationCountry": "FR", "conditionIds": ["3000"] }
+ *   { "gtin": "0045496590093", "destinationCountry": "CA", "conditionIds": ["3000"] }
  *
  * Returns the price suggestion and the comparables used. Runs server-side so
  * the eBay client secret never reaches the phone.
@@ -35,7 +35,11 @@ export async function POST(request: Request) {
 
   try {
     const { myShippingCost, ...query } = body;
-    const comparables = await findComparables(getClient(), query);
+    const ebay = getClient();
+    // Quote shipping to the marketplace's own country unless told otherwise
+    // (EBAY_CA -> CA).
+    query.destinationCountry ??= ebay.config.marketplaceId.replace(/^EBAY_/, "");
+    const comparables = await findComparables(ebay, query);
     const suggestion = suggestPrice(comparables, { myShippingCost });
     return Response.json({ suggestion, comparables });
   } catch (err) {

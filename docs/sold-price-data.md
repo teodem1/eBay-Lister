@@ -12,7 +12,7 @@
 
 eBay does not tell you where a sold item was actually shipped. What we can get
 is the shipping cost **to a destination we choose**, by sending
-`X-EBAY-C-ENDUSERCTX: contextualLocation=country=FR,zip=75001`. So
+`X-EBAY-C-ENDUSERCTX: contextualLocation=country=CA,zip=M5V3L9`. So
 "destination" in the data is the buyer location we asked about, and "origin"
 is the listing's `itemLocation`.
 

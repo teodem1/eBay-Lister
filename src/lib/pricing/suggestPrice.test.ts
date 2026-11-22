@@ -6,10 +6,10 @@ function comp(price: number, ship: number | null, over: Partial<Comparable> = {}
   return {
     itemId: `${price}-${ship}-${Math.random()}`,
     title: "x",
-    price: { value: price, currency: "EUR" },
-    shippingCost: ship === null ? null : { value: ship, currency: "EUR" },
-    itemLocation: { country: "FR", postalCode: null },
-    shippingDestination: "FR",
+    price: { value: price, currency: "CAD" },
+    shippingCost: ship === null ? null : { value: ship, currency: "CAD" },
+    itemLocation: { country: "CA", postalCode: null },
+    shippingDestination: "CA",
     condition: "Used",
     soldDate: "2026-11-20T00:00:00Z",
     quantitySold: 1,
@@ -38,7 +38,7 @@ describe("removeOutliers", () => {
 describe("suggestPrice", () => {
   const sold: ComparableResult = {
     source: "marketplace_insights",
-    marketplaceId: "EBAY_FR",
+    marketplaceId: "EBAY_CA",
     notes: [],
     items: [
       ...[40, 42, 44, 45, 46, 48, 50].map((p) => comp(p, 5)),
@@ -57,7 +57,7 @@ describe("suggestPrice", () => {
     expect(s.itemPrice.quickSale).toBeLessThanOrEqual(s.itemPrice.recommended);
     expect(s.itemPrice.high).toBeGreaterThanOrEqual(s.itemPrice.recommended);
     expect(s.byOrigin.find((o) => o.country === "DE")?.count).toBe(1);
-    expect(s.shippingDestination).toBe("FR");
+    expect(s.shippingDestination).toBe("CA");
   });
 
   it("uses the seller's own shipping cost when given", () => {
