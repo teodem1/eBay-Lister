@@ -1,3 +1,29 @@
-.env
-.env.*
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js / build
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# env files (secrets) — keep the example
+.env*
+!.env.example
+
+# claude code personal settings
 .claude/settings.local.json
+
+# vercel
+.vercel
