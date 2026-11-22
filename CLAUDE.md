@@ -24,6 +24,16 @@ through server-side API routes so the client secret never reaches the browser.
 Copy `.env.example` to `.env` and fill in your eBay keys (use `EBAY_ENV=sandbox`
 while developing).
 
+## Structure
+
+- `src/lib/ebay/` — eBay client (app token + Browse search). Server-only.
+- `src/lib/identify/` — Claude vision photo identification, barcode helpers.
+- `src/app/api/lookup/{barcode,photo}/route.ts` — lookup API routes.
+- `src/components/ItemLookup.tsx` — phone page: photo, barcode scan, results.
+
+Env: `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_ENV`, `EBAY_MARKETPLACE_ID`,
+`ANTHROPIC_API_KEY`. Camera access on a phone needs HTTPS (localhost is fine).
+
 ## Conventions
 
 - Never commit secrets: eBay API keys, OAuth tokens, `.env` files. Load
