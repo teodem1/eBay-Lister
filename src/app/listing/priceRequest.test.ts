@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchPriceSuggestion, formatMoney, isGtin, priceSuggestionBody } from "./priceRequest";
+import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
+import { defaultPrice, fetchPriceSuggestion, formatMoney, isGtin, priceSuggestionBody } from "./priceRequest";
 
 describe("priceSuggestionBody", () => {
   it("sends a valid barcode as gtin together with keywords", () => {
@@ -38,9 +39,13 @@ describe("fetchPriceSuggestion", () => {
     vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
 
   it("posts the query and returns the suggestion", async () => {
-    const f = ok({ suggestion: { currency: "CAD" }, comparables: {} });
+    const f = ok({
+      current: { suggestion: { currency: "CAD" }, comparables: {} },
+      sold: null,
+      unavailable: { sold: "not approved" },
+    });
     const r = await fetchPriceSuggestion({ keywords: "x" }, f);
-    expect(r).toEqual({ suggestion: { currency: "CAD" } });
+    expect(r).toEqual({ current: { currency: "CAD" }, sold: null, unavailable: { sold: "not approved" } });
     expect(f).toHaveBeenCalledWith("/api/price-suggestion", expect.objectContaining({ method: "POST" }));
   });
 
@@ -55,5 +60,23 @@ describe("fetchPriceSuggestion", () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
     expect(await fetchPriceSuggestion({ keywords: "x" }, f)).toEqual({ error: "offline" });
+  });
+});
+
+describe("defaultPrice", () => {
+  const s = (recommended: number, usedCount = 10) =>
+    ({ usedCount, itemPrice: { quickSale: 1, recommended, high: 2 } }) as PriceSuggestion;
+
+  it("prefers the last-sold price", () => {
+    expect(defaultPrice({ current: s(300), sold: s(250), unavailable: {} })).toBe(250);
+  });
+
+  it("falls back to the current price without sold data", () => {
+    expect(defaultPrice({ current: s(300), sold: null, unavailable: {} })).toBe(300);
+    expect(defaultPrice({ current: s(300), sold: s(250, 0), unavailable: {} })).toBe(300);
+  });
+
+  it("is undefined with no data", () => {
+    expect(defaultPrice({ current: null, sold: null, unavailable: {} })).toBeUndefined();
   });
 });

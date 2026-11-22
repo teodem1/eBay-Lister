@@ -213,3 +213,51 @@ export async function findComparables(
     ],
   };
 }
+
+export interface BothComparables {
+  /** Active listings right now (Browse API). Null only if that search failed. */
+  current: ComparableResult | null;
+  /** Items sold in the last 90 days (Marketplace Insights). Null when unavailable. */
+  sold: ComparableResult | null;
+  /** Why `current` or `sold` is missing, for the user. */
+  unavailable: { current?: string; sold?: string };
+}
+
+export const SOLD_ACCESS_NOTE =
+  "eBay only gives sold prices to apps it approves for its Marketplace Insights API, and this app is not approved.";
+
+/**
+ * Runs the active-listing and sold searches side by side so the screen can
+ * show a "current listings" price and a "last sold" price. One failing never
+ * hides the other; throws only when both fail.
+ */
+export async function findBothComparables(
+  client: EbayClient,
+  q: ComparableQuery,
+): Promise<BothComparables> {
+  const marketplaceId = client.config.marketplaceId;
+  const [active, sold] = await Promise.allSettled([searchActive(client, q), searchSold(client, q)]);
+  const unavailable: BothComparables["unavailable"] = {};
+  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  let current: ComparableResult | null = null;
+  if (active.status === "fulfilled") {
+    current = { source: "browse_active", marketplaceId, items: active.value, notes: [] };
+  } else {
+    unavailable.current = `Current listings search failed: ${message(active.reason)}`;
+  }
+
+  let soldResult: ComparableResult | null = null;
+  if (sold.status === "fulfilled") {
+    soldResult = { source: "marketplace_insights", marketplaceId, items: sold.value, notes: [] };
+  } else {
+    unavailable.sold = isAccessDenied(sold.reason)
+      ? SOLD_ACCESS_NOTE
+      : `Sold search failed: ${message(sold.reason)}`;
+  }
+
+  if (!current && !soldResult) {
+    throw active.status === "rejected" ? active.reason : new Error(unavailable.sold);
+  }
+  return { current, sold: soldResult, unavailable };
+}

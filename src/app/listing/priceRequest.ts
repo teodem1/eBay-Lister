@@ -29,11 +29,26 @@ export function formatMoney(amount: number, currency: string): string {
   }
 }
 
+export interface PriceCheck {
+  /** From active eBay listings right now (asking prices). */
+  current: PriceSuggestion | null;
+  /** From items sold in the last 90 days. */
+  sold: PriceSuggestion | null;
+  /** Why a price is missing, shown to the user. */
+  unavailable: { current?: string; sold?: string };
+}
+
+/** The price to prefill: last-sold recommended when there is one, else current. */
+export function defaultPrice(check: PriceCheck): number | undefined {
+  const usable = (s: PriceSuggestion | null) => (s && s.usedCount > 0 ? s : null);
+  return (usable(check.sold) ?? usable(check.current))?.itemPrice.recommended;
+}
+
 /** Calls POST /api/price-suggestion. Never throws: failures come back as { error }. */
 export async function fetchPriceSuggestion(
   body: ComparableQuery,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ suggestion: PriceSuggestion } | { error: string }> {
+): Promise<PriceCheck | { error: string }> {
   try {
     const res = await fetchImpl("/api/price-suggestion", {
       method: "POST",
@@ -41,8 +56,12 @@ export async function fetchPriceSuggestion(
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.suggestion) return { error: data?.error ?? "Price check failed" };
-    return { suggestion: data.suggestion as PriceSuggestion };
+    if (!res.ok || !("current" in data || "sold" in data)) return { error: data?.error ?? "Price check failed" };
+    return {
+      current: data.current?.suggestion ?? null,
+      sold: data.sold?.suggestion ?? null,
+      unavailable: data.unavailable ?? {},
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Price check failed" };
   }

@@ -2,11 +2,19 @@
 
 | Source | What it gives | Access | Used as |
 |---|---|---|---|
-| Marketplace Insights API `item_sales/search` | Items **sold** in the last 90 days: sold price, sold date, quantity, item location, shipping options | Limited Release. eBay must approve the app (business case) before the `buy.marketplace.insights` scope works | Primary |
-| Browse API `item_summary/search` | **Active** listings: asking price, item location, shipping cost to a chosen destination | Open to every keyset | Automatic fallback, discounted 15% (a guess) |
+| Marketplace Insights API `item_sales/search` | Items **sold** in the last 90 days: sold price, sold date, quantity, item location, shipping options | Limited Release. eBay must approve the app (business case) before the `buy.marketplace.insights` scope works | "Last sold" price |
+| Browse API `item_summary/search` | **Active** listings: asking price, item location, shipping cost to a chosen destination | Open to every keyset | "Current listings" price (no discount) |
 | Finding API `findCompletedItems` | Used to return sold items | Decommissioned by eBay in 2025 | Not used |
 | Terapeak (Seller Hub › Research) | Up to 3 years of sold data | Web UI only, no public API | Manual check |
 | Scraping eBay "Sold items" search | Sold prices | Against eBay's user agreement, fragile | Not used |
+
+## Two prices on the listing screen
+
+`/api/price-suggestion` runs both searches side by side (`findBothComparables`)
+and returns a `current` and a `sold` suggestion. The listing screen shows both
+and prefills the last-sold recommended price, or the current one when sold data
+is missing. Without Marketplace Insights approval the "Last sold" card says so
+and only the current price is filled.
 
 ## Shipping destination
 
@@ -25,6 +33,6 @@ the app runs on the Browse fallback and tells the user so.
 ## Code
 
 - `src/lib/ebay/client.ts`: OAuth app token + GET helper (mockable `fetch`).
-- `src/lib/ebay/comparables.ts`: queries both APIs, normalises results, falls back.
+- `src/lib/ebay/comparables.ts`: queries both APIs, normalises results (`findBothComparables` for the two prices, `findComparables` for sold-with-fallback).
 - `src/lib/pricing/suggestPrice.ts`: outlier removal, weighting, suggestion.
 - `src/app/api/price-suggestion/route.ts`: `POST` endpoint for the phone UI.

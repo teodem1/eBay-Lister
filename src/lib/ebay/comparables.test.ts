@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { EbayClient, type FetchLike } from "./client";
-import { buildEndUserCtx, buildFilter, findComparables } from "./comparables";
+import { buildEndUserCtx, buildFilter, findBothComparables, findComparables } from "./comparables";
 
 const config = {
   env: "sandbox" as const,
@@ -101,5 +101,54 @@ describe("findComparables", () => {
     await expect(
       findComparables(new EbayClient(config, fetchMock), { keywords: "x" }),
     ).rejects.toThrow(/500/);
+  });
+});
+
+describe("findBothComparables", () => {
+  const activeItem = { ...soldItem, lastSoldPrice: undefined, price: { value: "280.00", currency: "CAD" } };
+
+  it("returns current and sold results side by side", async () => {
+    const fetchMock = vi.fn<FetchLike>(async (url) => {
+      const u = String(url);
+      if (u.includes("oauth2/token")) return json(200, { access_token: "t", expires_in: 7200 });
+      if (u.includes("marketplace_insights")) return json(200, { itemSales: [soldItem] });
+      if (u.includes("/buy/browse/")) return json(200, { itemSummaries: [activeItem] });
+      throw new Error("unexpected " + u);
+    });
+    const res = await findBothComparables(new EbayClient(config, fetchMock), { keywords: "switch oled" });
+
+    expect(res.current?.source).toBe("browse_active");
+    expect(res.current?.items[0].price.value).toBe(280);
+    expect(res.sold?.source).toBe("marketplace_insights");
+    expect(res.sold?.items[0].price.value).toBe(250);
+    expect(res.unavailable).toEqual({});
+  });
+
+  it("keeps the current price and explains why sold prices are missing", async () => {
+    const fetchMock = vi.fn<FetchLike>(async (url, init) => {
+      const u = String(url);
+      if (u.includes("oauth2/token")) {
+        const scope = new URLSearchParams(String(init?.body)).get("scope")!;
+        return scope.endsWith("buy.marketplace.insights")
+          ? json(400, { error: "invalid_scope" })
+          : json(200, { access_token: "t", expires_in: 7200 });
+      }
+      if (u.includes("/buy/browse/")) return json(200, { itemSummaries: [activeItem] });
+      throw new Error("unexpected " + u);
+    });
+    const res = await findBothComparables(new EbayClient(config, fetchMock), { keywords: "x" });
+
+    expect(res.current?.items).toHaveLength(1);
+    expect(res.sold).toBeNull();
+    expect(res.unavailable.sold).toMatch(/Marketplace Insights/);
+  });
+
+  it("throws only when both searches fail", async () => {
+    const fetchMock = vi.fn<FetchLike>(async (url) =>
+      String(url).includes("oauth2/token")
+        ? json(200, { access_token: "t", expires_in: 7200 })
+        : json(500, { errors: [] }),
+    );
+    await expect(findBothComparables(new EbayClient(config, fetchMock), { keywords: "x" })).rejects.toThrow(/500/);
   });
 });
