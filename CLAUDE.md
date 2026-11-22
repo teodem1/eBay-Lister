@@ -24,6 +24,14 @@ through server-side API routes so the client secret never reaches the browser.
 Copy `.env.example` to `.env` and fill in your eBay keys (use `EBAY_ENV=sandbox`
 while developing).
 
+## Layout
+
+- `src/lib/ebay/sell.ts` — eBay client (OAuth, Inventory API, Taxonomy). `fetch` is injectable for tests.
+- `src/lib/ebay/publish.ts` — publish flow: location → inventory item → offer (create or update) → publish.
+  Ported from `ebay_handler.py` in teodem1/ebay-item-listings-anthropic-claude.
+- `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
+- `src/app/listing/` — review/edit screen; `src/app/api/listing/{generate,publish}` — server routes.
+
 ## Conventions
 
 - Never commit secrets: eBay API keys, OAuth tokens, `.env` files. Load
