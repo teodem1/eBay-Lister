@@ -56,7 +56,11 @@ Screens (phone first):
 
 Look and feel: design tokens (light + dark) and component classes (`.page`, `.card`, `.field`,
 `.btn btn-primary`, `.notice`, `.skeleton`...) live in `src/app/globals.css`; shared pieces
-(`AppBar`, `Spinner`, `StepHeading`, `Logo`) in `src/components/ui.tsx`. Use the token colours
+(`AppBar`, `Spinner`, `StepHeading`, `Logo`, `Icon`, `TabBar`) in `src/components/ui.tsx`. Text uses the type
+scale classes `.t-display/.t-title/.t-headline/.t-small/.t-caption` (12px floor, no ad hoc sizes). Selected
+states use `.choice` / `.chip-toggle` with `aria-pressed` (tinted + outline + check), never the solid
+primary colour, which is kept for the one main action. Icons come from `Icon` only. Design rationale and
+before/after screenshots: `docs/redesign/`. Use the token colours
 (`bg-surface`, `text-muted`, `border-line`, `bg-brand`...) rather than raw Tailwind palette colours.
 
 Server code:

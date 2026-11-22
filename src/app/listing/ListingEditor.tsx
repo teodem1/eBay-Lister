@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppBar, Spinner, StepHeading } from "@/components/ui";
+import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
@@ -42,7 +42,12 @@ const input = "field";
 const field = (guess: boolean) => (guess ? "field field-guess" : input);
 
 function GuessBadge() {
-  return <span className="chip ml-2 bg-warn-soft py-0 text-warn-ink">guess, check it</span>;
+  return (
+    <span className="chip ml-2 bg-warn-soft py-0 text-warn-ink">
+      <Icon name="alert" size={12} strokeWidth={2.6} />
+      guess
+    </span>
+  );
 }
 
 export default function ListingEditor({ initial }: { initial: { query: string; barcode: string; price?: number } }) {
@@ -56,7 +61,9 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   const [draft, setDraft] = useState<Draft | null>(null);
   const [guessed, setGuessed] = useState<Set<string>>(new Set());
   const [imageText, setImageText] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  // "Shipping and offers" starts open when Claude guessed the package size.
+  const [moreOpen, setMoreOpen] = useState(false);
   const [published, setPublished] = useState<PublishOk | null>(null);
   // The price to list at: from ?price=, a suggestion option, or typed by the user.
   const [price, setPrice] = useState<number | undefined>(initial.price);
@@ -148,6 +155,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
       // Keep the price chosen on this screen even if it changed while Claude was writing.
       setDraft({ ...g.draft, price: price ?? g.draft.price });
       setGuessed(new Set(g.guessedFields));
+      setMoreOpen(g.guessedFields.includes("package"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -206,37 +214,52 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
     </div>
   );
 
+  const currency = priceCheck?.sold?.currency ?? priceCheck?.current?.currency ?? "CAD";
+  const dims = draft?.packageDimensionsCm;
+  const optionsSummary = draft
+    ? [
+        draft.packageWeightKg ? `${draft.packageWeightKg} kg` : "No weight",
+        dims && dims.length && dims.width && dims.height ? `${dims.length}×${dims.width}×${dims.height} cm` : null,
+        `Promoted ${draft.promotedPercent ?? "default"}${draft.promotedPercent !== undefined ? "%" : ""}`,
+        `Offers ${draft.bestOfferMinPercent === 0 ? "off" : draft.bestOfferMinPercent !== undefined ? `≥ ${draft.bestOfferMinPercent}%` : "default"}`,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+
   return (
     <>
       <AppBar title="Create listing" back={{ href: "/", label: "Find another item" }} />
-      <main className={`page ${draft ? "pb-48" : ""}`}>
-        <section className="card space-y-4">
+      <main className={`page ${draft ? "pb-36" : ""}`}>
+        <section className="flex flex-col gap-3">
           <StepHeading n={1} title="Item" hint="What you're selling. Your notes help Claude get it right." />
-          <label className="block">
-            <span className="label">Item</span>
-            <input
-              className={input}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. Nintendo Switch OLED white"
-            />
-          </label>
-          <label className="block">
-            <span className="label">
-              Barcode <span className="font-normal text-subtle">(optional)</span>
-            </span>
-            <input className={input} inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className="label">Your notes</span>
-            <textarea
-              className={input}
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Condition, what's included, defects"
-            />
-          </label>
+          <div className="card space-y-4">
+            <label className="block">
+              <span className="label">Item</span>
+              <input
+                className={input}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g. Fleetwood Mac Rumours CD"
+              />
+            </label>
+            <label className="block">
+              <span className="label">
+                Barcode <span className="font-normal text-muted">(optional)</span>
+              </span>
+              <input className={input} inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="label">Your notes</span>
+              <textarea
+                className={input}
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Condition, what's included, defects"
+              />
+            </label>
+          </div>
         </section>
 
         <PriceSuggestionPanel
@@ -248,7 +271,11 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
           onRefresh={refreshSuggestion}
         />
 
-        <button className="btn btn-primary btn-lg w-full" disabled={!query.trim() || loading !== null} onClick={generate}>
+        <button
+          className={`btn ${draft ? "btn-secondary" : "btn-primary btn-lg"} w-full`}
+          disabled={!query.trim() || loading !== null}
+          onClick={generate}
+        >
           {loading === "generate" ? (
             <>
               <Spinner /> Writing listing…
@@ -265,49 +292,67 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
         {loading === "generate" && !draft && <DraftSkeleton />}
 
         {generated && draft && (
-          <section className={`space-y-4 fade-in ${loading === "generate" ? "opacity-60" : ""}`}>
-            <div className="px-1">
-              <StepHeading n={3} title="Review" hint="Fields in amber are Claude's guesses. Check them before publishing." />
-            </div>
+          <section className={`flex flex-col gap-3 fade-in ${loading === "generate" ? "opacity-60" : ""}`}>
+            <StepHeading
+              n={3}
+              title="Review"
+              hint="Amber fields are Claude's guesses."
+              action={
+                guessCount > 0 ? (
+                  <span className="chip shrink-0 bg-warn-soft py-1 text-warn-ink">
+                    <Icon name="alert" size={14} strokeWidth={2.4} />
+                    {guessCount} to check
+                  </span>
+                ) : (
+                  <span className="chip shrink-0 bg-ok-soft py-1 text-ok-ink">
+                    <Icon name="check" size={14} strokeWidth={2.6} />
+                    All checked
+                  </span>
+                )
+              }
+            />
 
             {(generated.warnings.length > 0 || generated.checks.length > 0) && (
-              <div className="notice notice-warn">
-                <p className="font-semibold">Check before publishing</p>
-                <ul className="mt-1 list-disc pl-5">
-                  {[...generated.warnings, ...generated.checks].map((c) => (
-                    <li key={c}>{c}</li>
-                  ))}
-                </ul>
+              <div className="notice notice-warn flex gap-2.5">
+                <Icon name="alert" className="mt-0.5" />
+                <div>
+                  <p className="font-semibold">Check before publishing</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {[...generated.warnings, ...generated.checks].map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
 
             <div className="card space-y-4">
+              <h3 className="t-headline">Basics</h3>
               <label className="block">
                 <span className="label flex items-center">
                   <span className="flex-1">
                     Title{isGuess("title") && <GuessBadge />}
                   </span>
                   <span
-                    className={`text-xs font-semibold tabular-nums ${draft.title.length > TITLE_MAX ? "text-bad-ink" : "text-subtle"}`}
+                    className={`t-caption tabular-nums ${draft.title.length > TITLE_MAX ? "text-bad-ink" : "text-muted"}`}
                   >
                     {draft.title.length}/{TITLE_MAX}
                   </span>
                 </span>
-                <input
-                  className={field(isGuess("title"))}
+                <textarea
+                  className={`${field(isGuess("title"))} resize-none`}
+                  rows={2}
                   value={draft.title}
                   maxLength={TITLE_MAX}
-                  onChange={(e) => update("title", e.target.value)}
+                  onChange={(e) => update("title", e.target.value.replace(/\n/g, " "))}
                 />
               </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="label">
-                    Price ({priceCheck?.sold?.currency ?? priceCheck?.current?.currency ?? "CAD"})
-                  </span>
+                  <span className="label">Price ({currency})</span>
                   <input
-                    className={`${input} font-semibold`}
+                    className={`${input} font-semibold tabular-nums`}
                     type="number"
                     inputMode="decimal"
                     min="0"
@@ -362,6 +407,24 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 )}
               </label>
 
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="label">Brand / label{isGuess("brand") && <GuessBadge />}</span>
+                  <input
+                    className={field(isGuess("brand"))}
+                    value={draft.brand ?? ""}
+                    onChange={(e) => update("brand", e.target.value || undefined)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="label">SKU</span>
+                  <input className={input} value={draft.sku} onChange={(e) => update("sku", e.target.value)} />
+                </label>
+              </div>
+            </div>
+
+            <div className="card space-y-4">
+              <h3 className="t-headline">Condition</h3>
               <label className="block">
                 <span className="label">Condition{isGuess("condition") && <GuessBadge />}</span>
                 <select
@@ -386,110 +449,116 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                   onChange={(e) => update("conditionDescription", e.target.value || undefined)}
                 />
               </label>
+            </div>
 
-              <label className="block">
-                <span className="label">Promoted listing ad rate (%, 0 = off)</span>
-                <input
-                  className={input}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="Server default"
-                  value={draft.promotedPercent ?? ""}
-                  onChange={(e) => update("promotedPercent", e.target.value === "" ? undefined : Number(e.target.value))}
-                />
-              </label>
-
-              <label className="block">
-                <span className="label">Best Offer: lowest offer allowed, % of price (0 = off)</span>
-                <input
-                  className={input}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  max="99"
-                  step="1"
-                  placeholder="Server default"
-                  value={draft.bestOfferMinPercent ?? ""}
-                  onChange={(e) =>
-                    update("bestOfferMinPercent", e.target.value === "" ? undefined : Number(e.target.value))
-                  }
-                />
-                {!!draft.bestOfferMinPercent && draft.price !== undefined && (
-                  <span className="mt-1 block text-xs text-muted">
-                    Offers under{" "}
-                    {formatMoney(Math.floor(draft.price * (draft.bestOfferMinPercent / 100) * 100) / 100, "CAD")} are declined
-                    automatically; the rest wait for you to accept, counter or decline.
+            <details
+              className="card disclosure"
+              open={moreOpen}
+              onToggle={(e) => setMoreOpen((e.currentTarget as HTMLDetailsElement).open)}
+            >
+              <summary>
+                <span className="min-w-0 flex-1">
+                  <span className="t-headline flex items-center">
+                    Shipping and offers{isGuess("package") && <GuessBadge />}
                   </span>
-                )}
-              </label>
+                  <span className="t-small block truncate text-muted">{optionsSummary}</span>
+                </span>
+                <Icon name="chevron" className="chevron text-muted" />
+              </summary>
 
-              <fieldset>
-                <legend className="label">
-                  Package (packed, for calculated shipping){isGuess("package") && <GuessBadge />}
-                </legend>
-                <div className="grid grid-cols-4 gap-2">
-                  <label className="block">
-                    <span className="text-xs text-muted">Weight kg</span>
-                    <input
-                      className={field(isGuess("package"))}
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={draft.packageWeightKg ?? ""}
-                      onChange={(e) =>
-                        update("packageWeightKg", e.target.value ? Number(e.target.value) : undefined, "package")
-                      }
-                    />
-                  </label>
-                  {(["length", "width", "height"] as const).map((dim) => (
-                    <label key={dim} className="block">
-                      <span className="text-xs text-muted">{dim[0].toUpperCase() + dim.slice(1)} cm</span>
+              <div className="mt-3 space-y-4">
+                <fieldset>
+                  <legend className="label">Package, packed (for calculated shipping)</legend>
+                  <div className="grid grid-cols-4 gap-2">
+                    <label className="block">
+                      <span className="t-caption text-muted">Weight kg</span>
                       <input
-                        className={field(isGuess("package"))}
+                        className={`${field(isGuess("package"))} px-2.5`}
                         type="number"
                         inputMode="decimal"
                         min="0"
-                        step="1"
-                        value={draft.packageDimensionsCm?.[dim] ?? ""}
-                        onChange={(e) => {
-                          const d = { length: 0, width: 0, height: 0, ...draft.packageDimensionsCm };
-                          d[dim] = Number(e.target.value) || 0;
-                          update("packageDimensionsCm", d, "package");
-                        }}
+                        step="0.01"
+                        value={draft.packageWeightKg ?? ""}
+                        onChange={(e) =>
+                          update("packageWeightKg", e.target.value ? Number(e.target.value) : undefined, "package")
+                        }
                       />
                     </label>
-                  ))}
-                </div>
-              </fieldset>
+                    {(["length", "width", "height"] as const).map((dim) => (
+                      <label key={dim} className="block">
+                        <span className="t-caption text-muted">{dim[0].toUpperCase() + dim.slice(1)} cm</span>
+                        <input
+                          className={`${field(isGuess("package"))} px-2.5`}
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="1"
+                          value={draft.packageDimensionsCm?.[dim] ?? ""}
+                          onChange={(e) => {
+                            const d = { length: 0, width: 0, height: 0, ...draft.packageDimensionsCm };
+                            d[dim] = Number(e.target.value) || 0;
+                            update("packageDimensionsCm", d, "package");
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
 
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="label">Brand{isGuess("brand") && <GuessBadge />}</span>
-                  <input
-                    className={field(isGuess("brand"))}
-                    value={draft.brand ?? ""}
-                    onChange={(e) => update("brand", e.target.value || undefined)}
-                  />
-                </label>
-                <label className="block">
-                  <span className="label">SKU</span>
-                  <input className={input} value={draft.sku} onChange={(e) => update("sku", e.target.value)} />
-                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="label">Promoted ad rate %</span>
+                    <input
+                      className={input}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      placeholder="Default"
+                      value={draft.promotedPercent ?? ""}
+                      onChange={(e) => update("promotedPercent", e.target.value === "" ? undefined : Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="label">Best Offer min %</span>
+                    <input
+                      className={input}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      max="99"
+                      step="1"
+                      placeholder="Default"
+                      value={draft.bestOfferMinPercent ?? ""}
+                      onChange={(e) =>
+                        update("bestOfferMinPercent", e.target.value === "" ? undefined : Number(e.target.value))
+                      }
+                    />
+                  </label>
+                </div>
+                <p className="hint -mt-2">
+                  0 turns either off. Empty uses your app default.
+                  {!!draft.bestOfferMinPercent && draft.price !== undefined && (
+                    <>
+                      {" "}
+                      Offers under{" "}
+                      {formatMoney(Math.floor(draft.price * (draft.bestOfferMinPercent / 100) * 100) / 100, "CAD")} are
+                      declined automatically; the rest wait for you.
+                    </>
+                  )}
+                </p>
               </div>
-            </div>
+            </details>
 
             <fieldset className="card">
               <legend className="sr-only">Item specifics</legend>
-              <p className="mb-3 text-base font-semibold tracking-tight">Item specifics</p>
+              <h3 className="t-headline mb-3">Item specifics</h3>
               <div className="space-y-2">
                 {draft.aspects.map((a, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <input
-                      className={`${input} w-2/5 text-sm`}
+                      className={`${input} w-2/5 px-3 text-sm`}
                       value={a.name}
                       aria-label="Specific name"
                       onChange={(e) =>
@@ -500,7 +569,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                       }
                     />
                     <input
-                      className={`${field(a.guessed)} w-3/5`}
+                      className={`${field(a.guessed)} w-3/5 px-3`}
                       value={a.value}
                       aria-label={`${a.name} value`}
                       placeholder={a.guessed ? "guess, check it" : ""}
@@ -512,41 +581,41 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                       }
                     />
                     <button
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-subtle active:bg-surface-2"
+                      className="icon-btn -mr-2"
                       aria-label={`Remove ${a.name}`}
                       onClick={() => update("aspects", draft.aspects.filter((_, j) => j !== i))}
                     >
-                      ✕
+                      <Icon name="close" size={18} />
                     </button>
                   </div>
                 ))}
               </div>
-              <div className="mt-3 flex items-center justify-between">
+              <div className="mt-3 flex items-center justify-between gap-3">
                 <button
-                  className="btn btn-secondary min-h-10 px-4 text-sm"
+                  className="btn btn-secondary min-h-11 px-4 text-sm"
                   onClick={() => update("aspects", [...draft.aspects, { name: "", value: "", guessed: false }])}
                 >
-                  + Add specific
+                  <Icon name="plus" size={18} /> Add specific
                 </button>
-                <p className="text-xs text-subtle">Several values: separate with |</p>
+                <p className="t-caption text-muted">Several values: separate with |</p>
               </div>
             </fieldset>
 
             <div className="card">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-base font-semibold tracking-tight">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="t-headline flex items-center">
                   Description{isGuess("description") && <GuessBadge />}
-                </span>
+                </h3>
                 <div className="flex rounded-full bg-surface-2 p-1 text-sm font-semibold" role="group" aria-label="Description view">
                   {[
-                    ["Edit HTML", false],
                     ["Preview", true],
+                    ["HTML", false],
                   ].map(([label, value]) => (
                     <button
                       key={String(label)}
                       aria-pressed={showPreview === value}
                       onClick={() => setShowPreview(value as boolean)}
-                      className={`rounded-full px-3 py-1.5 transition-colors ${
+                      className={`min-h-10 rounded-full px-3.5 transition-colors ${
                         showPreview === value ? "bg-surface text-foreground shadow-card" : "text-muted"
                       }`}
                     >
@@ -574,7 +643,8 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
             </div>
 
             <label className="card block">
-              <span className="label">Photo URLs (one per line, https)</span>
+              <span className="t-headline mb-3 block">Photos</span>
+              <span className="label">Photo URLs, one per line (https)</span>
               <textarea
                 className={input}
                 rows={3}
@@ -589,7 +659,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
       </main>
 
       {generated && draft && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/85 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/90 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
           <div className="mx-auto max-w-lg space-y-2">
             {error && <div className="max-h-[40vh] overflow-y-auto">{errorBox}</div>}
             {published && (
@@ -608,26 +678,22 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 </div>
               </div>
             )}
-            {guessCount > 0 && (
-              <p className="text-center text-xs font-medium text-warn-ink">
-                {guessCount} field{guessCount > 1 ? "s are" : " is"} still marked as a guess.
-              </p>
-            )}
-            <SaveToCollection listing={draft} imageText={imageText} query={initial.query} published={!!published} />
-            <button className="btn btn-primary btn-lg w-full" disabled={loading !== null} onClick={publish}>
-              {loading === "publish" ? (
-                <>
-                  <Spinner /> Publishing…
-                </>
-              ) : (
-                <>
-                  Publish to eBay
-                  {draft.price !== undefined && (
-                    <span className="opacity-80">· {formatMoney(draft.price, priceCheck?.sold?.currency ?? priceCheck?.current?.currency ?? "CAD")}</span>
-                  )}
-                </>
-              )}
-            </button>
+            <SaveToCollection listing={draft} imageText={imageText} query={initial.query} published={!!published}>
+              <button className="btn btn-primary btn-lg min-w-0 flex-1" disabled={loading !== null} onClick={publish}>
+                {loading === "publish" ? (
+                  <>
+                    <Spinner /> Publishing…
+                  </>
+                ) : (
+                  <>
+                    Publish
+                    {draft.price !== undefined && (
+                      <span className="tabular-nums opacity-85">· {formatMoney(draft.price, currency)}</span>
+                    )}
+                  </>
+                )}
+              </button>
+            </SaveToCollection>
           </div>
         </div>
       )}

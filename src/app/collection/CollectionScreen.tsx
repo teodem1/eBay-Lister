@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { AppBar, TabBar } from "@/components/ui";
+import { AppBar, Icon, TabBar } from "@/components/ui";
 import {
   CURRENCY,
   allCategories,
@@ -58,20 +58,7 @@ export default function CollectionScreen() {
                 <label htmlFor="collection-search" className="sr-only">
                   Search the collection
                 </label>
-                <svg
-                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-subtle"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  aria-hidden
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
+                <Icon name="search" size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
                 <input
                   id="collection-search"
                   type="search"
@@ -83,7 +70,7 @@ export default function CollectionScreen() {
               </div>
 
               {categories.length > 0 && (
-                <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="group" aria-label="Filter by category">
+                <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" role="group" aria-label="Filter by category">
                   <FilterChip on={!category} onClick={() => setCategory(undefined)}>
                     All · {items.length}
                   </FilterChip>
@@ -100,7 +87,7 @@ export default function CollectionScreen() {
               )}
 
               <div className="flex items-center justify-between gap-3 px-1">
-                <span className="text-sm text-muted">
+                <span className="t-small text-muted">
                   {shown.length} {shown.length === 1 ? "CD" : "CDs"}
                   {filtered && ` of ${items.length}`}
                 </span>
@@ -109,7 +96,7 @@ export default function CollectionScreen() {
                   <select
                     value={sort}
                     onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="field min-h-9 w-auto rounded-full py-1 pl-3 text-sm"
+                    className="field min-h-11 w-auto rounded-full py-1 pl-4 text-sm font-medium"
                   >
                     {SORTS.map((s) => (
                       <option key={s.key} value={s.key}>
@@ -122,9 +109,9 @@ export default function CollectionScreen() {
             </div>
 
             {shown.length === 0 ? (
-              <p className="card text-center text-sm text-muted">No CDs match. Try another search or category.</p>
+              <p className="card t-small text-center text-muted">No CDs match. Try another search or category.</p>
             ) : (
-              <ul className="flex flex-col gap-2.5">
+              <ul className="card divide-y divide-line overflow-hidden p-0">
                 {shown.map((item) => (
                   <li key={item.id}>
                     <CdCard item={item} onOpen={() => setEditing(item.id)} />
@@ -151,21 +138,32 @@ export default function CollectionScreen() {
 }
 
 function ValueSummary({ all, shown }: { all: CollectionItem[]; shown?: CollectionItem[] }) {
-  const unpriced = all.filter((i) => i.price === undefined).length;
+  const priced = all.filter((i) => i.price !== undefined);
+  const unpriced = all.length - priced.length;
+  const average = priced.length ? totalValue(priced) / priced.length : undefined;
+  const stats = [
+    { label: all.length === 1 ? "CD" : "CDs", value: String(all.length) },
+    { label: "Average", value: average !== undefined ? money(average) : "—" },
+    { label: "No price", value: String(unpriced) },
+  ];
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-brand p-5 text-brand-fg shadow-lift">
-      <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Inventory value</p>
-      <p className="mt-1 text-[2.25rem] font-bold leading-none tracking-tight">{money(totalValue(all))}</p>
-      <p className="mt-2 text-sm opacity-90">
-        {all.length} {all.length === 1 ? "CD" : "CDs"}
-        {unpriced > 0 && ` · ${unpriced} without a price`}
-      </p>
+    <section className="card relative overflow-hidden" aria-label="Inventory value">
+      <p className="eyebrow">Inventory value</p>
+      <p className="t-display mt-1 text-[2.25rem] leading-none tabular-nums text-brand-ink">{money(totalValue(all))}</p>
+      <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3">
+        {stats.map((s) => (
+          <div key={s.label}>
+            <dt className="t-caption text-muted">{s.label}</dt>
+            <dd className="font-semibold tabular-nums">{s.value}</dd>
+          </div>
+        ))}
+      </dl>
       {shown && (
-        <p className="mt-3 inline-flex rounded-full bg-white/15 px-3 py-1 text-sm font-semibold">
+        <p className="chip mt-3 bg-brand-soft px-3 py-1 text-sm text-brand-ink">
           Showing {money(totalValue(shown))} in {shown.length} {shown.length === 1 ? "CD" : "CDs"}
         </p>
       )}
-      <svg className="absolute -right-8 -top-8 opacity-10" width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
+      <svg className="absolute -right-10 -top-10 text-brand opacity-[0.07]" width="160" height="160" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
         <circle cx="12" cy="12" r="10" />
         <circle cx="12" cy="12" r="6" />
         <circle cx="12" cy="12" r="2" />
@@ -179,28 +177,28 @@ function CdCard({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) 
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full gap-3 rounded-2xl border border-line bg-surface p-2.5 text-left shadow-card transition-colors active:bg-surface-2"
+      className="flex w-full items-center gap-3 p-3 text-left transition-colors active:bg-surface-2"
     >
-      <Cover item={item} size="h-20 w-20" />
+      <Cover item={item} size="h-16 w-16" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <p className="truncate font-semibold leading-snug">{item.title}</p>
-        <p className="truncate text-sm text-muted">
+        <p className="truncate font-semibold">{item.title}</p>
+        <p className="t-small truncate text-muted">
           {item.artist || "Unknown artist"}
           {item.year ? ` · ${item.year}` : ""}
         </p>
         {item.categories.length > 0 && (
           <div className="mt-1 flex gap-1 overflow-hidden">
             {item.categories.slice(0, 3).map((c) => (
-              <span key={c} className="chip shrink-0 bg-brand-soft text-brand-ink">
+              <span key={c} className="chip shrink-0 bg-surface-2 text-muted">
                 {c}
               </span>
             ))}
           </div>
         )}
       </div>
-      <div className="flex shrink-0 flex-col items-end justify-between py-0.5">
-        <span className="text-lg font-bold tracking-tight">{item.price !== undefined ? money(item.price) : "—"}</span>
-        {item.priceSource === "estimate" && <span className="text-[0.6875rem] text-subtle">estimate</span>}
+      <div className="flex shrink-0 flex-col items-end">
+        <span className="text-base font-bold tabular-nums tracking-tight">{item.price !== undefined ? money(item.price) : "—"}</span>
+        {item.priceSource === "estimate" && <span className="t-caption text-muted">Estimate</span>}
       </div>
     </button>
   );
@@ -212,11 +210,8 @@ function Cover({ item, size }: { item: CollectionItem; size: string }) {
   const src = [item.coverUrl, item.fallbackCoverUrl].filter(Boolean)[failed];
   if (!src) {
     return (
-      <div className={`${size} flex shrink-0 items-center justify-center rounded-xl bg-surface-2 text-subtle`}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="2.5" />
-        </svg>
+      <div className={`${size} flex shrink-0 items-center justify-center rounded-xl bg-surface-2 text-muted`}>
+        <Icon name="disc" size={30} strokeWidth={1.5} />
       </div>
     );
   }
@@ -235,14 +230,8 @@ function Cover({ item, size }: { item: CollectionItem; size: string }) {
 
 function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`chip min-h-9 shrink-0 whitespace-nowrap border px-3.5 text-sm ${
-        on ? "border-brand bg-brand text-brand-fg" : "border-line bg-surface text-foreground"
-      }`}
-    >
+    <button type="button" aria-pressed={on} onClick={onClick} className="chip-toggle">
+      {on && <Icon name="check" size={16} strokeWidth={2.4} />}
       {children}
     </button>
   );
@@ -263,6 +252,20 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
   const yearValid = yearNum === undefined || (Number.isInteger(yearNum) && yearNum > 1800 && yearNum < 2200);
   const suggestions = allCategories.filter((c) => !cats.some((x) => x.toLowerCase() === c.toLowerCase()));
 
+  // Android back button (and browser back) closes the sheet instead of leaving
+  // the screen: opening adds a history entry, back pops it.
+  const onBack = useEffectEvent(() => onClose());
+  useEffect(() => {
+    window.history.pushState({ ...window.history.state, cdSheet: true }, "");
+    const onPop = () => onBack();
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  function close() {
+    if (window.history.state?.cdSheet) window.history.back();
+    else onClose();
+  }
+
   function addCat(c: string) {
     setCats((list) => withCategory(list, c));
     setNewCat("");
@@ -279,7 +282,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
       priceSource: priceNum === undefined ? undefined : priceChanged ? "manual" : item.priceSource,
       categories: pending ? withCategory(cats, pending) : cats,
     });
-    onClose();
+    close();
   }
 
   const listing = new URLSearchParams();
@@ -288,7 +291,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
   if (priceNum) listing.set("price", String(priceNum));
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 fade-in" onClick={close}>
       <div
         role="dialog"
         aria-modal
@@ -301,20 +304,13 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
           <Cover item={item} size="h-20 w-20" />
           <div className="min-w-0 flex-1">
             <p className="eyebrow">Edit CD</p>
-            <h2 id="edit-cd-title" className="truncate text-lg font-semibold tracking-tight">
+            <h2 id="edit-cd-title" className="t-title truncate">
               {item.title}
             </h2>
-            {item.barcode && <p className="text-xs text-subtle">Barcode {item.barcode}</p>}
+            {item.barcode && <p className="t-caption text-muted">Barcode {item.barcode}</p>}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-muted active:bg-surface-2"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
+          <button type="button" onClick={close} aria-label="Close" className="icon-btn -mr-2 self-start">
+            <Icon name="close" />
           </button>
         </div>
 
@@ -368,11 +364,12 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
                     key={c}
                     type="button"
                     onClick={() => setCats((list) => list.filter((x) => x !== c))}
-                    className="chip min-h-8 bg-brand-soft px-3 text-sm text-brand-ink"
+                    className="chip-toggle"
+                    aria-pressed
                     aria-label={`Remove category ${c}`}
                   >
                     {c}
-                    <span aria-hidden>×</span>
+                    <Icon name="close" size={14} strokeWidth={2.4} />
                   </button>
                 ))}
               </div>
@@ -403,8 +400,9 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
             {suggestions.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {suggestions.slice(0, 8).map((c) => (
-                  <button key={c} type="button" onClick={() => addCat(c)} className="chip min-h-8 border border-line px-3 text-sm text-muted">
-                    + {c}
+                  <button key={c} type="button" onClick={() => addCat(c)} className="chip-toggle text-muted">
+                    <Icon name="plus" size={14} strokeWidth={2.4} />
+                    {c}
                   </button>
                 ))}
               </div>
@@ -416,6 +414,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
           </button>
           <Link href={`/listing?${listing}`} className="btn btn-secondary">
             Create eBay listing
+            <Icon name="arrow" size={18} />
           </Link>
           <button
             type="button"
@@ -423,7 +422,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
             onClick={() => {
               if (!confirmRemove) return setConfirmRemove(true);
               collectionStore.remove(item.id);
-              onClose();
+              close();
             }}
           >
             {confirmRemove ? "Tap again to remove" : "Remove from collection"}
@@ -438,13 +437,10 @@ function EmptyState() {
   return (
     <section className="card flex flex-col items-center gap-3 py-10 text-center fade-in">
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-brand-ink">
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="2.5" />
-        </svg>
+        <Icon name="disc" size={34} strokeWidth={1.6} />
       </span>
-      <h1 className="text-lg font-semibold tracking-tight">No CDs yet</h1>
-      <p className="max-w-xs text-sm text-muted">
+      <h1 className="t-title">No CDs yet</h1>
+      <p className="t-small max-w-xs text-muted">
         Scan a CD, review its listing, then tap Add to Collection (or publish it). It lands here with its cover, artist, year and your price.
       </p>
       <Link href="/" className="btn btn-primary mt-1">
@@ -494,8 +490,8 @@ function Backup({ items }: { items: CollectionItem[] }) {
   return (
     <section className="card flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold tracking-tight">Backup</h2>
-        <p className="text-sm text-muted">
+        <h2 className="t-headline">Backup</h2>
+        <p className="t-small text-muted">
           Your collection is saved on this phone. Save a backup file now and then so you don&apos;t lose it if the app is
           reinstalled.
         </p>
