@@ -1,4 +1,4 @@
-import type { ComparableQuery } from "@/lib/ebay/types";
+import type { Comparable, ComparableQuery } from "@/lib/ebay/types";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
 
 /** A product barcode (UPC/EAN/GTIN) is 8 to 14 digits. */
@@ -32,8 +32,11 @@ export function formatMoney(amount: number, currency: string): string {
 export interface PriceCheck {
   /** From active eBay listings right now (asking prices). */
   current: PriceSuggestion | null;
-  /** From items sold in the last 90 days. */
+  /** From items sold recently (SOLD_LOOKBACK_DAYS, default a year). */
   sold: PriceSuggestion | null;
+  /** The listings behind each price, so the seller can compare them. */
+  currentItems: Comparable[];
+  soldItems: Comparable[];
   /** Why a price is missing, shown to the user. */
   unavailable: { current?: string; sold?: string };
 }
@@ -60,6 +63,8 @@ export async function fetchPriceSuggestion(
     return {
       current: data.current?.suggestion ?? null,
       sold: data.sold?.suggestion ?? null,
+      currentItems: data.current?.comparables?.items ?? [],
+      soldItems: data.sold?.comparables?.items ?? [],
       unavailable: data.unavailable ?? {},
     };
   } catch (e) {

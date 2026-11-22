@@ -32,6 +32,16 @@ export interface SoldCompsOptions {
   marketplaceId: string;
   fetch?: FetchLike;
   now?: Date;
+  /** How far back to ask for sales. eBay's own sold search keeps about 90 days, so older sales may not exist. */
+  lookbackDays?: number;
+}
+
+export const DEFAULT_SOLD_LOOKBACK_DAYS = 365;
+
+/** SOLD_LOOKBACK_DAYS from the environment, 30 to 1095 days; default 365. */
+export function soldLookbackDays(value?: string): number {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n >= 30 && n <= 1095 ? n : DEFAULT_SOLD_LOOKBACK_DAYS;
 }
 
 /** EBAY_CA -> "CA". The site's home country, for items with no location. */
@@ -90,6 +100,9 @@ interface RawSoldItem {
   shippingType?: string;
   endedAt?: string;
   itemLocation?: string | null;
+  imageUrl?: string | null;
+  image?: string | null;
+  thumbnail?: string | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -109,7 +122,8 @@ export function countryCode(location: string | null | undefined): string | null 
 export function buildSoldCompsUrl(q: ComparableQuery, opts: SoldCompsOptions): string {
   const keyword = q.keywords?.trim() || q.gtin;
   if (!keyword) throw new Error("Sold search needs keywords or a barcode.");
-  const since = new Date((opts.now ?? new Date()).getTime() - 90 * 86_400_000);
+  const days = opts.lookbackDays ?? DEFAULT_SOLD_LOOKBACK_DAYS;
+  const since = new Date((opts.now ?? new Date()).getTime() - days * 86_400_000);
   const params = new URLSearchParams({
     keyword,
     ebaySite: SITE_BY_MARKETPLACE[opts.marketplaceId] ?? "ebay.com",
@@ -147,6 +161,7 @@ export function normaliseSoldCompsItem(
     soldDate: raw.endedAt ?? null,
     quantitySold: 1,
     url: raw.url ?? null,
+    imageUrl: raw.imageUrl ?? raw.image ?? raw.thumbnail ?? null,
   };
 }
 

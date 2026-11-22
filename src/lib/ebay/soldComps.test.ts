@@ -1,15 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSoldCompsUrl, countryCode, homeCountry, normaliseSoldCompsItem, searchSoldComps } from "./soldComps";
+import { buildSoldCompsUrl, countryCode, homeCountry, normaliseSoldCompsItem, searchSoldComps, soldLookbackDays } from "./soldComps";
 
 const opts = { apiKey: "sc_test", marketplaceId: "EBAY_CA", now: new Date("2026-11-22T00:00:00Z") };
 
 describe("buildSoldCompsUrl", () => {
-  it("searches ebay.ca for the last 90 days", () => {
+  it("searches ebay.ca for the last year by default", () => {
     const u = new URL(buildSoldCompsUrl({ keywords: "Switch OLED", gtin: "0045496453435" }, opts));
     expect(u.origin + u.pathname).toBe("https://api.sold-comps.com/v1/scrape");
     expect(u.searchParams.get("keyword")).toBe("Switch OLED");
     expect(u.searchParams.get("ebaySite")).toBe("ebay.ca");
+    expect(u.searchParams.get("soldAfter")).toBe("2025-11-22");
+  });
+
+  it("honours a custom lookback", () => {
+    const u = new URL(buildSoldCompsUrl({ keywords: "x" }, { ...opts, lookbackDays: 90 }));
     expect(u.searchParams.get("soldAfter")).toBe("2026-08-24");
+    expect(soldLookbackDays("730")).toBe(730);
+    expect(soldLookbackDays("5")).toBe(365);
+    expect(soldLookbackDays(undefined)).toBe(365);
   });
 
   it("uses the barcode as keyword when there is no item text", () => {

@@ -47,6 +47,8 @@ interface RawItem {
   shippingOptions?: RawShippingOption[];
   itemWebUrl?: string;
   itemAffiliateWebUrl?: string;
+  image?: { imageUrl?: string };
+  thumbnailImages?: { imageUrl?: string }[];
 }
 interface RawSalesResponse {
   itemSales?: RawItem[];
@@ -135,6 +137,7 @@ export function normaliseItem(
     soldDate: kind === "sold" ? raw.lastSoldDate ?? null : null,
     quantitySold: kind === "sold" ? Math.max(1, raw.totalSoldQuantity ?? 1) : 1,
     url: raw.itemWebUrl ?? raw.itemAffiliateWebUrl ?? null,
+    imageUrl: raw.thumbnailImages?.[0]?.imageUrl ?? raw.image?.imageUrl ?? null,
   };
 }
 
@@ -232,6 +235,8 @@ export interface BothOptions {
   /** sold-comps.com key; used for sold prices when Marketplace Insights is refused. */
   soldCompsApiKey?: string;
   soldCompsFetch?: SoldCompsOptions["fetch"];
+  /** How many days of sales to ask sold-comps.com for (SOLD_LOOKBACK_DAYS). */
+  soldLookbackDays?: number;
 }
 
 /** Sold comparables: Marketplace Insights, else sold-comps.com whenever Insights fails and a key is set. */
@@ -253,13 +258,12 @@ async function searchSoldAny(
     apiKey: opts.soldCompsApiKey,
     marketplaceId,
     fetch: opts.soldCompsFetch,
+    lookbackDays: opts.soldLookbackDays,
   });
-  return {
-    source: "sold_comps",
-    marketplaceId,
-    items,
-    notes: ["Sold prices from sold-comps.com, a third-party service, not from eBay directly."],
-  };
+  const notes = ["Sold prices from sold-comps.com, a third-party service, not from eBay directly."];
+  const oldest = items.map((i) => i.soldDate).filter(Boolean).sort()[0];
+  if (oldest) notes.push(`Oldest sale found: ${oldest}.`);
+  return { source: "sold_comps", marketplaceId, items, notes };
 }
 
 /**

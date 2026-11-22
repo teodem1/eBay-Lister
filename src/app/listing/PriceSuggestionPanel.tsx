@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import type { Comparable } from "@/lib/ebay/types";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
 import { Spinner, StepHeading } from "@/components/ui";
 import { formatMoney, type PriceCheck } from "./priceRequest";
@@ -11,11 +13,105 @@ const OPTIONS: Option[] = [
   { key: "high", label: "High" },
 ];
 
+const total = (c: Comparable) => c.price.value + (c.shippingCost?.value ?? 0);
+
+function ComparableList({
+  items,
+  sold,
+  currency,
+  onPick,
+}: {
+  items: Comparable[];
+  sold: boolean;
+  currency: string;
+  onPick: (price: number) => void;
+}) {
+  const [sort, setSort] = useState<"price" | "date">(sold ? "date" : "price");
+  const [showAll, setShowAll] = useState(false);
+  const sorted = [...items].sort((a, b) =>
+    sort === "price" ? total(a) - total(b) : (b.soldDate ?? "").localeCompare(a.soldDate ?? ""),
+  );
+  const shown = showAll ? sorted : sorted.slice(0, 15);
+  const money = (n: number, cur = currency) => formatMoney(n, cur);
+
+  return (
+    <div className="mt-2">
+      {sold && (
+        <div className="mb-1.5 flex gap-1.5 text-xs">
+          {(["date", "price"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={sort === k}
+              onClick={() => setSort(k)}
+              className={`chip ${sort === k ? "bg-brand text-brand-fg" : "bg-surface text-muted"}`}
+            >
+              {k === "date" ? "Newest first" : "Cheapest first"}
+            </button>
+          ))}
+        </div>
+      )}
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        {shown.map((c) => (
+          <li key={c.itemId} className="flex items-center gap-2.5 p-2">
+            {c.imageUrl ? (
+              // eBay thumbnails come from many hosts, so a plain img keeps it simple.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.imageUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-surface-2 object-cover" />
+            ) : (
+              <div className="h-12 w-12 shrink-0 rounded-lg bg-surface-2" />
+            )}
+            <div className="min-w-0 flex-1">
+              {c.url ? (
+                <a href={c.url} target="_blank" rel="noreferrer" className="line-clamp-2 text-xs font-medium leading-snug underline-offset-2 hover:underline">
+                  {c.title || c.itemId}
+                </a>
+              ) : (
+                <p className="line-clamp-2 text-xs font-medium leading-snug">{c.title || c.itemId}</p>
+              )}
+              <p className="mt-0.5 truncate text-[0.6875rem] text-muted">
+                {[
+                  c.soldDate && `sold ${c.soldDate}`,
+                  c.shippingCost === null
+                    ? "shipping ?"
+                    : c.shippingCost.value === 0
+                      ? "free shipping"
+                      : `+${money(c.shippingCost.value, c.shippingCost.currency)} ship`,
+                  c.condition,
+                  c.itemLocation.country && `from ${c.itemLocation.country}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onPick(c.price.value)}
+              className="shrink-0 rounded-lg border border-line px-2 py-1.5 text-right active:scale-[0.97]"
+              title="Use this price"
+            >
+              <span className="block text-sm font-bold tabular-nums">{money(c.price.value, c.price.currency)}</span>
+              <span className="block text-[0.625rem] text-muted">Use</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {sorted.length > shown.length && (
+        <button type="button" className="mt-1.5 w-full text-center text-xs font-medium text-muted underline" onClick={() => setShowAll(true)}>
+          Show all {sorted.length}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PriceCard({
   title,
   subtitle,
   unit,
   suggestion,
+  items,
+  sold = false,
   missing,
   selected,
   onPick,
@@ -25,12 +121,15 @@ function PriceCard({
   /** What each comparable is, e.g. "sales" or "listings". */
   unit: string;
   suggestion: PriceSuggestion | null;
+  items: Comparable[];
+  sold?: boolean;
   missing?: string;
   selected: number | undefined;
   onPick: (price: number) => void;
 }) {
   const money = (n: number) => formatMoney(n, suggestion?.currency ?? "CAD");
   const has = suggestion !== null && suggestion.usedCount > 0;
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="-mx-1 rounded-2xl bg-surface-2 p-2.5">
@@ -86,13 +185,34 @@ function PriceCard({
             </ul>
           )}
         </>
-      ) : (
+      ) : null}
+
+      {items.length > 0 ? (
+        <>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+            className="mt-2 w-full rounded-xl border border-line bg-surface px-3 py-2 text-left text-sm font-medium"
+          >
+            {open ? "Hide" : "Compare"} the {items.length} {unit} {open ? "▴" : "▾"}
+          </button>
+          {open && <ComparableList items={items} sold={sold} currency={suggestion?.currency ?? "CAD"} onPick={onPick} />}
+        </>
+      ) : has ? null : (
         <p className="mt-2 text-xs text-muted">
           {missing ?? "No comparable eBay listings found."}
         </p>
       )}
     </div>
   );
+}
+
+function soldSubtitle(items: Comparable[]): string {
+  const dates = items.map((i) => i.soldDate).filter((d): d is string => Boolean(d)).sort();
+  return dates.length
+    ? `What buyers paid, sales from ${dates[0]} to ${dates[dates.length - 1]}`
+    : "What buyers paid in the past year";
 }
 
 export default function PriceSuggestionPanel({
@@ -153,9 +273,11 @@ export default function PriceSuggestionPanel({
         <div className={`mt-3 space-y-2 fade-in ${loading ? "opacity-60" : ""}`}>
           <PriceCard
             title="Last sold"
-            subtitle="What buyers paid in the last 90 days"
+            subtitle={soldSubtitle(check.soldItems)}
             unit="sales"
             suggestion={check.sold}
+            items={check.soldItems}
+            sold
             missing={check.unavailable.sold}
             selected={selected}
             onPick={onPick}
@@ -165,6 +287,7 @@ export default function PriceSuggestionPanel({
             subtitle="What similar items are listed at now"
             unit="listings"
             suggestion={check.current}
+            items={check.currentItems}
             missing={check.unavailable.current}
             selected={selected}
             onPick={onPick}
