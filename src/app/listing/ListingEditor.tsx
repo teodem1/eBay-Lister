@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CONDITIONS } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
 
@@ -123,6 +124,9 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
 
   return (
     <main className="mx-auto w-full max-w-xl flex-1 px-4 py-6 font-sans">
+      <Link href="/" className="mb-2 inline-block text-sm font-medium text-blue-600 dark:text-blue-400">
+        ← Find another item
+      </Link>
       <h1 className="mb-4 text-2xl font-semibold">Create listing</h1>
 
       <section className="space-y-3">
