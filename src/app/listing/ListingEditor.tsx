@@ -5,6 +5,9 @@ import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
+import { conditionComplete, conditionSummary } from "@/lib/listing/condition";
+import ConditionPicker, { type ConditionDraft } from "./ConditionPicker";
+import PhotoPicker from "./PhotoPicker";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
 import SaveToCollection from "./SaveToCollection";
 import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, type PriceCheck } from "./priceRequest";
@@ -54,6 +57,9 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   const [query, setQuery] = useState(initial.query);
   const [barcode, setBarcode] = useState(initial.barcode);
   const [notes, setNotes] = useState("");
+  // The seller's own condition, asked before Claude writes anything.
+  const [cond, setCond] = useState<ConditionDraft>({});
+  const condReady = conditionComplete(cond);
   const [loading, setLoading] = useState<"generate" | "publish" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
@@ -146,6 +152,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
           barcode: barcode || undefined,
           notes: notes || undefined,
           suggestedPrice: price,
+          sellerCondition: condReady ? cond : undefined,
         }),
       });
       const data = await res.json();
@@ -161,6 +168,16 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
     } finally {
       setLoading(null);
     }
+  }
+
+  // Changing the condition after Claude wrote the listing updates the draft too.
+  function changeCondition(next: ConditionDraft) {
+    setCond(next);
+    if (!draft || !conditionComplete(next)) return;
+    const allowed = generated?.conditionsByCategory?.[draft.categoryId] ?? [];
+    setDraft((d) =>
+      d ? { ...d, condition: nearestAllowedCondition(next.condition, allowed), conditionDescription: conditionSummary(next) } : d,
+    );
   }
 
   async function publish() {
@@ -232,7 +249,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
       <AppBar title="Create listing" back={{ href: "/", label: "Find another item" }} />
       <main className={`page ${draft ? "pb-36" : ""}`}>
         <section className="flex flex-col gap-3">
-          <StepHeading n={1} title="Item" hint="What you're selling. Your notes help Claude get it right." />
+          <StepHeading n={1} title="Item" hint="What you're selling." />
           <div className="card space-y-4">
             <label className="block">
               <span className="label">Item</span>
@@ -250,13 +267,15 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
               <input className={input} inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
             </label>
             <label className="block">
-              <span className="label">Your notes</span>
+              <span className="label">
+                Other notes <span className="font-normal text-muted">(optional)</span>
+              </span>
               <textarea
                 className={input}
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Condition, what's included, defects"
+                placeholder="Edition, what's included (obi strip, sticker, slipcase)"
               />
             </label>
           </div>
@@ -271,9 +290,16 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
           onRefresh={refreshSuggestion}
         />
 
+        <ConditionPicker n={3} value={cond} onChange={changeCondition} />
+
+        {!condReady && (
+          <p className="t-small px-1 text-muted">
+            {cond.condition ? "Grade the disc to continue." : "Pick the condition to continue."}
+          </p>
+        )}
         <button
           className={`btn ${draft ? "btn-secondary" : "btn-primary btn-lg"} w-full`}
-          disabled={!query.trim() || loading !== null}
+          disabled={!query.trim() || !condReady || loading !== null}
           onClick={generate}
         >
           {loading === "generate" ? (
@@ -294,7 +320,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
         {generated && draft && (
           <section className={`flex flex-col gap-3 fade-in ${loading === "generate" ? "opacity-60" : ""}`}>
             <StepHeading
-              n={3}
+              n={4}
               title="Review"
               hint="Amber fields are Claude's guesses."
               action={
@@ -642,18 +668,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
               )}
             </div>
 
-            <label className="card block">
-              <span className="t-headline mb-3 block">Photos</span>
-              <span className="label">Photo URLs, one per line (https)</span>
-              <textarea
-                className={input}
-                rows={3}
-                value={imageText}
-                onChange={(e) => setImageText(e.target.value)}
-                placeholder="https://…"
-              />
-              <span className="hint block">eBay needs at least one public photo URL. Uploading from the camera comes later.</span>
-            </label>
+            <PhotoPicker text={imageText} setText={setImageText} />
           </section>
         )}
       </main>

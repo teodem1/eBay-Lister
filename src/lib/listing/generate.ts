@@ -4,6 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
+import { conditionSummary } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
 export const MODEL = "claude-opus-5-5";
@@ -46,7 +47,7 @@ Item specifics:
 - Add other relevant aspects buyers filter on.
 - Mark guessed=true whenever the value is not stated by the seller and not certain from the barcode or exact model. If you have no reasonable value, give an empty string and guessed=true.
 
-Condition: pick only from the allowed conditions listed for the category, when a list is given.
+Condition: when the seller gives their condition, use exactly that condition and describe the item's condition using only the seller's words and grades: never add defects, wear or claims (like "tested") they did not state, and never use the condition of other eBay listings. Otherwise pick only from the allowed conditions listed for the category, when a list is given.
 
 Package: estimate the packed weight and a sensible box size for shipping the item (item plus box and padding). These are always estimates.
 
@@ -110,11 +111,17 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     warnings.push("eBay keys are not set, so no category was looked up. Enter a category ID by hand.");
   }
 
+  const sellerConditionText = input.sellerCondition ? conditionSummary(input.sellerCondition) : "";
   const userText = [
     `Marketplace: ${deps.config.marketplaceId} (write in ${deps.config.contentLanguage})`,
     `Item: ${input.query}`,
     input.barcode ? `Barcode (EAN/UPC): ${input.barcode}` : null,
-    input.notes ? `Seller notes: ${input.notes}` : "Seller notes: none (condition unknown, treat as a guess)",
+    sellerConditionText ? `Seller's condition (use exactly this): ${input.sellerCondition!.condition}. ${sellerConditionText}` : null,
+    input.notes
+      ? `Seller notes: ${input.notes}`
+      : sellerConditionText
+        ? null
+        : "Seller notes: none (condition unknown, treat as a guess)",
     categories[0] ? `eBay category: ${categories[0].path} (ID ${categories[0].categoryId})` : null,
     aspectHints.length
       ? `Item specifics for this category:\n${aspectHints.map((a) => `- ${a.name}${a.required ? " (required)" : ""}`).join("\n")}`
@@ -143,12 +150,17 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   if (!out) throw new Error(`Claude returned no listing (stop reason: ${response.stop_reason}).`);
 
   const title = trimTitle(out.title);
-  const guessedFields: string[] = [...out.guessedFields];
+  // The seller's condition wins over Claude's; it is a fact, not a guess.
+  const seller = input.sellerCondition;
+  const guessedFields: string[] = seller
+    ? out.guessedFields.filter((f) => f !== "condition" && f !== "conditionDescription")
+    : [...out.guessedFields];
+  const wanted = seller?.condition ?? out.condition;
   if (categories[0]) guessedFields.push("categoryId"); // eBay's top suggestion is still a guess
   const allowed = categories[0] ? (conditionsByCategory[categories[0].categoryId] ?? []) : [];
-  const condition = nearestAllowedCondition(out.condition, allowed);
-  if (condition !== out.condition) {
-    warnings.push(`eBay doesn't accept "${out.condition}" in this category, so the condition was set to "${condition}".`);
+  const condition = nearestAllowedCondition(wanted, allowed);
+  if (condition !== wanted) {
+    warnings.push(`eBay doesn't accept "${wanted}" in this category, so the condition was set to "${condition}".`);
     if (!guessedFields.includes("condition")) guessedFields.push("condition");
   }
   const dims = out.packageDimensionsCm;
@@ -163,7 +175,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       categoryId: categories[0]?.categoryId ?? "",
       categoryName: categories[0]?.path,
       condition,
-      conditionDescription: out.conditionDescription || undefined,
+      conditionDescription: (seller ? sellerConditionText : out.conditionDescription) || undefined,
       aspects: out.aspects.filter((a) => a.name.trim()),
       descriptionHtml: sanitizeDescription(out.descriptionHtml),
       price: input.suggestedPrice,

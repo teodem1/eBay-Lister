@@ -40,6 +40,11 @@ Screens (phone first):
   in a browser, barcode scan uses the live scanner in `BarcodeScanner.tsx`.
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
+  Before Claude writes, the seller picks the CD's condition in `ConditionPicker.tsx` (overall eBay
+  condition, disc/case/booklet grades, tested, defects; `src/lib/listing/condition.ts`). It sets the
+  draft's condition and condition text; Claude never guesses them. Photos come from the camera or
+  gallery in `PhotoPicker.tsx` and upload to eBay Picture Services through `/api/listing/photo`
+  (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
   `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It

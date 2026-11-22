@@ -16,6 +16,15 @@ describe("listingHref", () => {
     const href = listingHref({ ...base, results: { total: 1, items: [{ title: "Lego 10294" }] } } as unknown as LookupResponse);
     expect(href).toBe("/listing?q=Lego+10294");
   });
+  it("uses the album name, not the eBay listing title, for a CD", () => {
+    const href = listingHref({
+      ...base,
+      gtin: "0724384260927",
+      album: { title: "OK Computer", artist: "Radiohead", genres: [], mbid: "x" },
+      results: { total: 1, items: [{ title: "RADIOHEAD OK COMPUTER CD 1997 EMI VG+ FREE SHIP" }] },
+    } as unknown as LookupResponse);
+    expect(href).toBe("/listing?q=Radiohead+OK+Computer&barcode=0724384260927");
+  });
   it("opens an empty listing when nothing is known", () => {
     expect(listingHref(base)).toBe("/listing");
   });

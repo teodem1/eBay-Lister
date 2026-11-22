@@ -136,6 +136,11 @@ const INVENTORY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
 const MARKETING_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.marketing";
 const APP_SCOPE = "https://api.ebay.com/oauth/api_scope";
 
+/** The Media API lives on apim.ebay.com (apim.sandbox.ebay.com in the sandbox). */
+export function mediaBase(apiBase: string): string {
+  return apiBase.replace("://api.", "://apim.");
+}
+
 export class EbaySellClient {
   private userTokens = new Map<string, { value: string; expiresAt: number }>();
   private appToken?: { value: string; expiresAt: number };
@@ -209,6 +214,39 @@ export class EbaySellClient {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+  }
+
+  // ---------- Photos (Media API) ----------
+
+  /**
+   * Uploads a photo to eBay Picture Services and returns its https URL for
+   * imageUrls. Media API: create_image_from_file answers 201 with a Location
+   * header; reading that image gives imageUrl. An image not used in a listing expires.
+   */
+  async uploadImage(file: Blob, filename = "photo.jpg"): Promise<string> {
+    const token = await this.getUserToken();
+    const base = mediaBase(this.config.apiBase);
+    const form = new FormData();
+    form.append("image", file, filename);
+    const res = await this.fetchImpl(`${base}/commerce/media/v1_beta/image/create_image_from_file`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      body: form,
+    });
+    const data = await readBody(res);
+    if (!res.ok) throw new EbayApiError("upload photo", res.status, data);
+    const direct = (data as { imageUrl?: string } | null)?.imageUrl;
+    if (direct) return direct;
+    const location = res.headers.get("location");
+    if (!location) throw new Error("eBay accepted the photo but returned no link to it.");
+    const got = await this.fetchImpl(location, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    const image = await readBody(got);
+    if (!got.ok) throw new EbayApiError("get photo", got.status, image);
+    const url = (image as { imageUrl?: string } | null)?.imageUrl;
+    if (!url) throw new Error("eBay returned no URL for the uploaded photo.");
+    return url;
   }
 
   // ---------- Inventory flow (same order as ebay_handler.py) ----------
