@@ -107,7 +107,7 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
       <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline muted />
       {/* Aiming guide */}
       <div className="pointer-events-none absolute inset-x-8 top-1/2 h-36 -translate-y-1/2 rounded-3xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]">
-        <div className="absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 animate-pulse rounded-full bg-teal-300/90 shadow-[0_0_12px_2px_rgba(94,234,212,0.6)]" />
+        <div className="absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 animate-pulse rounded-full bg-white/90 shadow-[0_0_12px_2px_rgba(255,255,255,0.45)]" />
       </div>
       <div className="absolute inset-x-0 top-0 pt-[calc(env(safe-area-inset-top)+1.5rem)] text-center">
         <p className="mx-auto inline-block rounded-full bg-black/50 px-4 py-2 text-sm font-medium text-white backdrop-blur">

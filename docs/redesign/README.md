@@ -65,3 +65,15 @@ Ratio about 1.2, 12px floor, rem-based so Android font scaling works.
 - Bottom sheet closes on Android back, on the scrim and on ✕.
 - 48dp targets on all chips and inline actions; 16px field text (no zoom on focus); safe areas respected.
 - Geist stays as the brand face (custom font is an allowed departure); all sizes in rem so system text scaling applies.
+
+## 5. Sober restyle (follow-up)
+Guillaume asked for "more sober" colours and a style in line with current UI standards. The teal brand is replaced by a neutral palette: greys do the structure, near-black (white in dark mode) is the single action colour, status colours are desaturated. Shapes are flatter: 1px hairline borders, almost no shadow, 12px radius on buttons and fields (chips stay round), lighter headings with tighter tracking, sentence-case labels instead of uppercase eyebrows.
+
+| Token | Light | Dark |
+|---|---|---|
+| bg / surface / surface-2 | #f7f7f8 / #ffffff / #f2f2f4 | #0b0b0d / #141417 / #1c1c20 |
+| line / line-strong | #e6e6ea / #d2d2d8 | #26262b / #3a3a41 |
+| fg / muted / subtle | #0d0d10 / #55555e / #66666f | #f4f4f5 / #a6a6b0 / #8d8d97 |
+| brand (action) / brand-soft (selected) | #17171b / #ededf0 | #f4f4f5 / #26262b |
+
+All text pairs are 4.5:1 or better. Screenshots: `sober-*.png` (top row teal, bottom row sober).
