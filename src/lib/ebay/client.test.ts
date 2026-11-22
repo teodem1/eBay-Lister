@@ -86,9 +86,9 @@ describe("readEbayConfig", () => {
     expect(() => readEbayConfig({} as NodeJS.ProcessEnv)).toThrow(EbayConfigError);
   });
 
-  it("defaults to sandbox and EBAY_US", () => {
+  it("defaults to sandbox and EBAY_CA", () => {
     expect(
       readEbayConfig({ EBAY_CLIENT_ID: "a", EBAY_CLIENT_SECRET: "b" } as unknown as NodeJS.ProcessEnv),
-    ).toEqual({ clientId: "a", clientSecret: "b", env: "sandbox", marketplaceId: "EBAY_US" });
+    ).toEqual({ clientId: "a", clientSecret: "b", env: "sandbox", marketplaceId: "EBAY_CA" });
   });
 });

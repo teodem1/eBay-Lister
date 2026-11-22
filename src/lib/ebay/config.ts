@@ -27,8 +27,8 @@ export function readEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
     );
   }
   const ebayEnv = env.EBAY_ENV?.trim() === "production" ? "production" : "sandbox";
-  // Guess: default to the US site until the seller's marketplace is confirmed.
-  const marketplaceId = env.EBAY_MARKETPLACE_ID?.trim() || "EBAY_US";
+  // The seller lists on eBay.ca.
+  const marketplaceId = env.EBAY_MARKETPLACE_ID?.trim() || "EBAY_CA";
   return { clientId, clientSecret, env: ebayEnv, marketplaceId };
 }
 
