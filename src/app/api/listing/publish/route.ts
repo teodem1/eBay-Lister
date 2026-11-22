@@ -18,6 +18,8 @@ export async function POST(request: Request) {
     !config.fulfillmentPolicyId && "EBAY_FULFILLMENT_POLICY_ID",
     !config.paymentPolicyId && "EBAY_PAYMENT_POLICY_ID",
     !config.returnPolicyId && "EBAY_RETURN_POLICY_ID",
+    // eBay rejects a ship-from location without a postal code (error 25802).
+    !config.location.postalCode && "EBAY_LOCATION_POSTAL_CODE",
   ].filter(Boolean);
   if (missing.length) {
     return Response.json({ error: `Server is missing eBay settings: ${missing.join(", ")}` }, { status: 500 });

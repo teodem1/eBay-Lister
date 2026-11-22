@@ -115,7 +115,9 @@ export class EbaySellClient {
 
   /** User access token for the Sell APIs (acts on the seller's account). */
   async getUserToken(): Promise<string> {
-    if (this.config.userToken) return this.config.userToken;
+    // The refresh token wins: a leftover 2-hour EBAY_USER_TOKEN (often from eBay's
+    // developer page, without the sell.inventory scope) would otherwise shadow it.
+    if (!this.config.refreshToken && this.config.userToken) return this.config.userToken;
     if (this.userToken && this.userToken.expiresAt > Date.now()) return this.userToken.value;
     if (!this.config.refreshToken) {
       throw new Error(

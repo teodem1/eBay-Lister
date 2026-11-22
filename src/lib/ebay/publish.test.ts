@@ -131,13 +131,24 @@ describe("publishListing", () => {
     expect(err.message).toContain("Item specific Marque is missing");
   });
 
-  it("uses EBAY_USER_TOKEN directly when set", async () => {
+  it("uses EBAY_USER_TOKEN directly when there is no refresh token", async () => {
     const { calls, fetchImpl } = fakeEbay({
       "GET /sell/inventory/v1/location/default-location": () => [200, {}],
     });
-    const client = new EbaySellClient({ ...config, userToken: "DIRECT" }, fetchImpl);
+    const client = new EbaySellClient({ ...config, refreshToken: undefined, userToken: "DIRECT" }, fetchImpl);
     await client.ensureLocation();
     expect(calls[0].headers.Authorization).toBe("Bearer DIRECT");
+  });
+
+  it("prefers the refresh token over a leftover EBAY_USER_TOKEN", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/inventory/v1/location/default-location": () => [200, {}],
+    });
+    const client = new EbaySellClient({ ...config, userToken: "OLD-2H-TOKEN" }, fetchImpl);
+    await client.ensureLocation();
+    expect(calls[0].url).toContain("oauth2/token");
+    expect(calls[1].headers.Authorization).not.toBe("Bearer OLD-2H-TOKEN");
   });
 });
 
