@@ -2,7 +2,9 @@
 // so its "Try again" button knows where to go. Run before `cap sync`.
 import { writeFileSync } from "node:fs";
 
-const url = process.env.CAP_SERVER_URL ?? "";
+// Same rule as capacitor.config.ts: a bare host means https://host.
+const raw = (process.env.CAP_SERVER_URL ?? "").trim().replace(/\/+$/, "");
+const url = raw && !/^https?:\/\//i.test(raw) ? `https://${raw}` : raw;
 if (!url) {
   console.warn(
     "CAP_SERVER_URL is not set: the app will only show the offline shell.",
