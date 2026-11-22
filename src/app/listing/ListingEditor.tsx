@@ -9,7 +9,15 @@ import PriceSuggestionPanel from "./PriceSuggestionPanel";
 import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, type PriceCheck } from "./priceRequest";
 
 type Draft = GeneratedListing["draft"];
-type PublishOk = { listingId: string; offerId: string; sku: string; url: string; env: string };
+type PublishOk = {
+  listingId: string;
+  offerId: string;
+  sku: string;
+  url: string;
+  env: string;
+  promoted?: { percent: number; campaignId: string } | null;
+  promotionError?: string;
+};
 
 const CONDITION_LABELS: Record<(typeof CONDITIONS)[number], string> = {
   NEW: "New",
@@ -378,6 +386,21 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 />
               </label>
 
+              <label className="block">
+                <span className="label">Promoted listing ad rate (%, 0 = off)</span>
+                <input
+                  className={input}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Server default"
+                  value={draft.promotedPercent ?? ""}
+                  onChange={(e) => update("promotedPercent", e.target.value === "" ? undefined : Number(e.target.value))}
+                />
+              </label>
+
               <fieldset>
                 <legend className="label">
                   Package (packed, for calculated shipping){isGuess("package") && <GuessBadge />}
@@ -555,6 +578,8 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                       open on eBay
                     </a>
                   </p>
+                  {published.promoted && <p>Promoted at {published.promoted.percent}% ad rate.</p>}
+                  {published.promotionError && <p className="text-warn-ink">{published.promotionError}</p>}
                 </div>
               </div>
             )}

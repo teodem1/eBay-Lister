@@ -58,6 +58,7 @@ Server code:
 - `src/lib/ebay/publish.ts` — publish flow: location → inventory item → offer (create or update) → publish.
   Ported from `ebay_handler.py` in teodem1/ebay-item-listings-anthropic-claude.
 - `src/lib/ebay/oauth.ts` + `src/app/api/ebay/{connect,callback}` — one-time eBay sign-in that shows the refresh token for `EBAY_REFRESH_TOKEN` (needs `EBAY_RUNAME`).
+- Promoted Listings: after publish, `/api/listing/publish` adds the listing to a cost-per-sale campaign at `EBAY_PROMOTED_PERCENT` (or the draft's `promotedPercent`) via `EbaySellClient.promoteListing` (needs the `sell.marketing` scope).
 - `src/lib/ebay/config.ts` — env settings for both clients.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.

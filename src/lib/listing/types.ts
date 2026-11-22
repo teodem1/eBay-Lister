@@ -38,6 +38,8 @@ export const ListingDraftSchema = z.object({
   mpn: z.string().optional(),
   /** Packed weight. eBay needs it when the shipping policy uses calculated shipping. */
   packageWeightKg: z.number().positive().max(500).optional(),
+  /** Promoted Listings ad rate for this listing; 0 = don't promote. Unset uses EBAY_PROMOTED_PERCENT. */
+  promotedPercent: z.number().min(0).max(100).optional(),
   packageDimensionsCm: z
     .object({ length: z.number().positive(), width: z.number().positive(), height: z.number().positive() })
     .optional(),

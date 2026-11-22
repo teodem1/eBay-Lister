@@ -9,6 +9,7 @@ export const SELLER_SCOPES = [
   "https://api.ebay.com/oauth/api_scope",
   "https://api.ebay.com/oauth/api_scope/sell.inventory",
   "https://api.ebay.com/oauth/api_scope/sell.account",
+  "https://api.ebay.com/oauth/api_scope/sell.marketing",
 ];
 
 export function authorizeUrl(config: EbayConfig, ruName: string, state: string): string {

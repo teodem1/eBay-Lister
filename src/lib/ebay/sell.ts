@@ -131,10 +131,11 @@ export interface CategorySuggestion {
 }
 
 const INVENTORY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
+const MARKETING_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.marketing";
 const APP_SCOPE = "https://api.ebay.com/oauth/api_scope";
 
 export class EbaySellClient {
-  private userToken?: { value: string; expiresAt: number };
+  private userTokens = new Map<string, { value: string; expiresAt: number }>();
   private appToken?: { value: string; expiresAt: number };
 
   constructor(
@@ -165,25 +166,23 @@ export class EbaySellClient {
     return { value: access_token, expiresAt: Date.now() + (expires_in - 60) * 1000 };
   }
 
-  /** User access token for the Sell APIs (acts on the seller's account). */
-  async getUserToken(): Promise<string> {
+  /** User access token for the Sell APIs (acts on the seller's account), minted per scope. */
+  async getUserToken(scope: string = INVENTORY_SCOPE): Promise<string> {
     // The refresh token wins: a leftover 2-hour EBAY_USER_TOKEN (often from eBay's
     // developer page, without the sell.inventory scope) would otherwise shadow it.
     if (!this.config.refreshToken && this.config.userToken) return this.config.userToken;
-    if (this.userToken && this.userToken.expiresAt > Date.now()) return this.userToken.value;
+    const cached = this.userTokens.get(scope);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (!this.config.refreshToken) {
       throw new Error(
         "No eBay user token. Set EBAY_REFRESH_TOKEN (from the eBay OAuth consent flow) or EBAY_USER_TOKEN.",
       );
     }
-    this.userToken = await this.mintToken(
-      new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: this.config.refreshToken,
-        scope: INVENTORY_SCOPE,
-      }),
+    const token = await this.mintToken(
+      new URLSearchParams({ grant_type: "refresh_token", refresh_token: this.config.refreshToken, scope }),
     );
-    return this.userToken.value;
+    this.userTokens.set(scope, token);
+    return token.value;
   }
 
   /** Application token (client credentials) for public APIs like Taxonomy. */
@@ -318,6 +317,75 @@ export class EbaySellClient {
     return listingId;
   }
 
+  // ---------- Marketing (Promoted Listings Standard, cost per sale) ----------
+
+  private async marketingRequest(method: string, path: string, body?: unknown): Promise<Response> {
+    let token: string;
+    try {
+      token = await this.getUserToken(MARKETING_SCOPE);
+    } catch (err) {
+      if (err instanceof EbayApiError && JSON.stringify(err.body).includes("invalid_scope")) {
+        throw new Error(
+          "The eBay refresh token has no marketing permission. Sign in again at /api/ebay/connect and replace EBAY_REFRESH_TOKEN.",
+        );
+      }
+      throw err;
+    }
+    return this.fetchImpl(`${this.config.apiBase}/sell/marketing/v1${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Accept-Language": this.config.contentLanguage,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
+
+  /** Finds this app's running cost-per-sale campaign for the ad rate, creating it if needed. */
+  async ensurePromotedCampaign(percent: number): Promise<string> {
+    const name = promotedCampaignName(percent);
+    const qs = new URLSearchParams({ campaign_name: name, limit: "10" });
+    const found = await this.marketingRequest("GET", `/ad_campaign?${qs}`);
+    const data = await readBody(found);
+    if (!found.ok && found.status !== 404) throw new EbayApiError("find promoted campaign", found.status, data);
+    const existing = ((data as { campaigns?: { campaignId: string; campaignName: string; campaignStatus: string; marketplaceId: string }[] })
+      .campaigns ?? []).find(
+      (c) =>
+        c.campaignName === name &&
+        c.marketplaceId === this.config.marketplaceId &&
+        ["RUNNING", "SCHEDULED", "PAUSED"].includes(c.campaignStatus),
+    );
+    if (existing) return existing.campaignId;
+
+    const created = await this.marketingRequest("POST", "/ad_campaign", {
+      campaignName: name,
+      marketplaceId: this.config.marketplaceId,
+      startDate: new Date().toISOString(),
+      fundingStrategy: { fundingModel: "COST_PER_SALE", bidPercentage: percent.toFixed(1) },
+    });
+    if (!created.ok) throw new EbayApiError("create promoted campaign", created.status, await readBody(created));
+    const id = created.headers.get("location")?.split("/").pop();
+    if (!id) throw new EbayApiError("create promoted campaign", created.status, "No campaign ID in response");
+    return id;
+  }
+
+  /** Adds a live listing to the promoted campaign at the given ad rate (percent of the sale). */
+  async promoteListing(listingId: string, percent: number): Promise<{ campaignId: string }> {
+    const campaignId = await this.ensurePromotedCampaign(percent);
+    const res = await this.marketingRequest("POST", `/ad_campaign/${campaignId}/ad`, {
+      listingId,
+      bidPercentage: percent.toFixed(1),
+    });
+    if (!res.ok) {
+      const body = await readBody(res);
+      // 35036: the listing is already in this campaign (e.g. a re-publish).
+      if (!JSON.stringify(body).includes("35036")) throw new EbayApiError("promote listing", res.status, body);
+    }
+    return { campaignId };
+  }
+
   // ---------- Metadata (which conditions a category accepts) ----------
 
   /**
@@ -396,6 +464,10 @@ export class EbaySellClient {
       .slice(0, 25)
       .map((a) => ({ name: a.localizedAspectName, required: Boolean(a.aspectConstraint?.aspectRequired) }));
   }
+}
+
+export function promotedCampaignName(percent: number): string {
+  return `eBay Lister - Standard ${percent.toFixed(1)}%`;
 }
 
 function packageWeightAndSize(pkg?: PackageInput) {

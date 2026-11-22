@@ -208,3 +208,58 @@ describe("helpers", () => {
     expect(barcodeIdentifiers(undefined)).toEqual({});
   });
 });
+
+describe("promoted listings", () => {
+  it("reuses this app's running campaign and adds the listing at the ad rate", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/marketing/v1/ad_campaign": () => [
+        200,
+        {
+          campaigns: [
+            { campaignId: "C1", campaignName: "eBay Lister - Standard 11.0%", campaignStatus: "ENDED", marketplaceId: "EBAY_CA" },
+            { campaignId: "C2", campaignName: "eBay Lister - Standard 11.0%", campaignStatus: "RUNNING", marketplaceId: "EBAY_CA" },
+          ],
+        },
+      ],
+      "POST /sell/marketing/v1/ad_campaign/C2/ad": () => [201, {}],
+    });
+    const res = await new EbaySellClient(config, fetchImpl).promoteListing("L123", 11);
+
+    expect(res).toEqual({ campaignId: "C2" });
+    expect(String(calls[0].body)).toContain("sell.marketing");
+    const ad = calls.find((c) => c.url.endsWith("/ad_campaign/C2/ad"))!;
+    expect(ad.body).toEqual({ listingId: "L123", bidPercentage: "11.0" });
+  });
+
+  it("creates the cost-per-sale campaign when none exists", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/marketing/v1/ad_campaign": () => [200, { campaigns: [] }],
+      "POST /sell/marketing/v1/ad_campaign/NEW9/ad": () => [201, {}],
+    });
+    const wrapped: FetchLike = async (url, init) => {
+      if (init?.method === "POST" && url.endsWith("/sell/marketing/v1/ad_campaign")) {
+        calls.push({ url, method: "POST", body: JSON.parse(String(init.body)), headers: {} });
+        return new Response(null, { status: 201, headers: { Location: "https://api.ebay.com/sell/marketing/v1/ad_campaign/NEW9" } });
+      }
+      return fetchImpl(url, init);
+    };
+    const res = await new EbaySellClient(config, wrapped).promoteListing("L1", 11);
+
+    expect(res.campaignId).toBe("NEW9");
+    const create = calls.find((c) => c.method === "POST" && c.url.endsWith("/ad_campaign"))!;
+    expect(create.body).toMatchObject({
+      campaignName: "eBay Lister - Standard 11.0%",
+      marketplaceId: "EBAY_CA",
+      fundingStrategy: { fundingModel: "COST_PER_SALE", bidPercentage: "11.0" },
+    });
+  });
+
+  it("explains a refresh token without the marketing scope", async () => {
+    const { fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": () => [400, { error: "invalid_scope" }],
+    });
+    await expect(new EbaySellClient(config, fetchImpl).promoteListing("L1", 11)).rejects.toThrow(/api\/ebay\/connect/);
+  });
+});

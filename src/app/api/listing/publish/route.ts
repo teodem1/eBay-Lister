@@ -26,8 +26,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await publishListing(new EbaySellClient(config), parsed.data);
-    return Response.json({ ...result, env: config.env, url: listingUrl(config, result.listingId) });
+    const client = new EbaySellClient(config);
+    const result = await publishListing(client, parsed.data);
+    // The listing is live now, so a promotion failure is reported, not thrown.
+    const percent = parsed.data.promotedPercent ?? config.promotedPercent;
+    let promoted: { percent: number; campaignId: string } | null = null;
+    let promotionError: string | undefined;
+    if (percent >= 2) {
+      try {
+        promoted = { percent, ...(await client.promoteListing(result.listingId, percent)) };
+      } catch (err) {
+        promotionError = `Listed, but not promoted: ${(err as Error).message}`;
+      }
+    }
+    return Response.json({
+      ...result,
+      env: config.env,
+      url: listingUrl(config, result.listingId),
+      promoted,
+      promotionError,
+    });
   } catch (err) {
     if (err instanceof EbayApiError) {
       return Response.json({ error: err.message, step: err.step, details: err.body }, { status: 502 });
