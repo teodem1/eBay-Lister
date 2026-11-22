@@ -24,10 +24,15 @@ export interface LookupError {
 
 /** Hands the identified item to the listing screen (/listing reads q and barcode). */
 export function listingHref(data: LookupResponse): string {
-  const q = data.identification?.title || data.query || data.results.items[0]?.title || "";
+  const q = listingQuery(data);
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (data.gtin) params.set("barcode", data.gtin);
   const qs = params.toString();
   return qs ? `/listing?${qs}` : "/listing";
+}
+
+/** The item name the listing screen starts from (its ?q=). */
+export function listingQuery(data: LookupResponse): string {
+  return data.identification?.title || data.query || data.results.items[0]?.title || "";
 }

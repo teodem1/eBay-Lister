@@ -6,6 +6,7 @@ import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
+import SaveToCollection from "./SaveToCollection";
 import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, type PriceCheck } from "./priceRequest";
 
 type Draft = GeneratedListing["draft"];
@@ -208,7 +209,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   return (
     <>
       <AppBar title="Create listing" back={{ href: "/", label: "Find another item" }} />
-      <main className={`page ${draft ? "pb-36" : ""}`}>
+      <main className={`page ${draft ? "pb-48" : ""}`}>
         <section className="card space-y-4">
           <StepHeading n={1} title="Item" hint="What you're selling. Your notes help Claude get it right." />
           <label className="block">
@@ -588,6 +589,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 {guessCount} field{guessCount > 1 ? "s are" : " is"} still marked as a guess.
               </p>
             )}
+            <SaveToCollection listing={draft} imageText={imageText} query={initial.query} published={!!published} />
             <button className="btn btn-primary btn-lg w-full" disabled={loading !== null} onClick={publish}>
               {loading === "publish" ? (
                 <>

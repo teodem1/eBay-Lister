@@ -195,3 +195,75 @@ function newId(): string {
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** The reviewed listing fields the collection cares about. */
+export interface ListingSnapshot {
+  title: string;
+  price?: number;
+  barcode?: string;
+  aspects: { name: string; value: string }[];
+  imageUrls?: string[];
+}
+
+// Item specifics names eBay uses for music, in English and French.
+const ASPECT_NAMES = {
+  artist: ["artist", "artiste", "band", "groupe"],
+  album: ["release title", "album", "album name", "titre", "titre de l'album"],
+  year: ["release year", "year", "année", "annee", "année de sortie"],
+  genre: ["genre", "style"],
+} as const;
+
+function aspect(aspects: ListingSnapshot["aspects"], key: keyof typeof ASPECT_NAMES): string {
+  const names: readonly string[] = ASPECT_NAMES[key];
+  return aspects.find((a) => names.includes(a.name.trim().toLowerCase()) && a.value.trim())?.value.trim() ?? "";
+}
+
+/**
+ * The collection entry for a CD whose listing the user reviewed. The listing's
+ * item specifics and price win (the user checked them); details from the scan
+ * (cover, MusicBrainz names) fill the gaps.
+ */
+export function itemFromListing(listing: ListingSnapshot, scanned: CollectionItem | null, now = new Date()): CollectionItem {
+  const year = Number(aspect(listing.aspects, "year").slice(0, 4));
+  const genres = aspect(listing.aspects, "genre")
+    .split(/[,/|]/)
+    .map(cleanCategory)
+    .filter(Boolean);
+  const stamp = now.toISOString();
+  const price = listing.price && listing.price > 0 ? Math.round(listing.price * 100) / 100 : undefined;
+  const photo = listing.imageUrls?.find(Boolean);
+  return {
+    id: scanned?.id ?? newId(),
+    title: aspect(listing.aspects, "album") || scanned?.title || listing.title,
+    artist: aspect(listing.aspects, "artist") || scanned?.artist || "",
+    year: Number.isInteger(year) && year > 1800 ? year : scanned?.year,
+    coverUrl: scanned?.coverUrl ?? photo,
+    fallbackCoverUrl: scanned?.coverUrl ? (photo ?? scanned.fallbackCoverUrl) : undefined,
+    barcode: listing.barcode || scanned?.barcode,
+    price: price ?? scanned?.price,
+    priceSource: price !== undefined ? "manual" : scanned?.priceSource,
+    categories: genres.reduce(withCategory, scanned?.categories ?? []),
+    addedAt: scanned?.addedAt ?? stamp,
+    updatedAt: stamp,
+  };
+}
+
+/**
+ * Saves a reviewed CD: a new entry, or the existing one for the same CD with the
+ * listing's details (they are newer than anything saved before).
+ */
+export function saveReviewed(items: CollectionItem[], item: CollectionItem): { items: CollectionItem[]; isNew: boolean } {
+  const i = items.findIndex((x) => sameItem(x, item));
+  if (i < 0) return { items: [item, ...items], isNew: true };
+  const old = items[i];
+  const merged: CollectionItem = {
+    ...old,
+    ...Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined && v !== "")),
+    id: old.id,
+    addedAt: old.addedAt,
+    categories: item.categories.reduce(withCategory, old.categories),
+  };
+  const next = [...items];
+  next[i] = merged;
+  return { items: next, isNew: false };
+}

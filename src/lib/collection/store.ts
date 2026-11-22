@@ -5,9 +5,11 @@
  * or "Clear data", so the Collection screen offers a backup file.
  */
 import { useSyncExternalStore } from "react";
-import { upsert, type CollectionItem } from "./collection";
+import { saveReviewed, type CollectionItem } from "./collection";
 
 const KEY = "ebay-lister:collection:v1";
+// What the scan found, waiting for the listing screen to save it with the reviewed details.
+const PENDING_KEY = "ebay-lister:collection:pending";
 const EMPTY: CollectionItem[] = [];
 const listeners = new Set<() => void>();
 let cache: CollectionItem[] | null = null;
@@ -56,9 +58,9 @@ export function useCollection(): CollectionItem[] {
 export const collectionStore = {
   all: read,
   replace: write,
-  /** Saves a scanned CD (or refreshes its entry). */
-  save(item: CollectionItem) {
-    const result = upsert(read(), item);
+  /** Saves a CD from the listing screen (or refreshes its entry). */
+  saveReviewed(item: CollectionItem) {
+    const result = saveReviewed(read(), item);
     write(result.items);
     return result;
   },
@@ -73,3 +75,26 @@ export const collectionStore = {
     write(previous);
   },
 };
+
+/** Keeps what the scan found until the listing screen saves it (this tab only). */
+export function stashScanned(item: (CollectionItem & { query?: string }) | null) {
+  try {
+    if (item) sessionStorage.setItem(PENDING_KEY, JSON.stringify(item));
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Storage blocked: the listing screen falls back to the listing's own details.
+  }
+}
+
+/** The scanned CD for this listing, if the scan was for the same barcode or search. */
+export function readScanned(barcode: string, query: string): CollectionItem | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const item = JSON.parse(raw) as CollectionItem & { query?: string };
+    if (barcode && item.barcode) return item.barcode === barcode ? item : null;
+    return !item.query || item.query === query ? item : null;
+  } catch {
+    return null;
+  }
+}

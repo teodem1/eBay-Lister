@@ -445,7 +445,7 @@ function EmptyState() {
       </span>
       <h1 className="text-lg font-semibold tracking-tight">No CDs yet</h1>
       <p className="max-w-xs text-sm text-muted">
-        Every CD you scan or photograph lands here with its cover, artist, year and an estimated price.
+        Scan a CD, review its listing, then tap Add to Collection (or publish it). It lands here with its cover, artist, year and your price.
       </p>
       <Link href="/" className="btn btn-primary mt-1">
         Scan a CD
