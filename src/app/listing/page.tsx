@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Spinner } from "@/components/ui";
 import ListingEditor from "./ListingEditor";
 
 type SearchParams = PageProps<"/listing">["searchParams"];
@@ -21,7 +22,13 @@ async function EditorFromParams({ searchParams }: { searchParams: SearchParams }
 
 export default function ListingPage({ searchParams }: PageProps<"/listing">) {
   return (
-    <Suspense fallback={<main className="px-4 py-6">Loading…</main>}>
+    <Suspense
+      fallback={
+        <main className="page items-center justify-center text-brand-ink">
+          <Spinner />
+        </main>
+      }
+    >
       <EditorFromParams searchParams={searchParams} />
     </Suspense>
   );

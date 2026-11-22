@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { AppBar, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
-import { defaultPrice, fetchPriceSuggestion, priceSuggestionBody, type PriceCheck } from "./priceRequest";
+import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, type PriceCheck } from "./priceRequest";
 
 type Draft = GeneratedListing["draft"];
 type PublishOk = { listingId: string; offerId: string; sku: string; url: string; env: string };
@@ -28,18 +28,12 @@ const CONDITION_LABELS: Record<(typeof CONDITIONS)[number], string> = {
   FOR_PARTS_OR_NOT_WORKING: "For parts / not working",
 };
 
-const fieldBase = "w-full rounded-lg border px-3 py-2 text-base";
-const input = `${fieldBase} border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900`;
-// Replaces the normal colours (not added on top) so Tailwind class order can't hide the highlight.
-const guessField = `${fieldBase} border-amber-400 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/40`;
-const field = (guess: boolean) => (guess ? guessField : input);
-const button =
-  "w-full rounded-full bg-zinc-900 px-5 py-3 font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900";
+// Guess styling replaces the normal colours (not added on top) via .field-guess in globals.css.
+const input = "field";
+const field = (guess: boolean) => (guess ? "field field-guess" : input);
 
 function GuessBadge() {
-  return (
-    <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-medium text-amber-900">guess, check it</span>
-  );
+  return <span className="chip ml-2 bg-warn-soft py-0 text-warn-ink">guess, check it</span>;
 }
 
 export default function ListingEditor({ initial }: { initial: { query: string; barcode: string; price?: number } }) {
@@ -184,31 +178,52 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   const isGuess = (k: string) => guessed.has(k);
   const guessCount = guessed.size + (draft?.aspects.filter((a) => a.guessed).length ?? 0);
 
-  return (
-    <main className="mx-auto w-full max-w-xl flex-1 px-4 py-6 font-sans">
-      <Link href="/" className="mb-2 inline-block text-sm font-medium text-blue-600 dark:text-blue-400">
-        ← Find another item
-      </Link>
-      <h1 className="mb-4 text-2xl font-semibold">Create listing</h1>
+  const errorBox = error && (
+    <div role="alert" className="notice notice-bad fade-in">
+      <p className="font-medium">{error}</p>
+      {problems.length > 0 && (
+        <ul className="mt-1 list-disc pl-5">
+          {problems.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
-      <section className="space-y-3">
-        <label className="block">
-          <span className="text-sm font-medium">Item</span>
-          <input
-            className={input}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. Nintendo Switch OLED white"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium">Barcode (optional)</span>
-          <input className={input} inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium">Your notes: condition, what&apos;s included, defects</span>
-          <textarea className={input} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
+  return (
+    <>
+      <AppBar title="Create listing" back={{ href: "/", label: "Find another item" }} />
+      <main className={`page ${draft ? "pb-36" : ""}`}>
+        <section className="card space-y-4">
+          <StepHeading n={1} title="Item" hint="What you're selling. Your notes help Claude get it right." />
+          <label className="block">
+            <span className="label">Item</span>
+            <input
+              className={input}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. Nintendo Switch OLED white"
+            />
+          </label>
+          <label className="block">
+            <span className="label">
+              Barcode <span className="font-normal text-subtle">(optional)</span>
+            </span>
+            <input className={input} inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="label">Your notes</span>
+            <textarea
+              className={input}
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Condition, what's included, defects"
+            />
+          </label>
+        </section>
+
         <PriceSuggestionPanel
           check={priceCheck}
           loading={priceLoading}
@@ -217,265 +232,335 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
           onPick={choosePrice}
           onRefresh={refreshSuggestion}
         />
-        <button className={button} disabled={!query.trim() || loading !== null} onClick={generate}>
-          {loading === "generate" ? "Writing listing…" : draft ? "Write it again" : "Write listing with Claude"}
-        </button>
-      </section>
 
-      {error && (
-        <div className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
-          <p>{error}</p>
-          {problems.length > 0 && (
-            <ul className="mt-1 list-disc pl-5">
-              {problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
+        <button className="btn btn-primary btn-lg w-full" disabled={!query.trim() || loading !== null} onClick={generate}>
+          {loading === "generate" ? (
+            <>
+              <Spinner /> Writing listing…
+            </>
+          ) : (
+            <>
+              <SparkIcon /> {draft ? "Write it again" : "Write listing with Claude"}
+            </>
           )}
-        </div>
-      )}
+        </button>
+
+        {error && !draft && errorBox}
+
+        {loading === "generate" && !draft && <DraftSkeleton />}
+
+        {generated && draft && (
+          <section className={`space-y-4 fade-in ${loading === "generate" ? "opacity-60" : ""}`}>
+            <div className="px-1">
+              <StepHeading n={3} title="Review" hint="Fields in amber are Claude's guesses. Check them before publishing." />
+            </div>
+
+            {(generated.warnings.length > 0 || generated.checks.length > 0) && (
+              <div className="notice notice-warn">
+                <p className="font-semibold">Check before publishing</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {[...generated.warnings, ...generated.checks].map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="card space-y-4">
+              <label className="block">
+                <span className="label flex items-center">
+                  <span className="flex-1">
+                    Title{isGuess("title") && <GuessBadge />}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold tabular-nums ${draft.title.length > TITLE_MAX ? "text-bad-ink" : "text-subtle"}`}
+                  >
+                    {draft.title.length}/{TITLE_MAX}
+                  </span>
+                </span>
+                <input
+                  className={field(isGuess("title"))}
+                  value={draft.title}
+                  maxLength={TITLE_MAX}
+                  onChange={(e) => update("title", e.target.value)}
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="label">
+                    Price ({priceCheck?.sold?.currency ?? priceCheck?.current?.currency ?? "CAD"})
+                  </span>
+                  <input
+                    className={`${input} font-semibold`}
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={draft.price ?? ""}
+                    onChange={(e) => choosePrice(e.target.value ? Number(e.target.value) : undefined)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="label">Quantity</span>
+                  <input
+                    className={input}
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    value={draft.quantity}
+                    onChange={(e) => update("quantity", Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="label">Category{isGuess("categoryId") && <GuessBadge />}</span>
+                {generated.categorySuggestions.length > 0 ? (
+                  <select
+                    className={field(isGuess("categoryId"))}
+                    value={draft.categoryId}
+                    onChange={(e) => {
+                      const c = generated.categorySuggestions.find((s) => s.categoryId === e.target.value);
+                      update("categoryId", e.target.value);
+                      update("categoryName", c?.path, "categoryId");
+                    }}
+                  >
+                    {generated.categorySuggestions.map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>
+                        {c.path}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={input}
+                    inputMode="numeric"
+                    placeholder="eBay category ID"
+                    value={draft.categoryId}
+                    onChange={(e) => update("categoryId", e.target.value)}
+                  />
+                )}
+              </label>
+
+              <label className="block">
+                <span className="label">Condition{isGuess("condition") && <GuessBadge />}</span>
+                <select
+                  className={field(isGuess("condition"))}
+                  value={draft.condition}
+                  onChange={(e) => update("condition", e.target.value as Draft["condition"])}
+                >
+                  {CONDITIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {CONDITION_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="label">Condition notes{isGuess("conditionDescription") && <GuessBadge />}</span>
+                <textarea
+                  className={field(isGuess("conditionDescription"))}
+                  rows={2}
+                  value={draft.conditionDescription ?? ""}
+                  onChange={(e) => update("conditionDescription", e.target.value || undefined)}
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="label">Brand{isGuess("brand") && <GuessBadge />}</span>
+                  <input
+                    className={field(isGuess("brand"))}
+                    value={draft.brand ?? ""}
+                    onChange={(e) => update("brand", e.target.value || undefined)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="label">SKU</span>
+                  <input className={input} value={draft.sku} onChange={(e) => update("sku", e.target.value)} />
+                </label>
+              </div>
+            </div>
+
+            <fieldset className="card">
+              <legend className="sr-only">Item specifics</legend>
+              <p className="mb-3 text-base font-semibold tracking-tight">Item specifics</p>
+              <div className="space-y-2">
+                {draft.aspects.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      className={`${input} w-2/5 text-sm`}
+                      value={a.name}
+                      aria-label="Specific name"
+                      onChange={(e) =>
+                        update(
+                          "aspects",
+                          draft.aspects.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
+                        )
+                      }
+                    />
+                    <input
+                      className={`${field(a.guessed)} w-3/5`}
+                      value={a.value}
+                      aria-label={`${a.name} value`}
+                      placeholder={a.guessed ? "guess, check it" : ""}
+                      onChange={(e) =>
+                        update(
+                          "aspects",
+                          draft.aspects.map((x, j) => (j === i ? { ...x, value: e.target.value, guessed: false } : x)),
+                        )
+                      }
+                    />
+                    <button
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-subtle active:bg-surface-2"
+                      aria-label={`Remove ${a.name}`}
+                      onClick={() => update("aspects", draft.aspects.filter((_, j) => j !== i))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  className="btn btn-secondary min-h-10 px-4 text-sm"
+                  onClick={() => update("aspects", [...draft.aspects, { name: "", value: "", guessed: false }])}
+                >
+                  + Add specific
+                </button>
+                <p className="text-xs text-subtle">Several values: separate with |</p>
+              </div>
+            </fieldset>
+
+            <div className="card">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-base font-semibold tracking-tight">
+                  Description{isGuess("description") && <GuessBadge />}
+                </span>
+                <div className="flex rounded-full bg-surface-2 p-1 text-sm font-semibold" role="group" aria-label="Description view">
+                  {[
+                    ["Edit HTML", false],
+                    ["Preview", true],
+                  ].map(([label, value]) => (
+                    <button
+                      key={String(label)}
+                      aria-pressed={showPreview === value}
+                      onClick={() => setShowPreview(value as boolean)}
+                      className={`rounded-full px-3 py-1.5 transition-colors ${
+                        showPreview === value ? "bg-surface text-foreground shadow-card" : "text-muted"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {showPreview ? (
+                // Preview in a sandboxed iframe so the HTML can't run scripts in the app.
+                <iframe
+                  title="Description preview"
+                  sandbox=""
+                  className="h-80 w-full rounded-xl border border-line bg-white"
+                  srcDoc={draft.descriptionHtml}
+                />
+              ) : (
+                <textarea
+                  className={`${field(isGuess("description"))} font-mono text-sm`}
+                  rows={10}
+                  value={draft.descriptionHtml}
+                  onChange={(e) => update("descriptionHtml", e.target.value, "description")}
+                />
+              )}
+            </div>
+
+            <label className="card block">
+              <span className="label">Photo URLs (one per line, https)</span>
+              <textarea
+                className={input}
+                rows={3}
+                value={imageText}
+                onChange={(e) => setImageText(e.target.value)}
+                placeholder="https://…"
+              />
+              <span className="hint block">eBay needs at least one public photo URL. Uploading from the camera comes later.</span>
+            </label>
+          </section>
+        )}
+      </main>
 
       {generated && draft && (
-        <section className="mt-6 space-y-4">
-          {(generated.warnings.length > 0 || generated.checks.length > 0) && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-              <p className="font-medium">Check before publishing</p>
-              <ul className="mt-1 list-disc pl-5">
-                {[...generated.warnings, ...generated.checks].map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <label className="block">
-            <span className="text-sm font-medium">
-              Title{isGuess("title") && <GuessBadge />}
-              <span
-                className={`float-right ${draft.title.length > TITLE_MAX ? "text-red-600" : "text-zinc-500"}`}
-              >
-                {draft.title.length}/{TITLE_MAX}
-              </span>
-            </span>
-            <input
-              className={field(isGuess("title"))}
-              value={draft.title}
-              maxLength={TITLE_MAX}
-              onChange={(e) => update("title", e.target.value)}
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-sm font-medium">Price ({priceCheck?.sold?.currency ?? priceCheck?.current?.currency ?? "CAD"})</span>
-              <input
-                className={input}
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={draft.price ?? ""}
-                onChange={(e) => choosePrice(e.target.value ? Number(e.target.value) : undefined)}
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium">Quantity</span>
-              <input
-                className={input}
-                type="number"
-                inputMode="numeric"
-                min="1"
-                value={draft.quantity}
-                onChange={(e) => update("quantity", Math.max(1, Number(e.target.value) || 1))}
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="text-sm font-medium">
-              Category{isGuess("categoryId") && <GuessBadge />}
-            </span>
-            {generated.categorySuggestions.length > 0 ? (
-              <select
-                className={field(isGuess("categoryId"))}
-                value={draft.categoryId}
-                onChange={(e) => {
-                  const c = generated.categorySuggestions.find((s) => s.categoryId === e.target.value);
-                  update("categoryId", e.target.value);
-                  update("categoryName", c?.path, "categoryId");
-                }}
-              >
-                {generated.categorySuggestions.map((c) => (
-                  <option key={c.categoryId} value={c.categoryId}>
-                    {c.path}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className={input}
-                inputMode="numeric"
-                placeholder="eBay category ID"
-                value={draft.categoryId}
-                onChange={(e) => update("categoryId", e.target.value)}
-              />
-            )}
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium">
-              Condition{isGuess("condition") && <GuessBadge />}
-            </span>
-            <select
-              className={field(isGuess("condition"))}
-              value={draft.condition}
-              onChange={(e) => update("condition", e.target.value as Draft["condition"])}
-            >
-              {CONDITIONS.map((c) => (
-                <option key={c} value={c}>
-                  {CONDITION_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium">
-              Condition notes{isGuess("conditionDescription") && <GuessBadge />}
-            </span>
-            <textarea
-              className={field(isGuess("conditionDescription"))}
-              rows={2}
-              value={draft.conditionDescription ?? ""}
-              onChange={(e) => update("conditionDescription", e.target.value || undefined)}
-            />
-          </label>
-
-          <fieldset>
-            <legend className="mb-1 text-sm font-medium">Item specifics</legend>
-            <div className="space-y-2">
-              {draft.aspects.map((a, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    className={`${input} w-2/5`}
-                    value={a.name}
-                    aria-label="Specific name"
-                    onChange={(e) =>
-                      update(
-                        "aspects",
-                        draft.aspects.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
-                      )
-                    }
-                  />
-                  <input
-                    className={`${field(a.guessed)} w-3/5`}
-                    value={a.value}
-                    aria-label={`${a.name} value`}
-                    placeholder={a.guessed ? "guess, check it" : ""}
-                    onChange={(e) =>
-                      update(
-                        "aspects",
-                        draft.aspects.map((x, j) => (j === i ? { ...x, value: e.target.value, guessed: false } : x)),
-                      )
-                    }
-                  />
-                  <button
-                    className="px-2 text-zinc-500"
-                    aria-label={`Remove ${a.name}`}
-                    onClick={() => update("aspects", draft.aspects.filter((_, j) => j !== i))}
-                  >
-                    ✕
-                  </button>
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/85 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
+          <div className="mx-auto max-w-lg space-y-2">
+            {error && <div className="max-h-[40vh] overflow-y-auto">{errorBox}</div>}
+            {published && (
+              <div className="notice notice-ok fade-in flex items-start gap-3">
+                <CheckIcon />
+                <div>
+                  <p className="font-semibold">Published{published.env === "sandbox" ? " to the eBay sandbox" : ""}.</p>
+                  <p>
+                    Listing {published.listingId}:{" "}
+                    <a className="font-semibold underline" href={published.url} target="_blank" rel="noreferrer">
+                      open on eBay
+                    </a>
+                  </p>
                 </div>
-              ))}
-              <button
-                className="text-sm font-medium text-blue-700 dark:text-blue-400"
-                onClick={() => update("aspects", [...draft.aspects, { name: "", value: "", guessed: false }])}
-              >
-                + Add specific
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">Several values: separate with |</p>
-          </fieldset>
-
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-sm font-medium">
-                Description{isGuess("description") && <GuessBadge />}
-              </span>
-              <button className="text-sm text-blue-700 dark:text-blue-400" onClick={() => setShowPreview((p) => !p)}>
-                {showPreview ? "Edit HTML" : "Preview"}
-              </button>
-            </div>
-            {showPreview ? (
-              // Preview in a sandboxed iframe so the HTML can't run scripts in the app.
-              <iframe
-                title="Description preview"
-                sandbox=""
-                className="h-80 w-full rounded-lg border border-zinc-300 bg-white"
-                srcDoc={draft.descriptionHtml}
-              />
-            ) : (
-              <textarea
-                className={`${field(isGuess("description"))} font-mono text-sm`}
-                rows={10}
-                value={draft.descriptionHtml}
-                onChange={(e) => update("descriptionHtml", e.target.value, "description")}
-              />
+              </div>
             )}
-          </div>
-
-          <label className="block">
-            <span className="text-sm font-medium">Photo URLs (one per line, https)</span>
-            <textarea
-              className={input}
-              rows={3}
-              value={imageText}
-              onChange={(e) => setImageText(e.target.value)}
-              placeholder="https://…"
-            />
-            <span className="text-xs text-zinc-500">
-              eBay needs at least one public photo URL. Uploading from the camera comes later.
-            </span>
-          </label>
-
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <label className="block">
-              <span className="font-medium">Brand{isGuess("brand") && <GuessBadge />}</span>
-              <input
-                className={field(isGuess("brand"))}
-                value={draft.brand ?? ""}
-                onChange={(e) => update("brand", e.target.value || undefined)}
-              />
-            </label>
-            <label className="block">
-              <span className="font-medium">SKU</span>
-              <input className={input} value={draft.sku} onChange={(e) => update("sku", e.target.value)} />
-            </label>
-          </div>
-
-          <button className={button} disabled={loading !== null} onClick={publish}>
-            {loading === "publish" ? "Publishing…" : "Publish to eBay"}
-          </button>
-          {guessCount > 0 && (
-            <p className="text-center text-xs text-amber-700 dark:text-amber-300">
-              {guessCount} field{guessCount > 1 ? "s are" : " is"} still marked as a guess.
-            </p>
-          )}
-
-          {published && (
-            <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900 dark:bg-green-950/40 dark:text-green-100">
-              <p className="font-medium">Published{published.env === "sandbox" ? " to the eBay sandbox" : ""}.</p>
-              <p>
-                Listing {published.listingId}:{" "}
-                <a className="underline" href={published.url} target="_blank" rel="noreferrer">
-                  open on eBay
-                </a>
+            {guessCount > 0 && (
+              <p className="text-center text-xs font-medium text-warn-ink">
+                {guessCount} field{guessCount > 1 ? "s are" : " is"} still marked as a guess.
               </p>
-            </div>
-          )}
-        </section>
+            )}
+            <button className="btn btn-primary btn-lg w-full" disabled={loading !== null} onClick={publish}>
+              {loading === "publish" ? (
+                <>
+                  <Spinner /> Publishing…
+                </>
+              ) : (
+                <>
+                  Publish to eBay
+                  {draft.price !== undefined && (
+                    <span className="opacity-80">· {formatMoney(draft.price, priceCheck?.sold?.currency ?? priceCheck?.current?.currency ?? "CAD")}</span>
+                  )}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       )}
-    </main>
+    </>
+  );
+}
+
+function DraftSkeleton() {
+  return (
+    <div className="card space-y-4 fade-in" aria-hidden>
+      {[0.5, 0.33, 0.4].map((w, i) => (
+        <div key={i} className="space-y-2">
+          <div className="skeleton h-3" style={{ width: `${w * 100}%` }} />
+          <div className="skeleton h-12" />
+        </div>
+      ))}
+      <div className="skeleton h-32" />
+    </div>
+  );
+}
+
+function SparkIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0" aria-hidden>
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="m8 12.5 2.7 2.7L16 9.8" />
+    </svg>
   );
 }
