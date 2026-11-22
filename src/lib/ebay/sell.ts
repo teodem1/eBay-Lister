@@ -49,6 +49,57 @@ export const CONDITIONS = [
 ] as const;
 export type Condition = (typeof CONDITIONS)[number];
 
+/** eBay's numeric condition IDs (Metadata API) for each Inventory API condition enum. */
+export const CONDITION_IDS: Record<Condition, string> = {
+  NEW: "1000",
+  LIKE_NEW: "2750",
+  NEW_OTHER: "1500",
+  NEW_WITH_DEFECTS: "1750",
+  CERTIFIED_REFURBISHED: "2000",
+  EXCELLENT_REFURBISHED: "2010",
+  VERY_GOOD_REFURBISHED: "2020",
+  GOOD_REFURBISHED: "2030",
+  SELLER_REFURBISHED: "2500",
+  USED_EXCELLENT: "3000",
+  USED_VERY_GOOD: "4000",
+  USED_GOOD: "5000",
+  USED_ACCEPTABLE: "6000",
+  FOR_PARTS_OR_NOT_WORKING: "7000",
+};
+const CONDITION_BY_ID = Object.fromEntries(Object.entries(CONDITION_IDS).map(([k, v]) => [v, k as Condition]));
+
+// Closest substitutes, best first, when a category doesn't accept a condition.
+const CONDITION_FALLBACKS: Partial<Record<Condition, Condition[]>> = {
+  USED_VERY_GOOD: ["USED_EXCELLENT", "USED_GOOD"],
+  USED_GOOD: ["USED_EXCELLENT", "USED_VERY_GOOD", "USED_ACCEPTABLE"],
+  USED_ACCEPTABLE: ["USED_GOOD", "USED_EXCELLENT"],
+  USED_EXCELLENT: ["USED_VERY_GOOD", "USED_GOOD", "LIKE_NEW"],
+  LIKE_NEW: ["NEW_OTHER", "USED_EXCELLENT"],
+  NEW_OTHER: ["NEW", "LIKE_NEW"],
+  NEW_WITH_DEFECTS: ["NEW_OTHER", "NEW"],
+  EXCELLENT_REFURBISHED: ["SELLER_REFURBISHED", "VERY_GOOD_REFURBISHED"],
+  VERY_GOOD_REFURBISHED: ["SELLER_REFURBISHED", "GOOD_REFURBISHED"],
+  GOOD_REFURBISHED: ["SELLER_REFURBISHED", "VERY_GOOD_REFURBISHED"],
+  CERTIFIED_REFURBISHED: ["SELLER_REFURBISHED"],
+};
+
+/** The condition itself if the category allows it, else its closest allowed substitute. */
+export function nearestAllowedCondition(condition: Condition, allowed: readonly Condition[]): Condition {
+  if (!allowed.length || allowed.includes(condition)) return condition;
+  for (const c of CONDITION_FALLBACKS[condition] ?? []) if (allowed.includes(c)) return c;
+  if (condition.startsWith("USED")) {
+    const used = allowed.find((c) => c.startsWith("USED"));
+    if (used) return used;
+  }
+  return allowed[0];
+}
+
+/** Box weight and size, needed when the shipping policy uses calculated shipping. */
+export interface PackageInput {
+  weightKg?: number;
+  dimensionsCm?: { length: number; width: number; height: number };
+}
+
 export interface InventoryItemInput {
   sku: string;
   title: string;
@@ -62,6 +113,7 @@ export interface InventoryItemInput {
   upc?: string[];
   brand?: string;
   mpn?: string;
+  package?: PackageInput;
 }
 
 export interface OfferInput {
@@ -197,6 +249,7 @@ export class EbaySellClient {
       availability: { shipToLocationAvailability: { quantity: item.quantity } },
       condition: item.condition,
       conditionDescription: item.conditionDescription || undefined,
+      packageWeightAndSize: packageWeightAndSize(item.package),
       product,
     });
     if (res.status !== 201 && res.status !== 204 && !res.ok) {
@@ -265,6 +318,32 @@ export class EbaySellClient {
     return listingId;
   }
 
+  // ---------- Metadata (which conditions a category accepts) ----------
+
+  /**
+   * Conditions each category accepts, keyed by category ID. A category missing from the
+   * result has no condition policy on eBay (any condition is fine).
+   */
+  async getCategoryConditions(categoryIds: string[]): Promise<Record<string, Condition[]>> {
+    const ids = categoryIds.filter((id) => /^\d+$/.test(id));
+    if (!ids.length) return {};
+    const token = await this.getAppToken();
+    const qs = new URLSearchParams({ filter: `categoryIds:{${ids.join("|")}}` });
+    const res = await this.fetchImpl(
+      `${this.config.apiBase}/sell/metadata/v1/marketplace/${this.config.marketplaceId}/get_item_condition_policies?${qs}`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Accept-Language": this.config.contentLanguage } },
+    );
+    const data = await readBody(res);
+    if (!res.ok) throw new EbayApiError("condition policies", res.status, data);
+    const out: Record<string, Condition[]> = {};
+    for (const p of (data as { itemConditionPolicies?: { categoryId: string; itemConditions?: { conditionId: string }[] }[] })
+      .itemConditionPolicies ?? []) {
+      const conditions = (p.itemConditions ?? []).map((c) => CONDITION_BY_ID[c.conditionId]).filter(Boolean);
+      if (conditions.length) out[p.categoryId] = conditions;
+    }
+    return out;
+  }
+
   // ---------- Taxonomy (category + required item specifics) ----------
 
   private async taxonomyGet(step: string, path: string): Promise<unknown> {
@@ -317,6 +396,15 @@ export class EbaySellClient {
       .slice(0, 25)
       .map((a) => ({ name: a.localizedAspectName, required: Boolean(a.aspectConstraint?.aspectRequired) }));
   }
+}
+
+function packageWeightAndSize(pkg?: PackageInput) {
+  if (!pkg) return undefined;
+  const out: Record<string, unknown> = {};
+  if (pkg.weightKg && pkg.weightKg > 0) out.weight = { value: pkg.weightKg, unit: "KILOGRAM" };
+  const d = pkg.dimensionsCm;
+  if (d && d.length > 0 && d.width > 0 && d.height > 0) out.dimensions = { ...d, unit: "CENTIMETER" };
+  return Object.keys(out).length ? out : undefined;
 }
 
 async function readBody(res: Response): Promise<unknown> {

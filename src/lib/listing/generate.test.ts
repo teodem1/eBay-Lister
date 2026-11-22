@@ -17,6 +17,8 @@ const claudeOut: ClaudeListing = {
     { name: "Couleur", value: "Blanc", guessed: true },
   ],
   descriptionHtml: '<p onclick="x()">Bonne console</p><script>alert(1)</script>',
+  packageWeightKg: 0,
+  packageDimensionsCm: { length: 0, width: 0, height: 0 },
   guessedFields: ["condition"],
   checks: ["Confirm the original box is included"],
 };
@@ -35,6 +37,7 @@ describe("generateListing", () => {
         .fn()
         .mockResolvedValue([{ categoryId: "139971", categoryName: "Consoles", path: "Jeux vidéo > Consoles" }]),
       getCategoryAspects: vi.fn().mockResolvedValue([{ name: "Marque", required: true }]),
+      getCategoryConditions: vi.fn().mockResolvedValue({}),
     } as unknown as EbaySellClient;
 
     const out = await generateListing(
@@ -54,6 +57,35 @@ describe("generateListing", () => {
     expect(req.model).toBe("claude-opus-5-5");
     expect(req.messages[0].content).toContain("Marque (required)");
     expect(req.messages[0].content).toContain("en-CA");
+  });
+
+  it("swaps a condition the category refuses and keeps the package estimate", async () => {
+    const { client, parse } = fakeAnthropic({
+      ...claudeOut,
+      condition: "USED_GOOD",
+      guessedFields: [],
+      packageWeightKg: 0.456,
+      packageDimensionsCm: { length: 20.2, width: 15, height: 8 },
+    });
+    const ebay = {
+      getCategoryTreeId: vi.fn().mockResolvedValue("2"),
+      suggestCategories: vi
+        .fn()
+        .mockResolvedValue([{ categoryId: "117042", categoryName: "Controllers", path: "Video Games > Controllers" }]),
+      getCategoryAspects: vi.fn().mockResolvedValue([]),
+      getCategoryConditions: vi.fn().mockResolvedValue({ "117042": ["NEW", "USED_EXCELLENT", "FOR_PARTS_OR_NOT_WORKING"] }),
+    } as unknown as EbaySellClient;
+
+    const out = await generateListing({ query: "pro controller" }, { anthropic: client, ebay, config });
+
+    expect(out.draft.condition).toBe("USED_EXCELLENT");
+    expect(out.guessedFields).toContain("condition");
+    expect(out.warnings.join(" ")).toMatch(/USED_GOOD/);
+    expect(out.conditionsByCategory["117042"]).toHaveLength(3);
+    expect(out.draft.packageWeightKg).toBe(0.46);
+    expect(out.draft.packageDimensionsCm).toEqual({ length: 21, width: 15, height: 8 });
+    expect(out.guessedFields).toContain("package");
+    expect(parse.mock.calls[0][0].messages[0].content).toContain("Allowed conditions for this category: NEW, USED_EXCELLENT");
   });
 
   it("still works without eBay keys and warns", async () => {

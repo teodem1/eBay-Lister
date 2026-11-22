@@ -1,6 +1,6 @@
 // Shared shapes for the listing draft that the review screen edits and the publish route sends to eBay.
 import { z } from "zod";
-import { CONDITIONS } from "../ebay/sell";
+import { CONDITIONS, type Condition } from "../ebay/sell";
 
 export const TITLE_MAX = 80; // eBay hard limit
 
@@ -36,6 +36,11 @@ export const ListingDraftSchema = z.object({
   barcode: z.string().optional(),
   brand: z.string().optional(),
   mpn: z.string().optional(),
+  /** Packed weight. eBay needs it when the shipping policy uses calculated shipping. */
+  packageWeightKg: z.number().positive().max(500).optional(),
+  packageDimensionsCm: z
+    .object({ length: z.number().positive(), width: z.number().positive(), height: z.number().positive() })
+    .optional(),
 });
 export type ListingDraft = z.infer<typeof ListingDraftSchema>;
 
@@ -47,6 +52,8 @@ export interface GeneratedListing {
     categoryId: string;
   };
   categorySuggestions: { categoryId: string; categoryName: string; path: string }[];
+  /** Conditions each suggested category accepts; a category not listed accepts any. */
+  conditionsByCategory: Record<string, Condition[]>;
   /** Fields Claude guessed, by name: "title", "condition", "brand", ... (aspects carry their own flag). */
   guessedFields: string[];
   /** Things to verify before publishing, written by Claude. */

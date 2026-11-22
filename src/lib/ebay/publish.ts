@@ -22,6 +22,23 @@ export function aspectsToEbay(aspects: ListingDraft["aspects"]): Record<string, 
   return out;
 }
 
+/**
+ * Many categories refuse to publish without Brand and MPN item specifics
+ * (25002 "Input data for tag <BrandMPN> is invalid or missing").
+ * Fills them from the draft, with eBay's "Does not apply" for an unknown MPN.
+ */
+export function withBrandAndMpn(
+  aspects: Record<string, string[]>,
+  brand?: string,
+  mpn?: string,
+): Record<string, string[]> {
+  const out = { ...aspects };
+  const has = (name: string) => Object.keys(out).some((k) => k.toLowerCase() === name.toLowerCase());
+  if (!has("Brand") && brand?.trim()) out.Brand = [brand.trim()];
+  if (!has("MPN")) out.MPN = [mpn?.trim() || "Does not apply"];
+  return out;
+}
+
 /** EAN is 8 or 13 digits, UPC is 12. Anything else is not sent as a product identifier. */
 export function barcodeIdentifiers(barcode?: string): { ean?: string[]; upc?: string[] } {
   const digits = barcode?.replace(/\D/g, "") ?? "";
@@ -39,11 +56,12 @@ export async function publishListing(client: EbaySellClient, draft: ListingDraft
     descriptionHtml: draft.descriptionHtml,
     condition: draft.condition,
     conditionDescription: draft.conditionDescription,
-    aspects: aspectsToEbay(draft.aspects),
+    aspects: withBrandAndMpn(aspectsToEbay(draft.aspects), draft.brand, draft.mpn),
     imageUrls: draft.imageUrls,
     quantity: draft.quantity,
     brand: draft.brand,
     mpn: draft.mpn,
+    package: { weightKg: draft.packageWeightKg, dimensionsCm: draft.packageDimensionsCm },
     ...barcodeIdentifiers(draft.barcode),
   });
 
