@@ -112,4 +112,20 @@ describe("trimTitle / sanitizeDescription", () => {
   it("removes active content", () => {
     expect(sanitizeDescription('<a href="javascript:x">y</a><iframe src="z"></iframe>')).toBe('<a href="x">y</a>');
   });
+  it("uses the seller's condition, not Claude's guess", async () => {
+    const { client, parse } = fakeAnthropic({ ...claudeOut, condition: "USED_GOOD", conditionDescription: "Some scratches" });
+    const out = await generateListing(
+      {
+        query: "Radiohead OK Computer CD",
+        sellerCondition: { condition: "USED_VERY_GOOD", disc: "Near mint", case: "Very good", tested: true },
+      },
+      { anthropic: client, config },
+    );
+    expect(out.draft.condition).toBe("USED_VERY_GOOD");
+    expect(out.draft.conditionDescription).toBe("Disc: near mint. Case: very good. Tested: plays through without skips.");
+    expect(out.guessedFields).not.toContain("condition");
+    const text = parse.mock.calls[0][0].messages[0].content as string;
+    expect(text).toContain("Seller's condition (use exactly this): USED_VERY_GOOD. Disc: near mint.");
+    expect(text).not.toContain("condition unknown");
+  });
 });

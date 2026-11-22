@@ -1,6 +1,7 @@
 // Shared shapes for the listing draft that the review screen edits and the publish route sends to eBay.
 import { z } from "zod";
 import { CONDITIONS, type Condition } from "../ebay/sell";
+import { SellerConditionSchema } from "./condition";
 
 export const TITLE_MAX = 80; // eBay hard limit
 
@@ -18,6 +19,8 @@ export const ItemInputSchema = z.object({
   barcode: z.string().optional(),
   notes: z.string().optional(),
   suggestedPrice: z.number().positive().optional(),
+  /** The seller's own condition. When given, it sets the eBay condition and condition text. */
+  sellerCondition: SellerConditionSchema.optional(),
 });
 export type ItemInput = z.infer<typeof ItemInputSchema>;
 
