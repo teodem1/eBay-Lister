@@ -11,10 +11,14 @@
  * Pricing (Nov 2026): free 100 requests/month, $9/month for 2,000. One call
  * here is one request.
  *
- * GUESS: field types below follow the docs (prices as decimal strings or
- * numbers, endedAt as YYYY-MM-DD, itemLocation as a country name). The docs
- * do not list a GTIN parameter, so a barcode is only sent as the keyword
- * when there is no item text.
+ * Checked against the live API (Nov 2026, ebay.ca): prices are decimal
+ * strings ("286.88") in soldCurrency, shipping has its own shippingCurrency,
+ * free shipping comes as shippingPrice null with shippingType "free", endedAt
+ * is YYYY-MM-DD, and itemLocation is a bare country name ("United States").
+ * itemLocation is null when eBay shows no "from <country>" line, which it
+ * only shows for items outside the site's country, so null means domestic.
+ * The docs do not list a GTIN parameter, so a barcode is only sent as the
+ * keyword when there is no item text.
  */
 import type { Comparable, ComparableQuery } from "./types";
 
@@ -29,6 +33,10 @@ export interface SoldCompsOptions {
   fetch?: FetchLike;
   now?: Date;
 }
+
+/** EBAY_CA -> "CA". The site's home country, for items with no location. */
+export const homeCountry = (marketplaceId: string): string | null =>
+  /^EBAY_([A-Z]{2})$/.exec(marketplaceId)?.[1] ?? null;
 
 const SITE_BY_MARKETPLACE: Record<string, string> = {
   EBAY_US: "ebay.com",
@@ -78,9 +86,10 @@ interface RawSoldItem {
   soldPrice?: string | number;
   soldCurrency?: string;
   shippingPrice?: string | number | null;
+  shippingCurrency?: string | null;
   shippingType?: string;
   endedAt?: string;
-  itemLocation?: string;
+  itemLocation?: string | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -90,7 +99,7 @@ const num = (v: unknown): number | null => {
 };
 
 /** "Toronto, Ontario, Canada" or "Canada" -> "CA". Unknown names -> null. */
-export function countryCode(location: string | undefined): string | null {
+export function countryCode(location: string | null | undefined): string | null {
   if (!location) return null;
   const last = location.split(",").pop()!.trim().toLowerCase();
   if (/^[a-z]{2}$/.test(last)) return last.toUpperCase();
@@ -111,7 +120,15 @@ export function buildSoldCompsUrl(q: ComparableQuery, opts: SoldCompsOptions): s
   return `${SOLD_COMPS_BASE}/v1/scrape?${params}`;
 }
 
-export function normaliseSoldCompsItem(raw: RawSoldItem, q: ComparableQuery): Comparable | null {
+/**
+ * `siteCountry` is the marketplace's country (e.g. "CA" for ebay.ca); it is
+ * used when the provider gives no itemLocation (see the note at the top).
+ */
+export function normaliseSoldCompsItem(
+  raw: RawSoldItem,
+  q: ComparableQuery,
+  siteCountry: string | null = null,
+): Comparable | null {
   const price = num(raw.soldPrice);
   if (raw.itemId === undefined || price === null) return null;
   const currency = raw.soldCurrency ?? "";
@@ -120,8 +137,11 @@ export function normaliseSoldCompsItem(raw: RawSoldItem, q: ComparableQuery): Co
     itemId: String(raw.itemId),
     title: raw.title ?? "",
     price: { value: price, currency },
-    shippingCost: ship === null ? null : { value: ship, currency },
-    itemLocation: { country: countryCode(raw.itemLocation), postalCode: null },
+    shippingCost: ship === null ? null : { value: ship, currency: raw.shippingCurrency || currency },
+    itemLocation: {
+      country: raw.itemLocation ? countryCode(raw.itemLocation) : siteCountry,
+      postalCode: null,
+    },
     shippingDestination: q.destinationCountry ?? null,
     condition: raw.condition ?? null,
     soldDate: raw.endedAt ?? null,
@@ -141,6 +161,6 @@ export async function searchSoldComps(q: ComparableQuery, opts: SoldCompsOptions
   }
   const data = (await res.json()) as { items?: RawSoldItem[] };
   return (data.items ?? [])
-    .map((r) => normaliseSoldCompsItem(r, q))
+    .map((r) => normaliseSoldCompsItem(r, q, homeCountry(opts.marketplaceId)))
     .filter((c): c is Comparable => c !== null);
 }

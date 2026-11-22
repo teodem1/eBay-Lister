@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSoldCompsUrl, countryCode, normaliseSoldCompsItem, searchSoldComps } from "./soldComps";
+import { buildSoldCompsUrl, countryCode, homeCountry, normaliseSoldCompsItem, searchSoldComps } from "./soldComps";
 
 const opts = { apiKey: "sc_test", marketplaceId: "EBAY_CA", now: new Date("2026-11-22T00:00:00Z") };
 
@@ -50,6 +50,61 @@ describe("normaliseSoldCompsItem", () => {
         ?.shippingCost,
     ).toEqual({ value: 0, currency: "CAD" });
     expect(normaliseSoldCompsItem({ itemId: "1" }, {})).toBeNull();
+  });
+
+  it("parses an item as the live API returns it (ebay.ca, Nov 2026)", () => {
+    const raw = {
+      itemId: "168415872667",
+      url: "https://www.ebay.ca/itm/168415872667?nordt=true",
+      title: "Nintendo Switch OLED White With Satisfy Zen Grip And Case And A 200GB Micro SD",
+      condition: "Pre-Owned",
+      conditionId: 3000,
+      listingType: "sold",
+      endedAt: "2026-11-22",
+      soldPrice: "286.88",
+      soldPriceMax: null,
+      soldCurrency: "CAD",
+      shippingPrice: "113.96",
+      shippingCurrency: "CAD",
+      shippingType: "paid",
+      totalPrice: "400.84",
+      itemLocation: "United States",
+    };
+    expect(normaliseSoldCompsItem(raw, { destinationCountry: "CA" }, "CA")).toMatchObject({
+      itemId: "168415872667",
+      price: { value: 286.88, currency: "CAD" },
+      shippingCost: { value: 113.96, currency: "CAD" },
+      itemLocation: { country: "US" },
+      soldDate: "2026-11-22",
+      condition: "Pre-Owned",
+    });
+  });
+
+  it("uses shippingCurrency when it differs from the sold currency", () => {
+    const c = normaliseSoldCompsItem(
+      { itemId: "1", soldPrice: "10", soldCurrency: "CAD", shippingPrice: "5", shippingCurrency: "USD" },
+      {},
+    );
+    expect(c?.shippingCost).toEqual({ value: 5, currency: "USD" });
+  });
+
+  it("treats a missing location as the site's own country", () => {
+    // Live free-shipping item from ebay.ca: no "from <country>" line, so it is domestic.
+    const raw = {
+      itemId: "137935301233",
+      soldPrice: "247.05",
+      soldCurrency: "CAD",
+      shippingPrice: null,
+      shippingCurrency: null,
+      shippingType: "free",
+      endedAt: "2026-11-20",
+      itemLocation: null,
+    };
+    const c = normaliseSoldCompsItem(raw, {}, "CA");
+    expect(c?.itemLocation.country).toBe("CA");
+    expect(c?.shippingCost).toEqual({ value: 0, currency: "CAD" });
+    expect(homeCountry("EBAY_CA")).toBe("CA");
+    expect(homeCountry("EBAY_MOTORS")).toBeNull();
   });
 
   it("maps country names", () => {
