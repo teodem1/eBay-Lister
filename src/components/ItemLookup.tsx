@@ -5,13 +5,13 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { resizeImage } from "@/lib/resize-image";
 import { normalizeGtin } from "@/lib/identify/barcode";
-import { listingHref, type LookupError, type LookupResponse } from "@/lib/lookup";
+import { listingHref, listingQuery, type LookupError, type LookupResponse } from "@/lib/lookup";
 import type { ItemSummary } from "@/lib/ebay/client";
 import { takeItemPhoto } from "@/lib/native/camera";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
-import { itemFromLookup, type CollectionItem } from "@/lib/collection/collection";
-import { collectionStore } from "@/lib/collection/store";
+import { itemFromLookup } from "@/lib/collection/collection";
+import { stashScanned } from "@/lib/collection/store";
 import { AppBar, Spinner, TabBar } from "./ui";
 
 const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
@@ -22,36 +22,14 @@ type Status =
   | { kind: "done"; data: LookupResponse; preview?: string }
   | { kind: "error"; message: string };
 
-/** What the last lookup saved to the Collection, so it can be undone. */
-type Saved = { item: CollectionItem; isNew: boolean; before: CollectionItem[] };
-
 export default function ItemLookup() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const [saved, setSaved] = useState<Saved | null>(null);
+  // Small copy of the last photo, used as the cover when nothing better is found.
+  const [thumb, setThumb] = useState<string | undefined>();
 
-  /** Every identified item goes into the Collection (a rescan refreshes its entry). */
-  function saveToCollection(data: LookupResponse, thumb?: Promise<string | undefined>) {
-    const item = itemFromLookup(data);
-    if (!item) return;
-    const before = collectionStore.all();
-    const result = collectionStore.save(item);
-    setSaved({ item: result.saved, isNew: result.isNew, before });
-    // No cover from MusicBrainz or eBay: use a small copy of the user's photo.
-    if (!result.saved.coverUrl && thumb) {
-      thumb.then((url) => url && collectionStore.update(result.saved.id, { coverUrl: url }));
-    }
-  }
-
-  function undoSave() {
-    if (!saved) return;
-    collectionStore.restore(saved.before);
-    setSaved(null);
-  }
-
-  async function run(label: string, request: () => Promise<Response>, preview?: string, thumb?: Promise<string | undefined>) {
-    setSaved(null);
+  async function run(label: string, request: () => Promise<Response>, preview?: string) {
     setStatus({ kind: "loading", label, preview });
     try {
       const res = await request();
@@ -61,7 +39,6 @@ export default function ItemLookup() {
         return;
       }
       setStatus({ kind: "done", data: json, preview });
-      saveToCollection(json, thumb);
     } catch {
       setStatus({ kind: "error", message: "Network error. Check your connection and try again." });
     }
@@ -69,6 +46,7 @@ export default function ItemLookup() {
 
   function lookupBarcode(code: string) {
     setScanning(false);
+    setThumb(undefined);
     run(`Looking up barcode ${code}…`, () =>
       fetch("/api/lookup/barcode", {
         method: "POST",
@@ -126,12 +104,9 @@ export default function ItemLookup() {
     }
     const form = new FormData();
     form.append("image", blob, "photo.jpg");
-    run(
-      "Identifying the item…",
-      () => fetch("/api/lookup/photo", { method: "POST", body: form }),
-      preview,
-      thumbnailDataUrl(file),
-    );
+    setThumb(undefined);
+    thumbnailDataUrl(file).then(setThumb);
+    run("Identifying the item…", () => fetch("/api/lookup/photo", { method: "POST", body: form }), preview);
   }
 
   const busy = status.kind === "loading";
@@ -217,35 +192,12 @@ export default function ItemLookup() {
           </p>
         )}
 
-        {status.kind === "done" && saved && <SavedNotice saved={saved} onUndo={undoSave} />}
-
-        {status.kind === "done" && <Results data={status.data} preview={status.preview} />}
+        {status.kind === "done" && <Results data={status.data} preview={status.preview} thumb={thumb} />}
 
         {scanning && <BarcodeScanner onDetected={lookupBarcode} onClose={() => setScanning(false)} />}
       </main>
       <TabBar active="scan" />
     </>
-  );
-}
-
-function SavedNotice({ saved, onUndo }: { saved: Saved; onUndo: () => void }) {
-  const { item } = saved;
-  return (
-    <div className="notice notice-ok fade-in flex items-center gap-3" role="status">
-      <span className="min-w-0 flex-1">
-        <span className="block font-semibold">{saved.isNew ? "Added to your Collection" : "Updated in your Collection"}</span>
-        <span className="block truncate text-xs opacity-90">
-          {item.artist ? `${item.artist} · ` : ""}
-          {item.title}
-        </span>
-      </span>
-      <button type="button" onClick={onUndo} className="link px-1 text-sm">
-        Undo
-      </button>
-      <Link href="/collection" className="link px-1 text-sm">
-        View
-      </Link>
-    </div>
   );
 }
 
@@ -313,7 +265,16 @@ function LoadingResults({ label, preview }: { label: string; preview?: string })
   );
 }
 
-function Results({ data, preview }: { data: LookupResponse; preview?: string }) {
+function Results({ data, preview, thumb }: { data: LookupResponse; preview?: string; thumb?: string }) {
+  /**
+   * Hands what the scan found (cover, album details) to the listing screen,
+   * which adds the CD to the Collection once the listing is reviewed.
+   */
+  function handOff() {
+    const item = itemFromLookup(data);
+    stashScanned(item && { ...item, coverUrl: item.coverUrl ?? thumb, query: listingQuery(data) });
+  }
+
   const id = data.identification;
   return (
     <section className="flex flex-col gap-4 fade-in">
@@ -357,7 +318,7 @@ function Results({ data, preview }: { data: LookupResponse; preview?: string }) 
             {n}
           </p>
         ))}
-        <Link href={listingHref(data)} className="btn btn-primary btn-lg mt-4 w-full">
+        <Link href={listingHref(data)} onClick={handOff} className="btn btn-primary btn-lg mt-4 w-full">
           Create listing
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 12h14M13 6l6 6-6 6" />

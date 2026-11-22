@@ -7,6 +7,8 @@ import {
   itemFromLookup,
   mergeBackup,
   parseBackup,
+  saveReviewed,
+  itemFromListing,
   totalValue,
   upsert,
   withCategory,
@@ -134,5 +136,67 @@ describe("search, categories and value", () => {
     expect(back).toHaveLength(3);
     expect(mergeBackup(items.slice(0, 1), back)).toHaveLength(3);
     expect(() => parseBackup("{}")).toThrow();
+  });
+});
+
+describe("saving from the listing screen", () => {
+  const scanned = item({
+    id: "s",
+    title: "OK Computer",
+    artist: "Radiohead",
+    year: 1997,
+    barcode: "0724384260927",
+    coverUrl: "https://coverartarchive.org/x",
+    price: 15.5,
+    priceSource: "estimate",
+    categories: ["Alternative rock"],
+  });
+
+  it("prefers the reviewed item specifics and listing price, keeping the scanned cover", () => {
+    const out = itemFromListing(
+      {
+        title: "Radiohead OK Computer CD 1997 Parlophone Alternative Rock",
+        price: 22,
+        barcode: "0724384260927",
+        aspects: [
+          { name: "Artist", value: "Radiohead" },
+          { name: "Release Title", value: "OK Computer (Remastered)" },
+          { name: "Release Year", value: "2009" },
+          { name: "Genre", value: "Rock" },
+        ],
+        imageUrls: ["https://example.com/me.jpg"],
+      },
+      scanned,
+      now,
+    );
+    expect(out).toMatchObject({
+      title: "OK Computer (Remastered)",
+      artist: "Radiohead",
+      year: 2009,
+      price: 22,
+      priceSource: "manual",
+      coverUrl: "https://coverartarchive.org/x",
+      fallbackCoverUrl: "https://example.com/me.jpg",
+      categories: ["Alternative rock", "Rock"],
+    });
+  });
+
+  it("works without a scan, from the listing alone", () => {
+    const out = itemFromListing(
+      { title: "Blue Joni Mitchell CD", price: 18, aspects: [{ name: "Artiste", value: "Joni Mitchell" }], imageUrls: ["https://e.com/a.jpg"] },
+      null,
+      now,
+    );
+    expect(out).toMatchObject({ title: "Blue Joni Mitchell CD", artist: "Joni Mitchell", coverUrl: "https://e.com/a.jpg", price: 18 });
+  });
+
+  it("updates the existing entry for the same CD", () => {
+    const existing = item({ id: "old", title: "OK Computer", artist: "Radiohead", barcode: "1", categories: ["90s"], price: 10, addedAt: "2026-01-01" });
+    const reviewed = item({ id: "new", title: "OK Computer", artist: "Radiohead", barcode: "1", categories: ["Rock"], price: 25, priceSource: "manual" });
+    const out = saveReviewed([existing], reviewed);
+    expect(out.isNew).toBe(false);
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0]).toMatchObject({ id: "old", addedAt: "2026-01-01", price: 25, categories: ["90s", "Rock"] });
+    expect(saveReviewed([], reviewed).isNew).toBe(true);
   });
 });
