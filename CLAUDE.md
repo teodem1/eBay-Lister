@@ -19,7 +19,14 @@ through server-side API routes so the client secret never reaches the browser.
 - Test:    `npm test` (Vitest)
 - Lint:    `npm run lint`
 - Build:   `npm run build`
-- APK (later, via Capacitor): `npx cap sync android`, then `npx cap open android`
+- APK (Capacitor): `CAP_SERVER_URL=https://<host> npm run cap:sync`, then
+  `npm run cap:open` (Android Studio) or `npm run android:apk`. CI builds a
+  debug APK in `.github/workflows/android-apk.yml`. See `docs/android.md`.
+
+The Android app is a Capacitor shell that loads the hosted Next.js server
+(`server.url`), so nothing secret is bundled. Screens use the camera and
+barcode scanner only through `src/lib/native/` (native in the APK, browser
+fallback on the web).
 
 Copy `.env.example` to `.env` and fill in your eBay keys (use `EBAY_ENV=sandbox`
 while developing).

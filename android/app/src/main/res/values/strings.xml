@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">eBay Lister</string>
+    <string name="title_activity_main">eBay Lister</string>
+    <string name="package_name">com.teodem1.ebaylister</string>
+    <string name="custom_url_scheme">com.teodem1.ebaylister</string>
+</resources>
