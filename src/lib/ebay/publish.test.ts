@@ -263,3 +263,31 @@ describe("promoted listings", () => {
     await expect(new EbaySellClient(config, fetchImpl).promoteListing("L1", 11)).rejects.toThrow(/api\/ebay\/connect/);
   });
 });
+
+describe("best offer", () => {
+  it("auto-accepts offers up to the given % below the price", async () => {
+    const { bestOfferTerms } = await import("./sell");
+    expect(bestOfferTerms(14.99, 20, "CAD")).toEqual({
+      bestOfferEnabled: true,
+      autoAcceptPrice: { value: "12.00", currency: "CAD" },
+    });
+    expect(bestOfferTerms(14.99, 0, "CAD")).toBeUndefined();
+    expect(bestOfferTerms(14.99, undefined, "CAD")).toBeUndefined();
+  });
+
+  it("sends bestOfferTerms on the offer from the server default", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/inventory/v1/location/default-location": () => [200, {}],
+      "PUT /sell/inventory/v1/inventory_item/BC-123": () => [204],
+      "GET /sell/inventory/v1/offer": () => [200, { offers: [] }],
+      "POST /sell/inventory/v1/offer": () => [201, { offerId: "O1" }],
+      "POST /sell/inventory/v1/offer/O1/publish": () => [200, { listingId: "L1" }],
+    });
+    await publishListing(new EbaySellClient(config, fetchImpl), draft, { bestOfferAutoAcceptPercent: 20 });
+    const offer = calls.find((c) => c.method === "POST" && c.url.endsWith("/offer"))!;
+    expect(offer.body).toMatchObject({
+      listingPolicies: { bestOfferTerms: { bestOfferEnabled: true, autoAcceptPrice: { value: "199.92", currency: "CAD" } } },
+    });
+  });
+});

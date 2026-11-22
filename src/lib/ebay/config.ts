@@ -20,6 +20,8 @@ export interface EbayConfig {
   returnPolicyId?: string;
   /** Promoted Listings Standard ad rate (% of the sale) applied to every new listing; 0 = off. */
   promotedPercent: number;
+  /** Best Offer: auto-accept offers up to this % below the price; 0 = no Best Offer. */
+  bestOfferAutoAcceptPercent: number;
   /** Where the item ships from (inventory location). */
   location: {
     key: string;
@@ -59,6 +61,7 @@ export function getEbayConfig(env: Record<string, string | undefined> = process.
     paymentPolicyId: env.EBAY_PAYMENT_POLICY_ID || undefined,
     returnPolicyId: env.EBAY_RETURN_POLICY_ID || undefined,
     promotedPercent: parsePromotedPercent(env.EBAY_PROMOTED_PERCENT),
+    bestOfferAutoAcceptPercent: parseDiscountPercent(env.EBAY_BEST_OFFER_AUTO_ACCEPT_PERCENT),
     location: {
       key: env.EBAY_LOCATION_KEY || "default-location",
       country: env.EBAY_LOCATION_COUNTRY || defaults.country,
@@ -72,6 +75,12 @@ export function getEbayConfig(env: Record<string, string | undefined> = process.
 export function parsePromotedPercent(value?: string): number {
   const n = Number(value?.replace("%", "").trim());
   return Number.isFinite(n) && n >= 2 && n <= 100 ? Math.round(n * 10) / 10 : 0;
+}
+
+/** 1 to 90 (% below the price); anything else (or unset) = 0, off. */
+export function parseDiscountPercent(value?: string): number {
+  const n = Number(value?.replace("%", "").trim());
+  return Number.isFinite(n) && n >= 1 && n <= 90 ? n : 0;
 }
 
 /** eBay listing page for a published item, so the UI can link to it. */

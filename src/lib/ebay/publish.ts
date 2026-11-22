@@ -47,7 +47,11 @@ export function barcodeIdentifiers(barcode?: string): { ean?: string[]; upc?: st
   return {};
 }
 
-export async function publishListing(client: EbaySellClient, draft: ListingDraft): Promise<PublishResult> {
+export async function publishListing(
+  client: EbaySellClient,
+  draft: ListingDraft,
+  defaults: { bestOfferAutoAcceptPercent?: number } = {},
+): Promise<PublishResult> {
   const locationKey = await client.ensureLocation();
 
   await client.putInventoryItem({
@@ -72,6 +76,7 @@ export async function publishListing(client: EbaySellClient, draft: ListingDraft
       price: draft.price,
       quantity: draft.quantity,
       descriptionHtml: draft.descriptionHtml,
+      bestOfferAutoAcceptPercent: draft.bestOfferAutoAcceptPercent ?? defaults.bestOfferAutoAcceptPercent,
     },
     locationKey,
   );

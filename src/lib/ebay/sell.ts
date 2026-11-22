@@ -122,6 +122,8 @@ export interface OfferInput {
   price: number;
   quantity: number;
   descriptionHtml: string;
+  /** Best Offer: auto-accept offers up to this % below the price. Unset or 0 = no Best Offer. */
+  bestOfferAutoAcceptPercent?: number;
 }
 
 export interface CategorySuggestion {
@@ -270,6 +272,7 @@ export class EbaySellClient {
         fulfillmentPolicyId: c.fulfillmentPolicyId,
         paymentPolicyId: c.paymentPolicyId,
         returnPolicyId: c.returnPolicyId,
+        bestOfferTerms: bestOfferTerms(offer.price, offer.bestOfferAutoAcceptPercent, c.currency),
       },
       pricingSummary: { price: { value: offer.price.toFixed(2), currency: c.currency } },
       merchantLocationKey: locationKey,
@@ -464,6 +467,19 @@ export class EbaySellClient {
       .slice(0, 25)
       .map((a) => ({ name: a.localizedAspectName, required: Boolean(a.aspectConstraint?.aspectRequired) }));
   }
+}
+
+/**
+ * Best Offer that auto-accepts any offer at least (100 - percent)% of the price,
+ * e.g. 20 on $10.00 accepts $8.00 or more. Lower offers wait for the seller.
+ */
+export function bestOfferTerms(price: number, percent: number | undefined, currency: string) {
+  if (!percent || percent <= 0 || percent >= 100) return undefined;
+  const accept = Math.ceil(price * (1 - percent / 100) * 100) / 100;
+  return {
+    bestOfferEnabled: true,
+    autoAcceptPrice: { value: accept.toFixed(2), currency },
+  };
 }
 
 export function promotedCampaignName(percent: number): string {

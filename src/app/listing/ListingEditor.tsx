@@ -402,6 +402,30 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 />
               </label>
 
+              <label className="block">
+                <span className="label">Best Offer: auto-accept up to % below price (0 = off)</span>
+                <input
+                  className={input}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="90"
+                  step="1"
+                  placeholder="Server default"
+                  value={draft.bestOfferAutoAcceptPercent ?? ""}
+                  onChange={(e) =>
+                    update("bestOfferAutoAcceptPercent", e.target.value === "" ? undefined : Number(e.target.value))
+                  }
+                />
+                {!!draft.bestOfferAutoAcceptPercent && draft.price !== undefined && (
+                  <span className="mt-1 block text-xs text-muted">
+                    Offers of{" "}
+                    {formatMoney(Math.ceil(draft.price * (1 - draft.bestOfferAutoAcceptPercent / 100) * 100) / 100, "CAD")} or
+                    more are accepted automatically; lower ones wait for you.
+                  </span>
+                )}
+              </label>
+
               <fieldset>
                 <legend className="label">
                   Package (packed, for calculated shipping){isGuess("package") && <GuessBadge />}
