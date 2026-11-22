@@ -11,7 +11,7 @@ const config = getEbayConfig({
   EBAY_FULFILLMENT_POLICY_ID: "F1",
   EBAY_PAYMENT_POLICY_ID: "P1",
   EBAY_RETURN_POLICY_ID: "R1",
-  EBAY_LOCATION_POSTAL_CODE: "75001",
+  EBAY_LOCATION_POSTAL_CODE: "M5V 2T6",
 });
 
 const draft: ListingDraft = {
@@ -77,7 +77,7 @@ describe("publishListing", () => {
     expect(String(tokenCalls[0].body)).toContain("grant_type=refresh_token");
 
     const item = calls.find((c) => c.method === "PUT")!;
-    expect(item.headers["Content-Language"]).toBe("fr-FR");
+    expect(item.headers["Content-Language"]).toBe("en-CA");
     expect(item.body).toMatchObject({
       condition: "USED_VERY_GOOD",
       product: {
@@ -90,11 +90,11 @@ describe("publishListing", () => {
     const offer = calls.find((c) => c.method === "POST" && c.url.endsWith("/offer"))!;
     expect(offer.body).toMatchObject({
       sku: "BC-123",
-      marketplaceId: "EBAY_FR",
+      marketplaceId: "EBAY_CA",
       format: "FIXED_PRICE",
       categoryId: "139971",
       merchantLocationKey: "default-location",
-      pricingSummary: { price: { value: "249.90", currency: "EUR" } },
+      pricingSummary: { price: { value: "249.90", currency: "CAD" } },
       listingPolicies: { fulfillmentPolicyId: "F1", paymentPolicyId: "P1", returnPolicyId: "R1" },
     });
   });

@@ -27,7 +27,7 @@ export interface EbayConfig {
   };
 }
 
-// GUESS: defaults assume a French seller. Override with EBAY_MARKETPLACE_ID etc.
+// Defaults to eBay Canada (the seller uses ebay.ca). Override with EBAY_MARKETPLACE_ID etc.
 const MARKETPLACE_DEFAULTS: Record<string, { language: string; currency: string; country: string }> = {
   EBAY_FR: { language: "fr-FR", currency: "EUR", country: "FR" },
   EBAY_US: { language: "en-US", currency: "USD", country: "US" },
@@ -41,7 +41,7 @@ const MARKETPLACE_DEFAULTS: Record<string, { language: string; currency: string;
 
 export function getEbayConfig(env: Record<string, string | undefined> = process.env): EbayConfig {
   const ebayEnv: EbayEnv = env.EBAY_ENV === "production" ? "production" : "sandbox";
-  const marketplaceId = env.EBAY_MARKETPLACE_ID || "EBAY_FR";
+  const marketplaceId = env.EBAY_MARKETPLACE_ID || "EBAY_CA";
   const defaults = MARKETPLACE_DEFAULTS[marketplaceId] ?? MARKETPLACE_DEFAULTS.EBAY_US;
   return {
     env: ebayEnv,

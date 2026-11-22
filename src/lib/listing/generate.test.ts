@@ -53,7 +53,7 @@ describe("generateListing", () => {
     const req = parse.mock.calls[0][0];
     expect(req.model).toBe("claude-opus-5-5");
     expect(req.messages[0].content).toContain("Marque (required)");
-    expect(req.messages[0].content).toContain("fr-FR");
+    expect(req.messages[0].content).toContain("en-CA");
   });
 
   it("still works without eBay keys and warns", async () => {
