@@ -172,6 +172,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       barcode: input.barcode,
       brand: out.brand || undefined,
       mpn: out.mpn || undefined,
+      promotedPercent: deps.config.promotedPercent || undefined,
       packageWeightKg: out.packageWeightKg > 0 ? Math.round(out.packageWeightKg * 100) / 100 : undefined,
       packageDimensionsCm: hasDims
         ? { length: Math.ceil(dims.length), width: Math.ceil(dims.width), height: Math.ceil(dims.height) }

@@ -42,3 +42,15 @@ describe("exchangeCode", () => {
     await expect(exchangeCode(prod, "r", "old", fetchMock)).rejects.toBeInstanceOf(EbayApiError);
   });
 });
+
+describe("config helpers", () => {
+  it("parses the promoted ad rate and builds eBay.ca links", async () => {
+    const { parsePromotedPercent, listingUrl } = await import("./config");
+    expect(parsePromotedPercent("11")).toBe(11);
+    expect(parsePromotedPercent("11%")).toBe(11);
+    expect(parsePromotedPercent("1")).toBe(0);
+    expect(parsePromotedPercent(undefined)).toBe(0);
+    expect(listingUrl(prod, "123")).toBe("https://www.ebay.ca/itm/123");
+    expect(listingUrl(sandbox, "123")).toBe("https://sandbox.ebay.com/itm/123");
+  });
+});

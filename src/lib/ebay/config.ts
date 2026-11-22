@@ -18,6 +18,8 @@ export interface EbayConfig {
   fulfillmentPolicyId?: string;
   paymentPolicyId?: string;
   returnPolicyId?: string;
+  /** Promoted Listings Standard ad rate (% of the sale) applied to every new listing; 0 = off. */
+  promotedPercent: number;
   /** Where the item ships from (inventory location). */
   location: {
     key: string;
@@ -56,6 +58,7 @@ export function getEbayConfig(env: Record<string, string | undefined> = process.
     fulfillmentPolicyId: env.EBAY_FULFILLMENT_POLICY_ID || undefined,
     paymentPolicyId: env.EBAY_PAYMENT_POLICY_ID || undefined,
     returnPolicyId: env.EBAY_RETURN_POLICY_ID || undefined,
+    promotedPercent: parsePromotedPercent(env.EBAY_PROMOTED_PERCENT),
     location: {
       key: env.EBAY_LOCATION_KEY || "default-location",
       country: env.EBAY_LOCATION_COUNTRY || defaults.country,
@@ -65,9 +68,27 @@ export function getEbayConfig(env: Record<string, string | undefined> = process.
   };
 }
 
+/** eBay accepts ad rates from 2% to 100%. Anything else (or unset) turns promotion off. */
+export function parsePromotedPercent(value?: string): number {
+  const n = Number(value?.replace("%", "").trim());
+  return Number.isFinite(n) && n >= 2 && n <= 100 ? Math.round(n * 10) / 10 : 0;
+}
+
 /** eBay listing page for a published item, so the UI can link to it. */
+const MARKETPLACE_HOSTS: Record<string, string> = {
+  EBAY_CA: "www.ebay.ca",
+  EBAY_US: "www.ebay.com",
+  EBAY_GB: "www.ebay.co.uk",
+  EBAY_FR: "www.ebay.fr",
+  EBAY_DE: "www.ebay.de",
+  EBAY_IT: "www.ebay.it",
+  EBAY_ES: "www.ebay.es",
+  EBAY_BE: "www.benl.ebay.be",
+};
+
 export function listingUrl(config: EbayConfig, listingId: string): string {
-  const host = config.env === "production" ? "www.ebay.com" : "sandbox.ebay.com";
+  const host =
+    config.env === "production" ? (MARKETPLACE_HOSTS[config.marketplaceId] ?? "www.ebay.com") : "sandbox.ebay.com";
   return `https://${host}/itm/${listingId}`;
 }
 
