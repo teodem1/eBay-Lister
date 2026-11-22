@@ -65,7 +65,7 @@ export default function CollectionScreen() {
                   placeholder="Search album, artist, year, category"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="field h-12 rounded-full pl-11"
+                  className="field h-12 pl-11"
                 />
               </div>
 
@@ -96,7 +96,7 @@ export default function CollectionScreen() {
                   <select
                     value={sort}
                     onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="field min-h-11 w-auto rounded-full py-1 pl-4 text-sm font-medium"
+                    className="field min-h-11 w-auto py-1 pl-4 text-sm font-medium"
                   >
                     {SORTS.map((s) => (
                       <option key={s.key} value={s.key}>
@@ -147,9 +147,9 @@ function ValueSummary({ all, shown }: { all: CollectionItem[]; shown?: Collectio
     { label: "No price", value: String(unpriced) },
   ];
   return (
-    <section className="card relative overflow-hidden" aria-label="Inventory value">
+    <section className="card" aria-label="Inventory value">
       <p className="eyebrow">Inventory value</p>
-      <p className="t-display mt-1 text-[2.25rem] leading-none tabular-nums text-brand-ink">{money(totalValue(all))}</p>
+      <p className="t-display mt-1 text-[2.25rem] leading-none tabular-nums">{money(totalValue(all))}</p>
       <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3">
         {stats.map((s) => (
           <div key={s.label}>
@@ -163,11 +163,6 @@ function ValueSummary({ all, shown }: { all: CollectionItem[]; shown?: Collectio
           Showing {money(totalValue(shown))} in {shown.length} {shown.length === 1 ? "CD" : "CDs"}
         </p>
       )}
-      <svg className="absolute -right-10 -top-10 text-brand opacity-[0.07]" width="160" height="160" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="6" />
-        <circle cx="12" cy="12" r="2" />
-      </svg>
     </section>
   );
 }
@@ -296,7 +291,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
         role="dialog"
         aria-modal
         aria-labelledby="edit-cd-title"
-        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-line bg-background p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-card"
+        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-line bg-background p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line-strong" aria-hidden />

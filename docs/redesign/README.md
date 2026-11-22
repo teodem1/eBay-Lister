@@ -65,3 +65,16 @@ Ratio about 1.2, 12px floor, rem-based so Android font scaling works.
 - Bottom sheet closes on Android back, on the scrim and on ✕.
 - 48dp targets on all chips and inline actions; 16px field text (no zoom on focus); safe areas respected.
 - Geist stays as the brand face (custom font is an allowed departure); all sizes in rem so system text scaling applies.
+
+## 5. Sober beige restyle (follow-up)
+Guillaume asked for "more sober" colours, a style in line with current UI standards, and beige as the main colour. The teal brand is replaced by warm neutrals with beige as the action colour: primary buttons, the Scan hero and the logo are beige with dark espresso text. Beige is too faint for outlines, so a dark tan (`brand-ink`) marks selected items, focus rings and the price marker. Shapes are flatter: 1px hairline borders, almost no shadow, 12px radius on buttons and fields (chips stay round), lighter headings with tighter tracking, sentence-case labels instead of uppercase eyebrows.
+
+| Token | Light | Dark |
+|---|---|---|
+| bg / surface / surface-2 | #f6f3ee / #fffdfa / #f0ebe3 | #0f0e0c / #181613 / #211e1a |
+| line / line-strong | #e6dfd4 / #d3c9b9 | #2d2924 / #423c34 |
+| fg / muted / subtle | #1c1915 / #5c554b / #6b6357 | #f3efe8 / #b0a89b / #978f82 |
+| brand (beige) / brand-fg | #d4bf98 / #2a2218 (8.7:1) | #d8c4a0 / #1f1a12 (10.1:1) |
+| brand-ink (selected, focus) / brand-soft | #6d5530 / #f1e9da | #e3d2b2 / #2b261e |
+
+All text pairs are 4.5:1 or better. Screenshots: `beige-*.png` (top row teal, bottom row beige).

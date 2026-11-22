@@ -126,16 +126,16 @@ export default function ItemLookup() {
             type="button"
             disabled={busy}
             onClick={startScan}
-            className="flex min-h-28 items-center gap-4 rounded-3xl bg-brand p-5 text-left text-brand-fg shadow-lift transition-transform active:scale-[0.98] disabled:opacity-50"
+            className="flex min-h-24 items-center gap-4 rounded-2xl bg-brand p-4 text-left text-brand-fg shadow-lift transition-transform active:scale-[0.98] disabled:opacity-50"
           >
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
-              <Icon name="scan" size={30} strokeWidth={1.8} />
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-fg/10">
+              <Icon name="scan" size={26} strokeWidth={1.8} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="t-title block">Scan barcode</span>
-              <span className="t-small block opacity-85">Fastest for CDs, games and boxed items</span>
+              <span className="t-small block opacity-70">Fastest for CDs, games and boxed items</span>
             </span>
-            <Icon name="arrow" size={22} className="opacity-80" />
+            <Icon name="arrow" size={20} className="opacity-60" />
           </button>
 
           <div className="grid grid-cols-[auto_1fr] gap-3">
@@ -160,13 +160,13 @@ export default function ItemLookup() {
                 placeholder="Type a barcode"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
-                className="field h-14 rounded-full pl-4 pr-14"
+                className="field h-14 pl-4 pr-14"
               />
               <button
                 type="submit"
                 disabled={!manualValid || busy}
                 aria-label="Search barcode"
-                className="btn btn-primary absolute right-1 top-1 h-12 min-h-12 w-12 px-0 shadow-none"
+                className="btn btn-primary absolute right-1 top-1 h-12 min-h-12 w-12 rounded-[0.625rem] px-0"
               >
                 <Icon name="search" size={20} />
               </button>
@@ -280,9 +280,9 @@ function Results({ data, preview, thumb }: { data: LookupResponse; preview?: str
         <div className="flex gap-4">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={cover} alt="" className="h-24 w-24 shrink-0 rounded-2xl bg-surface-2 object-cover shadow-card" />
+            <img src={cover} alt="" className="h-24 w-24 shrink-0 rounded-xl border border-line bg-surface-2 object-cover" />
           ) : (
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-surface-2 text-subtle">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-subtle">
               <Icon name="disc" size={36} strokeWidth={1.5} />
             </div>
           )}

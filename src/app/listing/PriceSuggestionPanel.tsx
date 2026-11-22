@@ -135,7 +135,7 @@ function PriceStrip({ values, selected, currency }: { values: number[]; selected
         ))}
         {selected !== undefined && (
           <span
-            className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-brand ring-2 ring-surface"
+            className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-brand-ink ring-2 ring-surface"
             style={{ left: `${pos(selected)}%` }}
           />
         )}
@@ -183,9 +183,9 @@ function PriceCard({
           <p className="t-small text-muted">{subtitle}</p>
         </div>
         {sold ? (
-          <span className="chip shrink-0 bg-brand-soft text-brand-ink">Sold</span>
+          <span className="chip shrink-0 border border-line-strong text-foreground">Sold</span>
         ) : (
-          <span className="chip shrink-0 bg-surface-2 text-muted">Asking</span>
+          <span className="chip shrink-0 border border-line text-muted">Asking</span>
         )}
       </div>
 
@@ -249,7 +249,7 @@ function PriceCard({
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
-            className="mt-3 flex min-h-12 w-full items-center justify-between rounded-xl bg-surface-2 px-3.5 text-left text-sm font-semibold"
+            className="mt-3 flex min-h-12 w-full items-center justify-between rounded-xl border border-line px-3.5 text-left text-sm font-semibold active:bg-surface-2"
           >
             {open ? "Hide" : "Compare"} the {items.length} {unit}
             <Icon name="chevron" className={`transition-transform ${open ? "rotate-180" : ""}`} />
@@ -277,7 +277,7 @@ function ConfidenceDots({ level }: { level: "low" | "medium" | "high" }) {
   return (
     <span className="flex gap-0.5" aria-hidden>
       {[1, 2, 3].map((i) => (
-        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? "bg-brand" : "bg-line-strong"}`} />
+        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? "bg-brand-ink" : "bg-line-strong"}`} />
       ))}
     </span>
   );
