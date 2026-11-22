@@ -26,7 +26,8 @@ while developing).
 
 ## Structure
 
-- `src/lib/ebay/` — eBay client (app token + Browse search). Server-only.
+- `src/lib/ebay/` — eBay client (app token, Browse search, Marketplace Insights sold search with Browse fallback in `comparables.ts`). Server-only.
+- `src/lib/pricing/` — price suggestion from comparables; served by `src/app/api/price-suggestion/route.ts`. See `docs/sold-price-data.md`.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/app/api/lookup/{barcode,photo}/route.ts` — lookup API routes.
 - `src/components/ItemLookup.tsx` — phone page: photo, barcode scan, results.
