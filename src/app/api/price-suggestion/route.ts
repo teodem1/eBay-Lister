@@ -6,8 +6,9 @@
  *
  * Returns two suggestions, each with the comparables used:
  *   current: from active eBay listings (asking prices, Browse API)
- *   sold:    from items sold in the last 90 days (Marketplace Insights),
- *            null when the app has no access; `unavailable.sold` says why.
+ *   sold:    from items sold in the last 90 days (Marketplace Insights, or
+ *            sold-comps.com when SOLD_COMPS_API_KEY is set), null when neither
+ *            is available; `unavailable.sold` says why.
  * Runs server-side so the eBay client secret never reaches the phone.
  */
 import { getEbayClient } from "@/lib/ebay";
@@ -35,7 +36,9 @@ export async function POST(request: Request) {
     // Quote shipping to the marketplace's own country unless told otherwise
     // (EBAY_CA -> CA).
     query.destinationCountry ??= ebay.config.marketplaceId.replace(/^EBAY_/, "");
-    const both = await findBothComparables(ebay, query);
+    const both = await findBothComparables(ebay, query, {
+      soldCompsApiKey: process.env.SOLD_COMPS_API_KEY || undefined,
+    });
     // The current price is shown as what similar items are listed at, so no
     // asking-to-sold discount is applied to it.
     const suggest = (r: ComparableResult | null) =>

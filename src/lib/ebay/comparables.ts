@@ -23,6 +23,7 @@ import type {
   ComparableResult,
   Money,
 } from "./types";
+import { searchSoldComps, type SoldCompsOptions } from "./soldComps";
 
 // ---- Raw eBay response shapes (only the fields we use) ----
 
@@ -224,7 +225,40 @@ export interface BothComparables {
 }
 
 export const SOLD_ACCESS_NOTE =
-  "eBay only gives sold prices to apps it approves for its Marketplace Insights API, and this app is not approved.";
+  "eBay only gives sold prices to apps it approves for its Marketplace Insights API, and this app is not approved. " +
+  "Add a SOLD_COMPS_API_KEY (sold-comps.com) to get sold prices from a third-party service.";
+
+export interface BothOptions {
+  /** sold-comps.com key; used for sold prices when Marketplace Insights is refused. */
+  soldCompsApiKey?: string;
+  soldCompsFetch?: SoldCompsOptions["fetch"];
+}
+
+/** Sold comparables: Marketplace Insights, else sold-comps.com when a key is set. */
+async function searchSoldAny(
+  client: EbayClient,
+  q: ComparableQuery,
+  opts: BothOptions,
+): Promise<ComparableResult> {
+  const marketplaceId = client.config.marketplaceId;
+  try {
+    const items = await searchSold(client, q);
+    return { source: "marketplace_insights", marketplaceId, items, notes: [] };
+  } catch (err) {
+    if (!isAccessDenied(err) || !opts.soldCompsApiKey) throw err;
+  }
+  const items = await searchSoldComps(q, {
+    apiKey: opts.soldCompsApiKey,
+    marketplaceId,
+    fetch: opts.soldCompsFetch,
+  });
+  return {
+    source: "sold_comps",
+    marketplaceId,
+    items,
+    notes: ["Sold prices from sold-comps.com, a third-party service, not from eBay directly."],
+  };
+}
 
 /**
  * Runs the active-listing and sold searches side by side so the screen can
@@ -234,9 +268,10 @@ export const SOLD_ACCESS_NOTE =
 export async function findBothComparables(
   client: EbayClient,
   q: ComparableQuery,
+  opts: BothOptions = {},
 ): Promise<BothComparables> {
   const marketplaceId = client.config.marketplaceId;
-  const [active, sold] = await Promise.allSettled([searchActive(client, q), searchSold(client, q)]);
+  const [active, sold] = await Promise.allSettled([searchActive(client, q), searchSoldAny(client, q, opts)]);
   const unavailable: BothComparables["unavailable"] = {};
   const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -249,7 +284,7 @@ export async function findBothComparables(
 
   let soldResult: ComparableResult | null = null;
   if (sold.status === "fulfilled") {
-    soldResult = { source: "marketplace_insights", marketplaceId, items: sold.value, notes: [] };
+    soldResult = sold.value;
   } else {
     unavailable.sold = isAccessDenied(sold.reason)
       ? SOLD_ACCESS_NOTE

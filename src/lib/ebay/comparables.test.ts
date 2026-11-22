@@ -143,6 +143,33 @@ describe("findBothComparables", () => {
     expect(res.unavailable.sold).toMatch(/Marketplace Insights/);
   });
 
+  it("uses sold-comps.com for sold prices when Insights is refused and a key is set", async () => {
+    const fetchMock = vi.fn<FetchLike>(async (url, init) => {
+      const u = String(url);
+      if (u.includes("oauth2/token")) {
+        const scope = new URLSearchParams(String(init?.body)).get("scope")!;
+        return scope.endsWith("buy.marketplace.insights")
+          ? json(400, { error: "invalid_scope" })
+          : json(200, { access_token: "t", expires_in: 7200 });
+      }
+      if (u.includes("/buy/browse/")) return json(200, { itemSummaries: [activeItem] });
+      throw new Error("unexpected " + u);
+    });
+    const soldCompsFetch = vi.fn(async () =>
+      json(200, { items: [{ itemId: "9", soldPrice: "240.00", soldCurrency: "CAD", endedAt: "2026-11-01" }] }),
+    );
+    const res = await findBothComparables(
+      new EbayClient(config, fetchMock),
+      { keywords: "switch oled" },
+      { soldCompsApiKey: "sc_test", soldCompsFetch },
+    );
+
+    expect(res.sold?.source).toBe("sold_comps");
+    expect(res.sold?.items[0].price.value).toBe(240);
+    expect(res.sold?.notes[0]).toMatch(/third-party/);
+    expect(res.unavailable).toEqual({});
+  });
+
   it("throws only when both searches fail", async () => {
     const fetchMock = vi.fn<FetchLike>(async (url) =>
       String(url).includes("oauth2/token")

@@ -4,6 +4,7 @@
 |---|---|---|---|
 | Marketplace Insights API `item_sales/search` | Items **sold** in the last 90 days: sold price, sold date, quantity, item location, shipping options | Limited Release. eBay must approve the app (business case) before the `buy.marketplace.insights` scope works | "Last sold" price |
 | Browse API `item_summary/search` | **Active** listings: asking price, item location, shipping cost to a chosen destination | Open to every keyset | "Current listings" price (no discount) |
+| sold-comps.com `GET /v1/scrape` (third party) | Sold items from eBay's public sold search, any of 8 eBay sites incl. ebay.ca: sold price, currency, shipping, end date, item location | API key (`SOLD_COMPS_API_KEY`). Free 100 requests/month, $9/month for 2,000 (Nov 2026). The provider scrapes eBay; not an official eBay source | "Last sold" price when Insights is refused and a key is set |
 | Finding API `findCompletedItems` | Used to return sold items | Decommissioned by eBay in 2025 | Not used |
 | Terapeak (Seller Hub › Research) | Up to 3 years of sold data | Web UI only, no public API | Manual check |
 | Scraping eBay "Sold items" search | Sold prices | Against eBay's user agreement, fragile | Not used |
@@ -13,8 +14,15 @@
 `/api/price-suggestion` runs both searches side by side (`findBothComparables`)
 and returns a `current` and a `sold` suggestion. The listing screen shows both
 and prefills the last-sold recommended price, or the current one when sold data
-is missing. Without Marketplace Insights approval the "Last sold" card says so
-and only the current price is filled.
+is missing. Sold data comes from Marketplace Insights when approved, else from
+sold-comps.com when `SOLD_COMPS_API_KEY` is set (`src/lib/ebay/soldComps.ts`).
+With neither, the "Last sold" card says so and only the current price is filled.
+
+Why sold-comps.com: of the third-party sold-data APIs compared in Nov 2026
+(SoldComps.io, CompSniper, Trawl, CompsAPI, Soldgraph, Apify actors), only it
+and CompSniper document ebay.ca, and it has a free tier with no card. Not yet
+tested against the live API: no GTIN parameter is documented, so a barcode is
+sent as the keyword only when there is no item text.
 
 ## Shipping destination
 

@@ -39,7 +39,8 @@ Screens (phone first):
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
-  last sold (Marketplace Insights, needs eBay approval) and current listings (Browse). It
+  last sold (Marketplace Insights if eBay approves, else sold-comps.com via
+  `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
 
 Server code:

@@ -41,7 +41,9 @@ export type ComparableSource =
   /** Real sold prices from the Marketplace Insights API (restricted access). */
   | "marketplace_insights"
   /** Active asking prices from the Browse API (fallback, always available). */
-  | "browse_active";
+  | "browse_active"
+  /** Sold prices from the third-party sold-comps.com API (not eBay). */
+  | "sold_comps";
 
 export interface ComparableQuery {
   /** Free-text keywords, e.g. the identified product title. */
