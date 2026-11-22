@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   try {
     const client = new EbaySellClient(config);
     const result = await publishListing(client, parsed.data, {
-      bestOfferAutoAcceptPercent: config.bestOfferAutoAcceptPercent,
+      bestOfferMinPercent: config.bestOfferMinPercent,
     });
     // The listing is live now, so a promotion failure is reported, not thrown.
     const percent = parsed.data.promotedPercent ?? config.promotedPercent;

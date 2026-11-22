@@ -40,8 +40,8 @@ export const ListingDraftSchema = z.object({
   packageWeightKg: z.number().positive().max(500).optional(),
   /** Promoted Listings ad rate for this listing; 0 = don't promote. Unset uses EBAY_PROMOTED_PERCENT. */
   promotedPercent: z.number().min(0).max(100).optional(),
-  /** Best Offer: auto-accept offers up to this % below the price; 0 = off. Unset uses EBAY_BEST_OFFER_AUTO_ACCEPT_PERCENT. */
-  bestOfferAutoAcceptPercent: z.number().min(0).max(90).optional(),
+  /** Best Offer: offers under this % of the price are declined; 0 = off. Unset uses EBAY_BEST_OFFER_MIN_PERCENT. */
+  bestOfferMinPercent: z.number().min(0).max(99).optional(),
   packageDimensionsCm: z
     .object({ length: z.number().positive(), width: z.number().positive(), height: z.number().positive() })
     .optional(),

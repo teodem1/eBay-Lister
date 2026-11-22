@@ -122,8 +122,8 @@ export interface OfferInput {
   price: number;
   quantity: number;
   descriptionHtml: string;
-  /** Best Offer: auto-accept offers up to this % below the price. Unset or 0 = no Best Offer. */
-  bestOfferAutoAcceptPercent?: number;
+  /** Best Offer: offers under this % of the price are declined automatically. Unset or 0 = no Best Offer. */
+  bestOfferMinPercent?: number;
 }
 
 export interface CategorySuggestion {
@@ -272,7 +272,7 @@ export class EbaySellClient {
         fulfillmentPolicyId: c.fulfillmentPolicyId,
         paymentPolicyId: c.paymentPolicyId,
         returnPolicyId: c.returnPolicyId,
-        bestOfferTerms: bestOfferTerms(offer.price, offer.bestOfferAutoAcceptPercent, c.currency),
+        bestOfferTerms: bestOfferTerms(offer.price, offer.bestOfferMinPercent, c.currency),
       },
       pricingSummary: { price: { value: offer.price.toFixed(2), currency: c.currency } },
       merchantLocationKey: locationKey,
@@ -470,15 +470,16 @@ export class EbaySellClient {
 }
 
 /**
- * Best Offer that auto-accepts any offer at least (100 - percent)% of the price,
- * e.g. 20 on $10.00 accepts $8.00 or more. Lower offers wait for the seller.
+ * Best Offer with no auto-accept: every offer waits for the seller, except offers
+ * under `minPercent`% of the price, which eBay declines automatically
+ * (e.g. 75 on $10.00 declines anything under $7.50).
  */
-export function bestOfferTerms(price: number, percent: number | undefined, currency: string) {
-  if (!percent || percent <= 0 || percent >= 100) return undefined;
-  const accept = Math.ceil(price * (1 - percent / 100) * 100) / 100;
+export function bestOfferTerms(price: number, minPercent: number | undefined, currency: string) {
+  if (!minPercent || minPercent <= 0 || minPercent >= 100) return undefined;
+  const decline = Math.floor(price * (minPercent / 100) * 100) / 100;
   return {
     bestOfferEnabled: true,
-    autoAcceptPrice: { value: accept.toFixed(2), currency },
+    autoDeclinePrice: { value: decline.toFixed(2), currency },
   };
 }
 

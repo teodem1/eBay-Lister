@@ -403,25 +403,25 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
               </label>
 
               <label className="block">
-                <span className="label">Best Offer: auto-accept up to % below price (0 = off)</span>
+                <span className="label">Best Offer: lowest offer allowed, % of price (0 = off)</span>
                 <input
                   className={input}
                   type="number"
                   inputMode="decimal"
                   min="0"
-                  max="90"
+                  max="99"
                   step="1"
                   placeholder="Server default"
-                  value={draft.bestOfferAutoAcceptPercent ?? ""}
+                  value={draft.bestOfferMinPercent ?? ""}
                   onChange={(e) =>
-                    update("bestOfferAutoAcceptPercent", e.target.value === "" ? undefined : Number(e.target.value))
+                    update("bestOfferMinPercent", e.target.value === "" ? undefined : Number(e.target.value))
                   }
                 />
-                {!!draft.bestOfferAutoAcceptPercent && draft.price !== undefined && (
+                {!!draft.bestOfferMinPercent && draft.price !== undefined && (
                   <span className="mt-1 block text-xs text-muted">
-                    Offers of{" "}
-                    {formatMoney(Math.ceil(draft.price * (1 - draft.bestOfferAutoAcceptPercent / 100) * 100) / 100, "CAD")} or
-                    more are accepted automatically; lower ones wait for you.
+                    Offers under{" "}
+                    {formatMoney(Math.floor(draft.price * (draft.bestOfferMinPercent / 100) * 100) / 100, "CAD")} are declined
+                    automatically; the rest wait for you to accept, counter or decline.
                   </span>
                 )}
               </label>
