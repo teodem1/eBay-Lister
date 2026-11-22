@@ -70,3 +70,40 @@ export function listingUrl(config: EbayConfig, listingId: string): string {
   const host = config.env === "production" ? "www.ebay.com" : "sandbox.ebay.com";
   return `https://${host}/itm/${listingId}`;
 }
+
+// ---------------------------------------------------------------------------
+// App-token settings for the Browse API (item lookup). These need only the app
+// keys, so lookup works before a seller account is connected.
+
+/** Settings for the Browse API client (app token only). */
+export interface BrowseConfig {
+  clientId: string;
+  clientSecret: string;
+  env: EbayEnv;
+  /** e.g. EBAY_CA, EBAY_US, EBAY_GB. Decides which site's listings we search. */
+  marketplaceId: string;
+}
+
+export function apiBaseUrl(env: EbayEnv): string {
+  return env === "production"
+    ? "https://api.ebay.com"
+    : "https://api.sandbox.ebay.com";
+}
+
+export function readEbayConfig(env: NodeJS.ProcessEnv = process.env): BrowseConfig {
+  const clientId = env.EBAY_CLIENT_ID?.trim();
+  const clientSecret = env.EBAY_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    throw new EbayConfigError(
+      "EBAY_CLIENT_ID and EBAY_CLIENT_SECRET must be set (copy .env.example to .env).",
+    );
+  }
+  const ebayEnv = env.EBAY_ENV?.trim() === "production" ? "production" : "sandbox";
+  // The seller lists on eBay.ca.
+  const marketplaceId = env.EBAY_MARKETPLACE_ID?.trim() || "EBAY_CA";
+  return { clientId, clientSecret, env: ebayEnv, marketplaceId };
+}
+
+export class EbayConfigError extends Error {
+  name = "EbayConfigError";
+}
