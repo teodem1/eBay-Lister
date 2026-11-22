@@ -67,6 +67,11 @@ browser camera (and `BarcodeDetector` where Chrome supports it) on the web.
 `scanBarcode()` returns `null` when nothing could be read, so screens should
 offer typing the barcode as a fallback.
 
+The lookup screen (`src/components/ItemLookup.tsx`) does this: in the APK,
+"Scan barcode" opens the ML Kit scanner and "Take photo" opens the native
+camera. In a browser, "Scan barcode" keeps the live camera scanner
+(`src/components/BarcodeScanner.tsx`), which reads codes continuously.
+
 Icons are generated from `assets/icon.svg` / `assets/icon-only.png`; rerun
 `npx @capacitor/assets generate --android --iconBackgroundColor '#0f766e'` after changing them.
 

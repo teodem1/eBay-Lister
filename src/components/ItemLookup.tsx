@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { resizeImage } from "@/lib/resize-image";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import { listingHref, type LookupError, type LookupResponse } from "@/lib/lookup";
 import type { ItemSummary } from "@/lib/ebay/client";
+import { takeItemPhoto } from "@/lib/native/camera";
+import { scanBarcode } from "@/lib/native/barcode";
+import { isNativeApp } from "@/lib/native/platform";
 
 const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
 
@@ -20,7 +23,6 @@ export default function ItemLookup() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const photoInput = useRef<HTMLInputElement>(null);
 
   async function run(label: string, request: () => Promise<Response>, preview?: string) {
     setStatus({ kind: "loading", label, preview });
@@ -48,8 +50,43 @@ export default function ItemLookup() {
     );
   }
 
-  async function onPhoto(file: File | undefined) {
-    if (!file) return;
+  /**
+   * Android app: Google's ML Kit scanner. Browser: the live camera scanner
+   * below, which reads codes continuously (better than the photo-based web
+   * fallback in scanBarcode()).
+   */
+  async function startScan() {
+    if (!isNativeApp()) {
+      setScanning(true);
+      return;
+    }
+    try {
+      const code = await scanBarcode();
+      if (!code) return; // cancelled or nothing read
+      const gtin = normalizeGtin(code);
+      if (gtin) {
+        lookupBarcode(gtin);
+      } else {
+        setStatus({ kind: "error", message: `That code (${code}) isn't a product barcode. Try the UPC/EAN on the box.` });
+      }
+    } catch (err) {
+      setStatus({ kind: "error", message: `Scanner error: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
+  /** Android app: native camera. Browser: the phone camera via a file input. */
+  async function startPhoto() {
+    let file: File | null;
+    try {
+      file = await takeItemPhoto();
+    } catch (err) {
+      setStatus({ kind: "error", message: `Camera error: ${err instanceof Error ? err.message : String(err)}` });
+      return;
+    }
+    if (file) await onPhoto(file);
+  }
+
+  async function onPhoto(file: File) {
     const preview = URL.createObjectURL(file);
     setStatus({ kind: "loading", label: "Preparing photo…", preview });
     let blob: Blob;
@@ -80,7 +117,7 @@ export default function ItemLookup() {
         <button
           type="button"
           disabled={busy}
-          onClick={() => photoInput.current?.click()}
+          onClick={startPhoto}
           className="flex h-28 flex-col items-center justify-center gap-2 rounded-2xl bg-blue-600 text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
         >
           <CameraIcon />
@@ -89,24 +126,13 @@ export default function ItemLookup() {
         <button
           type="button"
           disabled={busy}
-          onClick={() => setScanning(true)}
+          onClick={startScan}
           className="flex h-28 flex-col items-center justify-center gap-2 rounded-2xl bg-zinc-900 text-white shadow-sm active:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
         >
           <BarcodeIcon />
           <span className="font-medium">Scan barcode</span>
         </button>
       </div>
-      <input
-        ref={photoInput}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          onPhoto(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
 
       <form
         className="flex gap-2"
