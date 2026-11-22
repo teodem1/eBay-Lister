@@ -103,27 +103,31 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
-      <div className="relative flex-1 overflow-hidden">
-        <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
-        {/* Aiming guide */}
-        <div className="pointer-events-none absolute inset-x-8 top-1/2 h-32 -translate-y-1/2 rounded-xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
-        <p className="absolute inset-x-0 top-6 text-center text-sm text-white/90">
+    <div className="fixed inset-0 z-50 bg-black fade-in">
+      <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline muted />
+      {/* Aiming guide */}
+      <div className="pointer-events-none absolute inset-x-8 top-1/2 h-36 -translate-y-1/2 rounded-3xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]">
+        <div className="absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 animate-pulse rounded-full bg-teal-300/90 shadow-[0_0_12px_2px_rgba(94,234,212,0.6)]" />
+      </div>
+      <div className="absolute inset-x-0 top-0 pt-[calc(env(safe-area-inset-top)+1.5rem)] text-center">
+        <p className="mx-auto inline-block rounded-full bg-black/50 px-4 py-2 text-sm font-medium text-white backdrop-blur">
           Point at the barcode
         </p>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-4 px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
         {error && (
-          <p className="absolute inset-x-4 bottom-6 rounded-lg bg-red-600 p-3 text-sm text-white">
+          <p role="alert" className="w-full max-w-md rounded-2xl bg-red-600/95 p-3 text-sm text-white">
             {error}
           </p>
         )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn min-w-40 bg-white/15 text-white backdrop-blur-md active:bg-white/25"
+        >
+          Cancel
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="h-16 bg-zinc-900 text-lg font-medium text-white active:bg-zinc-800"
-      >
-        Cancel
-      </button>
     </div>
   );
 }

@@ -45,6 +45,11 @@ Screens (phone first):
   `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
 
+Look and feel: design tokens (light + dark) and component classes (`.page`, `.card`, `.field`,
+`.btn btn-primary`, `.notice`, `.skeleton`...) live in `src/app/globals.css`; shared pieces
+(`AppBar`, `Spinner`, `StepHeading`, `Logo`) in `src/components/ui.tsx`. Use the token colours
+(`bg-surface`, `text-muted`, `border-line`, `bg-brand`...) rather than raw Tailwind palette colours.
+
 Server code:
 - `src/lib/ebay/client.ts` — app-token client (Browse search) used by lookup and pricing.
 - `src/lib/ebay/comparables.ts` — Marketplace Insights sold search with Browse fallback.

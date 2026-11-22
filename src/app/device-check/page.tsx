@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { takeItemPhoto } from "@/lib/native/camera";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
+import { AppBar } from "@/components/ui";
 
 /**
  * Test page for the phone build: checks the camera and barcode scanner work
@@ -45,33 +46,36 @@ export default function DeviceCheck() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 p-4">
-      <h1 className="text-2xl font-semibold">Device check</h1>
-      <p className="text-sm text-zinc-500">
-        Running as: {runtime}
-      </p>
-      <button
-        onClick={onPhoto}
-        className="h-12 rounded-full bg-teal-700 px-5 text-white"
-      >
-        Take item photo
-      </button>
-      <button
-        onClick={onScan}
-        className="h-12 rounded-full border border-teal-700 px-5 text-teal-700"
-      >
-        Scan barcode
-      </button>
-      {status && <p role="status">{status}</p>}
-      {code && (
-        <p className="font-mono text-lg">
-          Barcode: <strong>{code}</strong>
-        </p>
-      )}
-      {photoUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={photoUrl} alt="Captured item" className="rounded-lg" />
-      )}
-    </main>
+    <>
+      <AppBar title="Device check" back={{ href: "/", label: "Back to lookup" }} />
+      <main className="page">
+        <div className="card flex items-center justify-between">
+          <span className="text-sm text-muted">Running as</span>
+          <span className="chip bg-brand-soft text-brand-ink">{runtime}</span>
+        </div>
+        <div className="grid gap-3">
+          <button onClick={onPhoto} className="btn btn-primary btn-lg">
+            Take item photo
+          </button>
+          <button onClick={onScan} className="btn btn-secondary btn-lg">
+            Scan barcode
+          </button>
+        </div>
+        {status && (
+          <p role="status" className="card text-sm">
+            {status}
+          </p>
+        )}
+        {code && (
+          <p className="card font-mono text-lg">
+            Barcode: <strong>{code}</strong>
+          </p>
+        )}
+        {photoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photoUrl} alt="Captured item" className="rounded-2xl border border-line" />
+        )}
+      </main>
+    </>
   );
 }
