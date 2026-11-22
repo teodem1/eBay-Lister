@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Comparable } from "@/lib/ebay/types";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
-import { Spinner, StepHeading } from "@/components/ui";
+import { Icon, Spinner, StepHeading } from "@/components/ui";
 import { formatMoney, type PriceCheck } from "./priceRequest";
 
 type Option = { key: keyof PriceSuggestion["itemPrice"]; label: string };
@@ -19,11 +19,13 @@ function ComparableList({
   items,
   sold,
   currency,
+  selected,
   onPick,
 }: {
   items: Comparable[];
   sold: boolean;
   currency: string;
+  selected: number | undefined;
   onPick: (price: number) => void;
 }) {
   const [sort, setSort] = useState<"price" | "date">(sold ? "date" : "price");
@@ -35,73 +37,115 @@ function ComparableList({
   const money = (n: number, cur = currency) => formatMoney(n, cur);
 
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       {sold && (
-        <div className="mb-1.5 flex gap-1.5 text-xs">
+        <div className="mb-2 flex gap-2" role="group" aria-label="Sort sales">
           {(["date", "price"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={sort === k}
-              onClick={() => setSort(k)}
-              className={`chip ${sort === k ? "bg-brand text-brand-fg" : "bg-surface text-muted"}`}
-            >
+            <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)} className="chip-toggle">
+              {sort === k && <Icon name="check" size={16} strokeWidth={2.4} />}
               {k === "date" ? "Newest first" : "Cheapest first"}
             </button>
           ))}
         </div>
       )}
-      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-        {shown.map((c) => (
-          <li key={c.itemId} className="flex items-center gap-2.5 p-2">
-            {c.imageUrl ? (
-              // eBay thumbnails come from many hosts, so a plain img keeps it simple.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.imageUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-surface-2 object-cover" />
-            ) : (
-              <div className="h-12 w-12 shrink-0 rounded-lg bg-surface-2" />
-            )}
-            <div className="min-w-0 flex-1">
-              {c.url ? (
-                <a href={c.url} target="_blank" rel="noreferrer" className="line-clamp-2 text-xs font-medium leading-snug underline-offset-2 hover:underline">
-                  {c.title || c.itemId}
-                </a>
+      <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+        {shown.map((c) => {
+          const active = selected === c.price.value;
+          return (
+            <li key={c.itemId} className="flex items-center gap-3 p-2.5">
+              {c.imageUrl ? (
+                // eBay thumbnails come from many hosts, so a plain img keeps it simple.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={c.imageUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-surface-2 object-cover" />
               ) : (
-                <p className="line-clamp-2 text-xs font-medium leading-snug">{c.title || c.itemId}</p>
+                <div className="h-12 w-12 shrink-0 rounded-lg bg-surface-2" />
               )}
-              <p className="mt-0.5 truncate text-[0.6875rem] text-muted">
-                {[
-                  c.soldDate && `sold ${c.soldDate}`,
-                  c.shippingCost === null
-                    ? "shipping ?"
-                    : c.shippingCost.value === 0
-                      ? "free shipping"
-                      : `+${money(c.shippingCost.value, c.shippingCost.currency)} ship`,
-                  c.condition,
-                  c.itemLocation.country && `from ${c.itemLocation.country}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onPick(c.price.value)}
-              className="shrink-0 rounded-lg border border-line px-2 py-1.5 text-right active:scale-[0.97]"
-              title="Use this price"
-            >
-              <span className="block text-sm font-bold tabular-nums">{money(c.price.value, c.price.currency)}</span>
-              <span className="block text-[0.625rem] text-muted">Use</span>
-            </button>
-          </li>
-        ))}
+              <div className="min-w-0 flex-1">
+                {c.url ? (
+                  <a href={c.url} target="_blank" rel="noreferrer" className="t-small line-clamp-2 font-medium underline-offset-2 hover:underline">
+                    {c.title || c.itemId}
+                  </a>
+                ) : (
+                  <p className="t-small line-clamp-2 font-medium">{c.title || c.itemId}</p>
+                )}
+                <p className="t-caption mt-0.5 truncate text-muted">
+                  {[
+                    c.soldDate && shortDate(c.soldDate),
+                    c.shippingCost === null
+                      ? "shipping ?"
+                      : c.shippingCost.value === 0
+                        ? "free ship"
+                        : `+${money(c.shippingCost.value, c.shippingCost.currency)} ship`,
+                    c.condition,
+                    c.itemLocation.country,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-pressed={active}
+                onClick={() => onPick(c.price.value)}
+                className="choice flex min-h-12 shrink-0 flex-col items-end justify-center px-2.5"
+                aria-label={`Use ${money(c.price.value, c.price.currency)}`}
+              >
+                <span className="text-sm font-bold tabular-nums">{money(c.price.value, c.price.currency)}</span>
+                <span className={`t-caption ${active ? "text-brand-ink" : "text-muted"}`}>{active ? "Using" : "Use"}</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
       {sorted.length > shown.length && (
-        <button type="button" className="mt-1.5 w-full text-center text-xs font-medium text-muted underline" onClick={() => setShowAll(true)}>
+        <button type="button" className="btn mt-1 w-full text-sm text-brand-ink" onClick={() => setShowAll(true)}>
           Show all {sorted.length}
         </button>
       )}
     </div>
+  );
+}
+
+/** "2026-11-04" -> "Nov 4". */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
+
+/**
+ * Dot strip: each comparable's item price on one line, with the chosen price
+ * marked, so the seller sees where their price sits among real sales.
+ */
+function PriceStrip({ values, selected, currency }: { values: number[]; selected: number | undefined; currency: string }) {
+  const all = selected !== undefined ? [...values, selected] : values;
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  const pos = (v: number) => (max === min ? 50 : ((v - min) / (max - min)) * 100);
+  const money = (n: number) => formatMoney(n, currency);
+  return (
+    <figure className="mt-4" aria-label={`Prices range from ${money(min)} to ${money(max)}`}>
+      <div className="relative mx-1.5 h-8">
+        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-surface-2" />
+        {values.map((v, i) => (
+          <span
+            key={i}
+            className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted/45 ring-2 ring-surface"
+            style={{ left: `${pos(v)}%` }}
+          />
+        ))}
+        {selected !== undefined && (
+          <span
+            className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-brand ring-2 ring-surface"
+            style={{ left: `${pos(selected)}%` }}
+          />
+        )}
+      </div>
+      <figcaption className="t-caption mt-1 flex justify-between text-muted tabular-nums">
+        <span>{money(min)}</span>
+        {selected !== undefined && <span className="font-semibold text-brand-ink">Your price {money(selected)}</span>}
+        <span>{money(max)}</span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -132,20 +176,22 @@ function PriceCard({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="-mx-1 rounded-2xl bg-surface-2 p-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="font-semibold tracking-tight">{title}</p>
-        {has && (
-          <span className="chip bg-surface text-muted">
-            {suggestion.usedCount} {unit}
-          </span>
+    <div className="card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="t-headline">{title}</h3>
+          <p className="t-small text-muted">{subtitle}</p>
+        </div>
+        {sold ? (
+          <span className="chip shrink-0 bg-brand-soft text-brand-ink">Sold</span>
+        ) : (
+          <span className="chip shrink-0 bg-surface-2 text-muted">Asking</span>
         )}
       </div>
-      <p className="text-xs text-muted">{subtitle}</p>
 
       {has ? (
         <>
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             {OPTIONS.map((o) => {
               const value = suggestion.itemPrice[o.key];
               const active = selected === value;
@@ -155,30 +201,40 @@ function PriceCard({
                   type="button"
                   aria-pressed={active}
                   onClick={() => onPick(value)}
-                  className={`min-h-16 min-w-0 rounded-xl border px-2 py-2 text-left transition-all active:scale-[0.97] ${
-                    active
-                      ? "border-brand bg-brand text-brand-fg shadow-lift"
-                      : "border-line bg-surface"
-                  }`}
+                  className="choice min-h-[4.25rem] min-w-0 px-2.5 py-2 text-left"
                 >
-                  <span className={`block truncate text-xs font-medium ${active ? "opacity-85" : "text-muted"}`}>{o.label}</span>
-                  <span className="block text-[0.9375rem] font-bold tabular-nums tracking-tight min-[380px]:text-base">{money(value)}</span>
+                  <span className={`t-caption flex items-center gap-1 ${active ? "text-brand-ink" : "text-muted"}`}>
+                    {o.label}
+                    {active && <Icon name="check" size={14} strokeWidth={2.6} className="ml-auto" />}
+                  </span>
+                  <span className="block text-base font-bold tabular-nums tracking-tight min-[380px]:text-[1.0625rem]">
+                    {money(value)}
+                  </span>
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted">
-            {suggestion.usedCount} {unit}, {suggestion.confidence} confidence. Before shipping; assumes you charge{" "}
-            {money(suggestion.assumedShipping)}
-            {suggestion.shippingDestination ? ` to ${suggestion.shippingDestination}` : ""}.
-            {suggestion.byOrigin.length > 0 &&
-              ` Ships from ${suggestion.byOrigin
-                .slice(0, 3)
-                .map((o) => `${o.country} (${o.count}, ${money(o.medianTotal)} total)`)
-                .join(", ")}.`}
-          </p>
+          {items.length >= 3 && (
+            <PriceStrip values={items.map((c) => c.price.value)} selected={selected} currency={suggestion.currency} />
+          )}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className="fact">
+              {suggestion.usedCount} {unit}
+            </span>
+            <span className="fact">
+              <ConfidenceDots level={suggestion.confidence} /> {suggestion.confidence} confidence
+            </span>
+            <span className="fact">
+              +{money(suggestion.assumedShipping)} shipping{suggestion.shippingDestination ? ` to ${suggestion.shippingDestination}` : ""}
+            </span>
+            {suggestion.byOrigin.slice(0, 3).map((o) => (
+              <span key={o.country} className="fact" title={`${o.count} from ${o.country}, ${money(o.medianTotal)} median total`}>
+                From {o.country}: {o.count} · {money(o.medianTotal)}
+              </span>
+            ))}
+          </div>
           {suggestion.notes.length > 0 && (
-            <ul className="mt-1 list-disc pl-5 text-xs text-warn-ink">
+            <ul className="notice notice-warn t-small mt-3 list-disc pl-8">
               {suggestion.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
@@ -193,25 +249,44 @@ function PriceCard({
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
-            className="mt-2 w-full rounded-xl border border-line bg-surface px-3 py-2 text-left text-sm font-medium"
+            className="mt-3 flex min-h-12 w-full items-center justify-between rounded-xl bg-surface-2 px-3.5 text-left text-sm font-semibold"
           >
-            {open ? "Hide" : "Compare"} the {items.length} {unit} {open ? "▴" : "▾"}
+            {open ? "Hide" : "Compare"} the {items.length} {unit}
+            <Icon name="chevron" className={`transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
-          {open && <ComparableList items={items} sold={sold} currency={suggestion?.currency ?? "CAD"} onPick={onPick} />}
+          {open && (
+            <ComparableList
+              items={items}
+              sold={sold}
+              currency={suggestion?.currency ?? "CAD"}
+              selected={selected}
+              onPick={onPick}
+            />
+          )}
         </>
       ) : has ? null : (
-        <p className="mt-2 text-xs text-muted">
-          {missing ?? "No comparable eBay listings found."}
-        </p>
+        <p className="t-small mt-3 text-muted">{missing ?? "No comparable eBay listings found."}</p>
       )}
     </div>
+  );
+}
+
+/** Confidence as 1-3 filled dots, so it doesn't rely on the word alone. */
+function ConfidenceDots({ level }: { level: "low" | "medium" | "high" }) {
+  const n = { low: 1, medium: 2, high: 3 }[level];
+  return (
+    <span className="flex gap-0.5" aria-hidden>
+      {[1, 2, 3].map((i) => (
+        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? "bg-brand" : "bg-line-strong"}`} />
+      ))}
+    </span>
   );
 }
 
 function soldSubtitle(items: Comparable[]): string {
   const dates = items.map((i) => i.soldDate).filter((d): d is string => Boolean(d)).sort();
   return dates.length
-    ? `What buyers paid, sales from ${dates[0]} to ${dates[dates.length - 1]}`
+    ? `What buyers paid, ${shortDate(dates[0])} to ${shortDate(dates[dates.length - 1])}`
     : "What buyers paid in the past year";
 }
 
@@ -231,33 +306,37 @@ export default function PriceSuggestionPanel({
   onRefresh: () => void;
 }) {
   return (
-    <section className="card">
-      <div className="flex items-start justify-between gap-2">
-        <StepHeading n={2} title="Price" hint="Pick a suggestion or type your own later." />
-        <button
-          type="button"
-          className="btn btn-secondary min-h-9 shrink-0 px-3.5 text-sm"
-          disabled={loading}
-          onClick={onRefresh}
-        >
-          {loading ? (
-            <>
-              <Spinner className="h-4 w-4" /> Checking
-            </>
-          ) : check ? (
-            "Refresh"
-          ) : (
-            "Check prices"
-          )}
-        </button>
-      </div>
+    <section className="flex flex-col gap-3">
+      <StepHeading
+        n={2}
+        title="Price"
+        hint="Pick a price, or type your own later."
+        action={
+          <button
+            type="button"
+            className="btn btn-secondary min-h-11 shrink-0 px-4 text-sm"
+            disabled={loading}
+            onClick={onRefresh}
+          >
+            {loading ? (
+              <>
+                <Spinner className="h-4 w-4" /> Checking
+              </>
+            ) : check ? (
+              "Refresh"
+            ) : (
+              "Check prices"
+            )}
+          </button>
+        }
+      />
 
-      {error && <p className="notice notice-bad mt-3">{error}</p>}
+      {error && <p className="notice notice-bad">{error}</p>}
 
       {loading && !check && (
-        <div className="mt-3 space-y-2" aria-busy>
+        <div className="space-y-3" aria-busy>
           {[0, 1].map((i) => (
-            <div key={i} className="space-y-2 rounded-2xl border border-line p-3">
+            <div key={i} className="card space-y-3">
               <div className="skeleton h-4 w-1/3" />
               <div className="grid grid-cols-3 gap-2">
                 <div className="skeleton h-16" />
@@ -270,7 +349,7 @@ export default function PriceSuggestionPanel({
       )}
 
       {check && (
-        <div className={`mt-3 space-y-2 fade-in ${loading ? "opacity-60" : ""}`}>
+        <div className={`space-y-3 fade-in ${loading ? "opacity-60" : ""}`}>
           <PriceCard
             title="Last sold"
             subtitle={soldSubtitle(check.soldItems)}
@@ -284,7 +363,7 @@ export default function PriceSuggestionPanel({
           />
           <PriceCard
             title="Current listings"
-            subtitle="What similar items are listed at now"
+            subtitle="What similar items are listed at"
             unit="listings"
             suggestion={check.current}
             items={check.currentItems}
