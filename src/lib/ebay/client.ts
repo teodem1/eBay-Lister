@@ -7,6 +7,15 @@ import { apiBaseUrl, type BrowseConfig } from "./config";
 
 const BROWSE_SCOPE = "https://api.ebay.com/oauth/api_scope";
 
+/** Application-token scope. Covers the Browse API. */
+export const SCOPE_PUBLIC = BROWSE_SCOPE;
+/**
+ * Scope for the Marketplace Insights API (sold items). eBay only grants it
+ * to approved apps; a normal keyset gets `invalid_scope` when requesting it.
+ */
+export const SCOPE_MARKETPLACE_INSIGHTS =
+  "https://api.ebay.com/oauth/api_scope/buy.marketplace.insights";
+
 export interface ItemSummary {
   itemId: string;
   title: string;
@@ -33,7 +42,7 @@ export interface SearchResult {
   items: ItemSummary[];
 }
 
-type FetchLike = typeof fetch;
+export type FetchLike = typeof fetch;
 
 export class EbayApiError extends Error {
   name = "EbayApiError";
@@ -47,18 +56,19 @@ export class EbayApiError extends Error {
 }
 
 export class EbayClient {
-  private token?: { value: string; expiresAt: number };
+  private tokens = new Map<string, { value: string; expiresAt: number }>();
 
   constructor(
-    private readonly config: BrowseConfig,
+    readonly config: BrowseConfig,
     private readonly fetchImpl: FetchLike = fetch,
     private readonly now: () => number = Date.now,
   ) {}
 
   /** Returns a cached application access token, fetching a new one when it is about to expire. */
-  async getAppToken(): Promise<string> {
-    if (this.token && this.token.expiresAt - 60_000 > this.now()) {
-      return this.token.value;
+  async getAppToken(scope: string = BROWSE_SCOPE): Promise<string> {
+    const cached = this.tokens.get(scope);
+    if (cached && cached.expiresAt - 60_000 > this.now()) {
+      return cached.value;
     }
     const basic = Buffer.from(
       `${this.config.clientId}:${this.config.clientSecret}`,
@@ -73,7 +83,7 @@ export class EbayClient {
         },
         body: new URLSearchParams({
           grant_type: "client_credentials",
-          scope: BROWSE_SCOPE,
+          scope,
         }).toString(),
       },
     );
@@ -81,11 +91,37 @@ export class EbayClient {
       throw new EbayApiError("eBay token request failed", res.status, await res.text());
     }
     const json = (await res.json()) as { access_token: string; expires_in: number };
-    this.token = {
+    this.tokens.set(scope, {
       value: json.access_token,
       expiresAt: this.now() + json.expires_in * 1000,
+    });
+    return json.access_token;
+  }
+
+  /** GET a Buy API path with an app token for `scope`, plus marketplace/end-user headers. */
+  async get<T>(
+    path: string,
+    params: Record<string, string | undefined>,
+    opts: { scope: string; endUserCtx?: string },
+  ): Promise<T> {
+    const token = await this.getAppToken(opts.scope);
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      "X-EBAY-C-MARKETPLACE-ID": this.config.marketplaceId,
+      Accept: "application/json",
     };
-    return this.token.value;
+    if (opts.endUserCtx) headers["X-EBAY-C-ENDUSERCTX"] = opts.endUserCtx;
+
+    const res = await this.fetchImpl(
+      `${apiBaseUrl(this.config.env)}${path}?${qs.toString()}`,
+      { headers },
+    );
+    if (!res.ok) {
+      throw new EbayApiError(`eBay GET ${path} failed (${res.status})`, res.status, await res.text());
+    }
+    return (await res.json()) as T;
   }
 
   /** Browse API item search, by barcode (gtin) and/or keywords (q). */

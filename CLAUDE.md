@@ -33,14 +33,16 @@ Screens (phone first):
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
 
 Server code:
-- `src/lib/ebay/client.ts` — app-token client (Browse search) used by lookup.
+- `src/lib/ebay/client.ts` — app-token client (Browse search) used by lookup and pricing.
+- `src/lib/ebay/comparables.ts` — Marketplace Insights sold search with Browse fallback.
+- `src/lib/pricing/` — price suggestion from comparables; served by `src/app/api/price-suggestion/route.ts`. See `docs/sold-price-data.md`.
 - `src/lib/ebay/sell.ts` — user-token client (OAuth, Inventory API, Taxonomy). `fetch` is injectable for tests.
 - `src/lib/ebay/publish.ts` — publish flow: location → inventory item → offer (create or update) → publish.
   Ported from `ebay_handler.py` in teodem1/ebay-item-listings-anthropic-claude.
 - `src/lib/ebay/config.ts` — env settings for both clients.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
-- `src/app/api/lookup/{barcode,photo}` and `src/app/api/listing/{generate,publish}` — server routes.
+- `src/app/api/lookup/{barcode,photo}`, `src/app/api/price-suggestion` and `src/app/api/listing/{generate,publish}` — server routes.
 
 Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine).
 
