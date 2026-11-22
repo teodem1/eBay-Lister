@@ -1,6 +1,7 @@
 /** Shapes shared by the lookup API routes and the page. */
 import type { SearchResult } from "./ebay/client";
 import type { PhotoIdentification } from "./identify/vision";
+import type { AlbumInfo } from "./music/musicbrainz";
 
 export interface LookupResponse {
   source: "barcode" | "photo";
@@ -11,6 +12,8 @@ export interface LookupResponse {
   /** Present for photo lookups: what Claude thinks the item is. */
   identification?: PhotoIdentification;
   results: SearchResult;
+  /** Album details when the item is a CD (or other music release) MusicBrainz knows. */
+  album?: AlbumInfo;
   /** Things the user should know, e.g. "no exact barcode match, showing keyword results". */
   notes: string[];
 }

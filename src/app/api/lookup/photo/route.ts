@@ -3,6 +3,7 @@ import { errorResponse } from "@/lib/api-errors";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import { identifyFromPhoto, type ImageMediaType } from "@/lib/identify/vision";
 import type { LookupResponse } from "@/lib/lookup";
+import { albumByBarcode, albumByName, safely, type AlbumInfo } from "@/lib/music/musicbrainz";
 
 const MEDIA_TYPES: ImageMediaType[] = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 // Claude accepts up to 5 MB per image; the page shrinks photos well below this.
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
 
     const ebay = getEbayClient();
     const gtin = identification.gtin ? normalizeGtin(identification.gtin) ?? undefined : undefined;
+    const album = safely(photoAlbum(identification, gtin));
     let results = gtin ? await ebay.searchItems({ gtin }) : { total: 0, items: [] };
     let query: string | undefined;
     if (results.items.length === 0) {
@@ -53,9 +55,37 @@ export async function POST(request: Request) {
     if (identification.confidence !== "high") {
       notes.push(`Claude's confidence is ${identification.confidence}. Check the match before listing.`);
     }
-    const payload: LookupResponse = { source: "photo", gtin, query, identification, results, notes };
+    const payload: LookupResponse = {
+      source: "photo",
+      gtin,
+      query,
+      identification,
+      results,
+      album: (await album) ?? undefined,
+      notes,
+    };
     return Response.json(payload);
   } catch (err) {
     return errorResponse(err);
   }
+}
+
+/** Album details for a photographed CD: by barcode if Claude read one, else by name. */
+async function photoAlbum(
+  id: Awaited<ReturnType<typeof identifyFromPhoto>>,
+  gtin: string | undefined,
+): Promise<AlbumInfo | null> {
+  const music = id.music;
+  if (!music?.album.trim()) return gtin ? albumByBarcode(gtin) : null;
+  const found = (gtin ? await albumByBarcode(gtin) : null) ?? (await albumByName(music.album, music.artist));
+  if (found) return found;
+  // MusicBrainz doesn't know it: keep what Claude read off the cover.
+  const year = Number(music.year);
+  return {
+    title: music.album.trim(),
+    artist: music.artist.trim(),
+    year: Number.isInteger(year) && year > 1800 ? year : undefined,
+    genres: [],
+    mbid: "",
+  };
 }

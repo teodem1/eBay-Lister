@@ -64,3 +64,56 @@ export function StepHeading({ n, title, hint }: { n: number; title: string; hint
     </div>
   );
 }
+
+/** Bottom tabs: Scan (/) and Collection. Pages using it add the `page-tabs` class. */
+export function TabBar({ active }: { active: "scan" | "collection" }) {
+  const tabs = [
+    {
+      key: "scan",
+      href: "/",
+      label: "Scan",
+      icon: (
+        <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9v6M11 9v6M14 9v6M17 9v6" />
+      ),
+    },
+    {
+      key: "collection",
+      href: "/collection",
+      label: "Collection",
+      icon: (
+        <>
+          <circle cx="12" cy="12" r="8.5" />
+          <circle cx="12" cy="12" r="2.5" />
+        </>
+      ),
+    },
+  ] as const;
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+    >
+      <ul className="mx-auto grid h-16 max-w-lg grid-cols-2">
+        {tabs.map((t) => {
+          const on = t.key === active;
+          return (
+            <li key={t.key}>
+              <Link
+                href={t.href}
+                aria-current={on ? "page" : undefined}
+                className={`flex h-full flex-col items-center justify-center gap-0.5 text-xs font-semibold ${on ? "text-brand-ink" : "text-muted"}`}
+              >
+                <span className={`flex h-7 w-14 items-center justify-center rounded-full ${on ? "bg-brand-soft" : ""}`}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    {t.icon}
+                  </svg>
+                </span>
+                {t.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}

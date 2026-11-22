@@ -121,6 +121,11 @@ body {
       max(1rem, env(safe-area-inset-left));
   }
 
+  /* A page with the bottom TabBar: room for the bar under the last card. */
+  .page-tabs {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
   .card {
     border-radius: 1.25rem;
     border: 1px solid var(--line);
