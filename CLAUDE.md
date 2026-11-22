@@ -36,6 +36,8 @@ while developing).
 Screens (phone first):
 - `/` — `src/components/ItemLookup.tsx`: photo, barcode scan, eBay matches. "Create listing"
   hands the identified item to the listing screen.
+  In the APK the buttons use the native camera and ML Kit scanner via `src/lib/native/`;
+  in a browser, barcode scan uses the live scanner in `BarcodeScanner.tsx`.
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
