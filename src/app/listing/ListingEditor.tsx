@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CONDITIONS } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
+import type { ComparableQuery } from "@/lib/ebay/types";
+import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
+import PriceSuggestionPanel from "./PriceSuggestionPanel";
+import { fetchPriceSuggestion, priceSuggestionBody } from "./priceRequest";
 
 type Draft = GeneratedListing["draft"];
 type PublishOk = { listingId: string; offerId: string; sku: string; url: string; env: string };
@@ -52,6 +56,65 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   const [imageText, setImageText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [published, setPublished] = useState<PublishOk | null>(null);
+  // The price to list at: from ?price=, a suggestion option, or typed by the user.
+  const [price, setPrice] = useState<number | undefined>(initial.price);
+  const [suggestion, setSuggestion] = useState<PriceSuggestion | null>(null);
+  const [priceLoading, setPriceLoading] = useState(() => priceSuggestionBody(initial.query, initial.barcode) !== null);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  // Once the user picks or types a price, a (re)loaded suggestion no longer overwrites it.
+  const priceChosen = useRef(initial.price !== undefined);
+  const priceRequestId = useRef(0);
+
+  function choosePrice(value: number | undefined) {
+    priceChosen.current = true;
+    setPrice(value);
+    setDraft((d) => (d ? { ...d, price: value } : d));
+  }
+
+  // Applies a finished price check, ignoring any that a newer request replaced.
+  const applySuggestion = useCallback(
+    (id: number, result: { suggestion: PriceSuggestion } | { error: string }) => {
+      if (id !== priceRequestId.current) return;
+      setPriceLoading(false);
+      if ("error" in result) {
+        setPriceError(result.error);
+        return;
+      }
+      const s = result.suggestion;
+      setSuggestion(s);
+      if (!priceChosen.current && s.usedCount > 0) {
+        const value = s.itemPrice.recommended;
+        setPrice(value);
+        setDraft((d) => (d ? { ...d, price: value } : d));
+      }
+    },
+    [],
+  );
+
+  const startPriceCheck = useCallback(
+    (body: ComparableQuery) => {
+      const id = ++priceRequestId.current;
+      fetchPriceSuggestion(body).then((result) => applySuggestion(id, result));
+    },
+    [applySuggestion],
+  );
+
+  function refreshSuggestion() {
+    const body = priceSuggestionBody(query, barcode);
+    if (!body) {
+      setPriceError("Enter the item or a barcode first.");
+      return;
+    }
+    setPriceLoading(true);
+    setPriceError(null);
+    startPriceCheck(body);
+  }
+
+  // Coming from the lookup screen: check prices straight away.
+  useEffect(() => {
+    const body = priceSuggestionBody(initial.query, initial.barcode);
+    if (body) startPriceCheck(body);
+  }, [initial.query, initial.barcode, startPriceCheck]);
 
   function update<K extends keyof Draft>(key: K, value: Draft[K], guessKey: string = key as string) {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
@@ -74,14 +137,15 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
           query,
           barcode: barcode || undefined,
           notes: notes || undefined,
-          suggestedPrice: initial.price,
+          suggestedPrice: price,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       const g = data as GeneratedListing;
       setGenerated(g);
-      setDraft(g.draft);
+      // Keep the price chosen on this screen even if it changed while Claude was writing.
+      setDraft({ ...g.draft, price: price ?? g.draft.price });
       setGuessed(new Set(g.guessedFields));
     } catch (e) {
       setError((e as Error).message);
@@ -147,6 +211,14 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
           <span className="text-sm font-medium">Your notes: condition, what&apos;s included, defects</span>
           <textarea className={input} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
+        <PriceSuggestionPanel
+          suggestion={suggestion}
+          loading={priceLoading}
+          error={priceError}
+          selected={price}
+          onPick={choosePrice}
+          onRefresh={refreshSuggestion}
+        />
         <button className={button} disabled={!query.trim() || loading !== null} onClick={generate}>
           {loading === "generate" ? "Writing listing…" : draft ? "Write it again" : "Write listing with Claude"}
         </button>
@@ -197,7 +269,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-sm font-medium">Price</span>
+              <span className="text-sm font-medium">Price ({suggestion?.currency ?? "CAD"})</span>
               <input
                 className={input}
                 type="number"
@@ -205,7 +277,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                 min="0"
                 step="0.01"
                 value={draft.price ?? ""}
-                onChange={(e) => update("price", e.target.value ? Number(e.target.value) : undefined)}
+                onChange={(e) => choosePrice(e.target.value ? Number(e.target.value) : undefined)}
               />
             </label>
             <label className="block">

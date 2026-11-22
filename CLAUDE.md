@@ -38,6 +38,8 @@ Screens (phone first):
   hands the identified item to the listing screen.
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
+  On load it calls `/api/price-suggestion` and prefills the recommended price (quick/high
+  options in `PriceSuggestionPanel.tsx`); a `?price=` or a price the user picks wins.
 
 Server code:
 - `src/lib/ebay/client.ts` — app-token client (Browse search) used by lookup and pricing.
