@@ -19,7 +19,14 @@ through server-side API routes so the client secret never reaches the browser.
 - Test:    `npm test` (Vitest)
 - Lint:    `npm run lint`
 - Build:   `npm run build`
-- APK (later, via Capacitor): `npx cap sync android`, then `npx cap open android`
+- APK (Capacitor): `CAP_SERVER_URL=https://<host> npm run cap:sync`, then
+  `npm run cap:open` (Android Studio) or `npm run android:apk`. CI builds a
+  debug APK in `.github/workflows/android-apk.yml`. See `docs/android.md`.
+
+The Android app is a Capacitor shell that loads the hosted Next.js server
+(`server.url`), so nothing secret is bundled. Screens use the camera and
+barcode scanner only through `src/lib/native/` (native in the APK, browser
+fallback on the web).
 
 Copy `.env.example` to `.env` and fill in your eBay keys (use `EBAY_ENV=sandbox`
 while developing).
@@ -31,6 +38,10 @@ Screens (phone first):
   hands the identified item to the listing screen.
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
+  On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
+  last sold (Marketplace Insights if eBay approves, else sold-comps.com via
+  `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
+  prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
 
 Server code:
 - `src/lib/ebay/client.ts` — app-token client (Browse search) used by lookup and pricing.

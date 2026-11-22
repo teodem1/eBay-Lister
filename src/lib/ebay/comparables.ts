@@ -23,6 +23,7 @@ import type {
   ComparableResult,
   Money,
 } from "./types";
+import { searchSoldComps, type SoldCompsOptions } from "./soldComps";
 
 // ---- Raw eBay response shapes (only the fields we use) ----
 
@@ -212,4 +213,86 @@ export async function findComparables(
         "Prices below are current asking prices from active listings, which usually run higher than what items sell for.",
     ],
   };
+}
+
+export interface BothComparables {
+  /** Active listings right now (Browse API). Null only if that search failed. */
+  current: ComparableResult | null;
+  /** Items sold in the last 90 days (Marketplace Insights). Null when unavailable. */
+  sold: ComparableResult | null;
+  /** Why `current` or `sold` is missing, for the user. */
+  unavailable: { current?: string; sold?: string };
+}
+
+export const SOLD_ACCESS_NOTE =
+  "eBay only gives sold prices to apps it approves for its Marketplace Insights API, and this app is not approved. " +
+  "Add a SOLD_COMPS_API_KEY (sold-comps.com) to get sold prices from a third-party service.";
+
+export interface BothOptions {
+  /** sold-comps.com key; used for sold prices when Marketplace Insights is refused. */
+  soldCompsApiKey?: string;
+  soldCompsFetch?: SoldCompsOptions["fetch"];
+}
+
+/** Sold comparables: Marketplace Insights, else sold-comps.com when a key is set. */
+async function searchSoldAny(
+  client: EbayClient,
+  q: ComparableQuery,
+  opts: BothOptions,
+): Promise<ComparableResult> {
+  const marketplaceId = client.config.marketplaceId;
+  try {
+    const items = await searchSold(client, q);
+    return { source: "marketplace_insights", marketplaceId, items, notes: [] };
+  } catch (err) {
+    if (!isAccessDenied(err) || !opts.soldCompsApiKey) throw err;
+  }
+  const items = await searchSoldComps(q, {
+    apiKey: opts.soldCompsApiKey,
+    marketplaceId,
+    fetch: opts.soldCompsFetch,
+  });
+  return {
+    source: "sold_comps",
+    marketplaceId,
+    items,
+    notes: ["Sold prices from sold-comps.com, a third-party service, not from eBay directly."],
+  };
+}
+
+/**
+ * Runs the active-listing and sold searches side by side so the screen can
+ * show a "current listings" price and a "last sold" price. One failing never
+ * hides the other; throws only when both fail.
+ */
+export async function findBothComparables(
+  client: EbayClient,
+  q: ComparableQuery,
+  opts: BothOptions = {},
+): Promise<BothComparables> {
+  const marketplaceId = client.config.marketplaceId;
+  const [active, sold] = await Promise.allSettled([searchActive(client, q), searchSoldAny(client, q, opts)]);
+  const unavailable: BothComparables["unavailable"] = {};
+  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  let current: ComparableResult | null = null;
+  if (active.status === "fulfilled") {
+    current = { source: "browse_active", marketplaceId, items: active.value, notes: [] };
+  } else {
+    unavailable.current = `Current listings search failed: ${message(active.reason)}`;
+  }
+
+  let soldResult: ComparableResult | null = null;
+  if (sold.status === "fulfilled") {
+    soldResult = sold.value;
+  } else {
+    unavailable.sold = isAccessDenied(sold.reason)
+      ? SOLD_ACCESS_NOTE
+      : `Sold search failed: ${message(sold.reason)}`;
+  }
+
+  if (!current && !soldResult) {
+    throw active.status === "rejected" ? active.reason : new Error(unavailable.sold);
+  }
+  return { current, sold: soldResult, unavailable };
 }
