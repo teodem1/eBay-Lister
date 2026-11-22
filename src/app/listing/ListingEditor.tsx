@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppBar, Spinner, StepHeading } from "@/components/ui";
-import { CONDITIONS } from "@/lib/ebay/sell";
+import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
@@ -155,7 +155,13 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
       .split(/\s+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    const body: Partial<ListingDraft> = { ...draft, imageUrls };
+    const dims = draft.packageDimensionsCm;
+    const body: Partial<ListingDraft> = {
+      ...draft,
+      imageUrls,
+      // Send a box size only when all three sides are filled in.
+      packageDimensionsCm: dims && dims.length > 0 && dims.width > 0 && dims.height > 0 ? dims : undefined,
+    };
     try {
       const res = await fetch("/api/listing/publish", {
         method: "POST",
@@ -324,6 +330,10 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                       const c = generated.categorySuggestions.find((s) => s.categoryId === e.target.value);
                       update("categoryId", e.target.value);
                       update("categoryName", c?.path, "categoryId");
+                      // Keep the condition valid for the new category.
+                      const allowed = generated.conditionsByCategory?.[e.target.value] ?? [];
+                      const next = nearestAllowedCondition(draft.condition, allowed);
+                      if (next !== draft.condition) setDraft((d) => (d ? { ...d, condition: next } : d));
                     }}
                   >
                     {generated.categorySuggestions.map((c) => (
@@ -350,7 +360,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                   value={draft.condition}
                   onChange={(e) => update("condition", e.target.value as Draft["condition"])}
                 >
-                  {CONDITIONS.map((c) => (
+                  {(generated.conditionsByCategory?.[draft.categoryId] ?? CONDITIONS).map((c) => (
                     <option key={c} value={c}>
                       {CONDITION_LABELS[c]}
                     </option>
@@ -367,6 +377,46 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
                   onChange={(e) => update("conditionDescription", e.target.value || undefined)}
                 />
               </label>
+
+              <fieldset>
+                <legend className="label">
+                  Package (packed, for calculated shipping){isGuess("package") && <GuessBadge />}
+                </legend>
+                <div className="grid grid-cols-4 gap-2">
+                  <label className="block">
+                    <span className="text-xs text-muted">Weight kg</span>
+                    <input
+                      className={field(isGuess("package"))}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={draft.packageWeightKg ?? ""}
+                      onChange={(e) =>
+                        update("packageWeightKg", e.target.value ? Number(e.target.value) : undefined, "package")
+                      }
+                    />
+                  </label>
+                  {(["length", "width", "height"] as const).map((dim) => (
+                    <label key={dim} className="block">
+                      <span className="text-xs text-muted">{dim[0].toUpperCase() + dim.slice(1)} cm</span>
+                      <input
+                        className={field(isGuess("package"))}
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="1"
+                        value={draft.packageDimensionsCm?.[dim] ?? ""}
+                        onChange={(e) => {
+                          const d = { length: 0, width: 0, height: 0, ...draft.packageDimensionsCm };
+                          d[dim] = Number(e.target.value) || 0;
+                          update("packageDimensionsCm", d, "package");
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">

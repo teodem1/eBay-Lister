@@ -2,7 +2,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { CONDITIONS, type CategorySuggestion, type EbaySellClient } from "../ebay/sell";
+import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
@@ -23,6 +23,10 @@ const ClaudeListingSchema = z.object({
     }),
   ),
   descriptionHtml: z.string(),
+  packageWeightKg: z.number().describe("Estimated packed weight in kg including box and padding; 0 if no idea"),
+  packageDimensionsCm: z
+    .object({ length: z.number(), width: z.number(), height: z.number() })
+    .describe("Estimated shipping box size in cm; zeros if no idea"),
   guessedFields: z
     .array(z.enum(["title", "condition", "conditionDescription", "brand", "mpn", "description"]))
     .describe("Top-level fields that rely on assumptions"),
@@ -41,6 +45,10 @@ Item specifics:
 - Fill every aspect the category lists, required ones first, using eBay's usual values (e.g. "Apple", "128 GB").
 - Add other relevant aspects buyers filter on.
 - Mark guessed=true whenever the value is not stated by the seller and not certain from the barcode or exact model. If you have no reasonable value, give an empty string and guessed=true.
+
+Condition: pick only from the allowed conditions listed for the category, when a list is given.
+
+Package: estimate the packed weight and a sensible box size for shipping the item (item plus box and padding). These are always estimates.
 
 Description (descriptionHtml):
 - Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
@@ -83,6 +91,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   const warnings: string[] = [];
   let categories: CategorySuggestion[] = [];
   let aspectHints: { name: string; required: boolean }[] = [];
+  let conditionsByCategory: Record<string, Condition[]> = {};
 
   if (deps.ebay) {
     try {
@@ -91,6 +100,11 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       if (categories[0]) aspectHints = await deps.ebay.getCategoryAspects(categories[0].categoryId, treeId);
     } catch (err) {
       warnings.push(`Could not look up the eBay category: ${(err as Error).message}`);
+    }
+    try {
+      conditionsByCategory = await deps.ebay.getCategoryConditions(categories.map((c) => c.categoryId));
+    } catch (err) {
+      warnings.push(`Could not look up which conditions the category accepts: ${(err as Error).message}`);
     }
   } else {
     warnings.push("eBay keys are not set, so no category was looked up. Enter a category ID by hand.");
@@ -104,6 +118,9 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     categories[0] ? `eBay category: ${categories[0].path} (ID ${categories[0].categoryId})` : null,
     aspectHints.length
       ? `Item specifics for this category:\n${aspectHints.map((a) => `- ${a.name}${a.required ? " (required)" : ""}`).join("\n")}`
+      : null,
+    categories[0] && conditionsByCategory[categories[0].categoryId]
+      ? `Allowed conditions for this category: ${conditionsByCategory[categories[0].categoryId].join(", ")}`
       : null,
   ]
     .filter(Boolean)
@@ -128,6 +145,15 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   const title = trimTitle(out.title);
   const guessedFields: string[] = [...out.guessedFields];
   if (categories[0]) guessedFields.push("categoryId"); // eBay's top suggestion is still a guess
+  const allowed = categories[0] ? (conditionsByCategory[categories[0].categoryId] ?? []) : [];
+  const condition = nearestAllowedCondition(out.condition, allowed);
+  if (condition !== out.condition) {
+    warnings.push(`eBay doesn't accept "${out.condition}" in this category, so the condition was set to "${condition}".`);
+    if (!guessedFields.includes("condition")) guessedFields.push("condition");
+  }
+  const dims = out.packageDimensionsCm;
+  const hasDims = dims.length > 0 && dims.width > 0 && dims.height > 0;
+  if (out.packageWeightKg > 0 || hasDims) guessedFields.push("package"); // always an estimate
   if (!input.suggestedPrice) warnings.push("No suggested price was passed in. Enter a price before publishing.");
 
   return {
@@ -136,7 +162,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       title,
       categoryId: categories[0]?.categoryId ?? "",
       categoryName: categories[0]?.path,
-      condition: out.condition,
+      condition,
       conditionDescription: out.conditionDescription || undefined,
       aspects: out.aspects.filter((a) => a.name.trim()),
       descriptionHtml: sanitizeDescription(out.descriptionHtml),
@@ -146,8 +172,13 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       barcode: input.barcode,
       brand: out.brand || undefined,
       mpn: out.mpn || undefined,
+      packageWeightKg: out.packageWeightKg > 0 ? Math.round(out.packageWeightKg * 100) / 100 : undefined,
+      packageDimensionsCm: hasDims
+        ? { length: Math.ceil(dims.length), width: Math.ceil(dims.width), height: Math.ceil(dims.height) }
+        : undefined,
     },
     categorySuggestions: categories,
+    conditionsByCategory,
     guessedFields,
     checks: out.checks,
     warnings,

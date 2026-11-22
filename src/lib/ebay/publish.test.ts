@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getEbayConfig } from "./config";
-import { aspectsToEbay, barcodeIdentifiers, publishListing } from "./publish";
-import { EbayApiError, EbaySellClient, type FetchLike } from "./sell";
+import { aspectsToEbay, barcodeIdentifiers, publishListing, withBrandAndMpn } from "./publish";
+import { EbayApiError, EbaySellClient, nearestAllowedCondition, type FetchLike } from "./sell";
 import type { ListingDraft } from "../listing/types";
 
 const config = getEbayConfig({
@@ -28,6 +28,8 @@ const draft: ListingDraft = {
   price: 249.9,
   quantity: 1,
   imageUrls: ["https://example.com/a.jpg"],
+  packageWeightKg: 0.5,
+  packageDimensionsCm: { length: 30, width: 20, height: 10 },
   barcode: "0045496453435",
 };
 
@@ -80,6 +82,10 @@ describe("publishListing", () => {
     expect(item.headers["Content-Language"]).toBe("en-CA");
     expect(item.body).toMatchObject({
       condition: "USED_VERY_GOOD",
+      packageWeightAndSize: {
+        weight: { value: 0.5, unit: "KILOGRAM" },
+        dimensions: { length: 30, width: 20, height: 10, unit: "CENTIMETER" },
+      },
       product: {
         title: draft.title,
         aspects: { Marque: ["Nintendo"], Couleur: ["Blanc", "Noir"] },
@@ -162,6 +168,35 @@ describe("publishListing", () => {
 });
 
 describe("helpers", () => {
+  it("adds Brand and MPN item specifics when missing", () => {
+    expect(withBrandAndMpn({ Color: ["Black"] }, "Nintendo")).toEqual({
+      Color: ["Black"],
+      Brand: ["Nintendo"],
+      MPN: ["Does not apply"],
+    });
+    expect(withBrandAndMpn({ brand: ["Sony"], mpn: ["X1"] }, "Nintendo", "Y")).toEqual({ brand: ["Sony"], mpn: ["X1"] });
+  });
+
+  it("picks the closest condition a category allows", () => {
+    expect(nearestAllowedCondition("USED_GOOD", ["NEW", "USED_EXCELLENT"])).toBe("USED_EXCELLENT");
+    expect(nearestAllowedCondition("USED_GOOD", [])).toBe("USED_GOOD");
+    expect(nearestAllowedCondition("NEW_OTHER", ["NEW", "USED_EXCELLENT"])).toBe("NEW");
+    expect(nearestAllowedCondition("FOR_PARTS_OR_NOT_WORKING", ["NEW"])).toBe("NEW");
+  });
+
+  it("reads condition policies from the Metadata API", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/metadata/v1/marketplace/EBAY_CA/get_item_condition_policies": () => [
+        200,
+        { itemConditionPolicies: [{ categoryId: "117042", itemConditions: [{ conditionId: "1000" }, { conditionId: "3000" }, { conditionId: "9999" }] }] },
+      ],
+    });
+    const out = await new EbaySellClient(config, fetchImpl).getCategoryConditions(["117042", "139971"]);
+    expect(out).toEqual({ "117042": ["NEW", "USED_EXCELLENT"] });
+    expect(decodeURIComponent(calls[1].url)).toContain("filter=categoryIds:{117042|139971}");
+  });
+
   it("drops empty aspects and splits multi-values", () => {
     expect(aspectsToEbay(draft.aspects)).toEqual({ Marque: ["Nintendo"], Couleur: ["Blanc", "Noir"] });
   });
