@@ -170,6 +170,27 @@ describe("findBothComparables", () => {
     expect(res.unavailable).toEqual({});
   });
 
+  it("falls back to sold-comps.com when the Insights search itself fails (sandbox 400)", async () => {
+    const fetchMock = vi.fn<FetchLike>(async (url) => {
+      const u = String(url);
+      if (u.includes("oauth2/token")) return json(200, { access_token: "t", expires_in: 7200 });
+      if (u.includes("/buy/marketplace_insights/")) return json(400, { errors: [{ errorId: 12000 }] });
+      if (u.includes("/buy/browse/")) return json(200, { itemSummaries: [activeItem] });
+      throw new Error("unexpected " + u);
+    });
+    const soldCompsFetch = vi.fn(async () =>
+      json(200, { items: [{ itemId: "9", soldPrice: "240.00", soldCurrency: "CAD", endedAt: "2026-11-01" }] }),
+    );
+    const res = await findBothComparables(
+      new EbayClient(config, fetchMock),
+      { keywords: "switch oled" },
+      { soldCompsApiKey: "sc_test", soldCompsFetch },
+    );
+
+    expect(res.sold?.source).toBe("sold_comps");
+    expect(res.unavailable).toEqual({});
+  });
+
   it("throws only when both searches fail", async () => {
     const fetchMock = vi.fn<FetchLike>(async (url) =>
       String(url).includes("oauth2/token")

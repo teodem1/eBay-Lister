@@ -234,7 +234,7 @@ export interface BothOptions {
   soldCompsFetch?: SoldCompsOptions["fetch"];
 }
 
-/** Sold comparables: Marketplace Insights, else sold-comps.com when a key is set. */
+/** Sold comparables: Marketplace Insights, else sold-comps.com whenever Insights fails and a key is set. */
 async function searchSoldAny(
   client: EbayClient,
   q: ComparableQuery,
@@ -245,7 +245,9 @@ async function searchSoldAny(
     const items = await searchSold(client, q);
     return { source: "marketplace_insights", marketplaceId, items, notes: [] };
   } catch (err) {
-    if (!isAccessDenied(err) || !opts.soldCompsApiKey) throw err;
+    // With a sold-comps.com key, any Insights failure falls back to it: the
+    // sandbox answers the search itself with 400, not only 401/403.
+    if (!opts.soldCompsApiKey) throw err;
   }
   const items = await searchSoldComps(q, {
     apiKey: opts.soldCompsApiKey,
