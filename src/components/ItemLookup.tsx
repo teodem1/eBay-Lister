@@ -2,9 +2,10 @@
 
 import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { resizeImage } from "@/lib/resize-image";
 import { normalizeGtin } from "@/lib/identify/barcode";
-import type { LookupError, LookupResponse } from "@/lib/lookup";
+import { listingHref, type LookupError, type LookupResponse } from "@/lib/lookup";
 import type { ItemSummary } from "@/lib/ebay/client";
 
 const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
@@ -156,6 +157,12 @@ function Results({ data, preview }: { data: LookupResponse; preview?: string }) 
   const id = data.identification;
   return (
     <section className="flex flex-col gap-4">
+      <Link
+        href={listingHref(data)}
+        className="flex h-14 items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white shadow-sm active:bg-blue-700"
+      >
+        Create listing
+      </Link>
       <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
         <div className="flex gap-3">
           {preview && <Thumb src={preview} />}
