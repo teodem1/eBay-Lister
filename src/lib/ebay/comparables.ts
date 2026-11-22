@@ -184,12 +184,7 @@ export function isAccessDenied(err: unknown): boolean {
   if (!(err instanceof EbayApiError)) return false;
   if (err.status === 401 || err.status === 403) return true;
   // Token endpoint answers 400 invalid_scope for scopes the app doesn't have.
-  return (
-    err.status === 400 &&
-    typeof err.body === "object" &&
-    err.body !== null &&
-    (err.body as { error?: string }).error === "invalid_scope"
-  );
+  return err.status === 400 && err.body.includes("invalid_scope");
 }
 
 /**

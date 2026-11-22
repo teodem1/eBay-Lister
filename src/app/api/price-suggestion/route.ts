@@ -7,17 +7,10 @@
  * Returns the price suggestion and the comparables used. Runs server-side so
  * the eBay client secret never reaches the phone.
  */
-import { EbayClient } from "@/lib/ebay/client";
+import { getEbayClient } from "@/lib/ebay";
 import { findComparables } from "@/lib/ebay/comparables";
-import { loadEbayConfig } from "@/lib/ebay/config";
 import type { ComparableQuery } from "@/lib/ebay/types";
 import { suggestPrice } from "@/lib/pricing/suggestPrice";
-
-let client: EbayClient | null = null;
-function getClient(): EbayClient {
-  client ??= new EbayClient(loadEbayConfig());
-  return client;
-}
 
 export async function POST(request: Request) {
   let body: ComparableQuery & { myShippingCost?: number };
@@ -35,7 +28,7 @@ export async function POST(request: Request) {
 
   try {
     const { myShippingCost, ...query } = body;
-    const ebay = getClient();
+    const ebay = getEbayClient();
     // Quote shipping to the marketplace's own country unless told otherwise
     // (EBAY_CA -> CA).
     query.destinationCountry ??= ebay.config.marketplaceId.replace(/^EBAY_/, "");
