@@ -40,12 +40,18 @@ describe("fetchPriceSuggestion", () => {
 
   it("posts the query and returns the suggestion", async () => {
     const f = ok({
-      current: { suggestion: { currency: "CAD" }, comparables: {} },
+      current: { suggestion: { currency: "CAD" }, comparables: { items: [{ itemId: "1" }] } },
       sold: null,
       unavailable: { sold: "not approved" },
     });
     const r = await fetchPriceSuggestion({ keywords: "x" }, f);
-    expect(r).toEqual({ current: { currency: "CAD" }, sold: null, unavailable: { sold: "not approved" } });
+    expect(r).toEqual({
+      current: { currency: "CAD" },
+      sold: null,
+      currentItems: [{ itemId: "1" }],
+      soldItems: [],
+      unavailable: { sold: "not approved" },
+    });
     expect(f).toHaveBeenCalledWith("/api/price-suggestion", expect.objectContaining({ method: "POST" }));
   });
 
@@ -68,15 +74,15 @@ describe("defaultPrice", () => {
     ({ usedCount, itemPrice: { quickSale: 1, recommended, high: 2 } }) as PriceSuggestion;
 
   it("prefers the last-sold price", () => {
-    expect(defaultPrice({ current: s(300), sold: s(250), unavailable: {} })).toBe(250);
+    expect(defaultPrice({ current: s(300), sold: s(250), unavailable: {}, currentItems: [], soldItems: [] })).toBe(250);
   });
 
   it("falls back to the current price without sold data", () => {
-    expect(defaultPrice({ current: s(300), sold: null, unavailable: {} })).toBe(300);
-    expect(defaultPrice({ current: s(300), sold: s(250, 0), unavailable: {} })).toBe(300);
+    expect(defaultPrice({ current: s(300), sold: null, unavailable: {}, currentItems: [], soldItems: [] })).toBe(300);
+    expect(defaultPrice({ current: s(300), sold: s(250, 0), unavailable: {}, currentItems: [], soldItems: [] })).toBe(300);
   });
 
   it("is undefined with no data", () => {
-    expect(defaultPrice({ current: null, sold: null, unavailable: {} })).toBeUndefined();
+    expect(defaultPrice({ current: null, sold: null, unavailable: {}, currentItems: [], soldItems: [] })).toBeUndefined();
   });
 });

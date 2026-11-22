@@ -6,13 +6,14 @@
  *
  * Returns two suggestions, each with the comparables used:
  *   current: from active eBay listings (asking prices, Browse API)
- *   sold:    from items sold in the last 90 days (Marketplace Insights, or
+ *   sold:    from items sold in the last SOLD_LOOKBACK_DAYS days (default 365) (Marketplace Insights, or
  *            sold-comps.com when SOLD_COMPS_API_KEY is set), null when neither
  *            is available; `unavailable.sold` says why.
  * Runs server-side so the eBay client secret never reaches the phone.
  */
 import { getEbayClient } from "@/lib/ebay";
 import { findBothComparables } from "@/lib/ebay/comparables";
+import { soldLookbackDays } from "@/lib/ebay/soldComps";
 import type { ComparableQuery, ComparableResult } from "@/lib/ebay/types";
 import { suggestPrice } from "@/lib/pricing/suggestPrice";
 
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
     query.destinationCountry ??= ebay.config.marketplaceId.replace(/^EBAY_/, "");
     const both = await findBothComparables(ebay, query, {
       soldCompsApiKey: process.env.SOLD_COMPS_API_KEY || undefined,
+      soldLookbackDays: soldLookbackDays(process.env.SOLD_LOOKBACK_DAYS),
     });
     // The current price is shown as what similar items are listed at, so no
     // asking-to-sold discount is applied to it.

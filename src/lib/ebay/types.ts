@@ -34,6 +34,8 @@ export interface Comparable {
   /** How many units sold (multi-quantity listings). Defaults to 1. */
   quantitySold: number;
   url: string | null;
+  /** Thumbnail of the listing, when the source gives one. */
+  imageUrl?: string | null;
 }
 
 /** Where the comparables came from. Drives how much we trust them. */
