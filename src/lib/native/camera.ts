@@ -1,4 +1,3 @@
-import { Camera, CameraDirection, EncodingType } from "@capacitor/camera";
 import { isNativeApp } from "./platform";
 
 /**
@@ -12,6 +11,8 @@ export async function takeItemPhoto(): Promise<File | null> {
 }
 
 async function takeNativePhoto(): Promise<File | null> {
+  // Loaded only in the Android app, so browsers never download the plugin.
+  const { Camera, CameraDirection, EncodingType } = await import("@capacitor/camera");
   try {
     const result = await Camera.takePhoto({
       quality: 80,

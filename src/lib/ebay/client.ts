@@ -55,8 +55,13 @@ export class EbayApiError extends Error {
   }
 }
 
+/** How long a scope eBay refused is remembered before asking again. */
+export const REFUSED_SCOPE_TTL_MS = 60 * 60 * 1000;
+
 export class EbayClient {
   private tokens = new Map<string, { value: string; expiresAt: number }>();
+  /** Scopes eBay refused (invalid_scope), so each price check doesn't ask again. */
+  private refused = new Map<string, { error: EbayApiError; until: number }>();
 
   constructor(
     readonly config: BrowseConfig,
@@ -70,6 +75,8 @@ export class EbayClient {
     if (cached && cached.expiresAt - 60_000 > this.now()) {
       return cached.value;
     }
+    const refused = this.refused.get(scope);
+    if (refused && refused.until > this.now()) throw refused.error;
     const basic = Buffer.from(
       `${this.config.clientId}:${this.config.clientSecret}`,
     ).toString("base64");
@@ -88,7 +95,13 @@ export class EbayClient {
       },
     );
     if (!res.ok) {
-      throw new EbayApiError("eBay token request failed", res.status, await res.text());
+      const error = new EbayApiError("eBay token request failed", res.status, await res.text());
+      // The app isn't approved for this scope (e.g. Marketplace Insights): that won't change
+      // within the hour, so skip the round trip to eBay until then.
+      if (res.status === 400 && error.body.includes("invalid_scope")) {
+        this.refused.set(scope, { error, until: this.now() + REFUSED_SCOPE_TTL_MS });
+      }
+      throw error;
     }
     const json = (await res.json()) as { access_token: string; expires_in: number };
     this.tokens.set(scope, {
