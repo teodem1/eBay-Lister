@@ -42,7 +42,8 @@ Screens (phone first):
   in a browser, barcode scan uses the live scanner in `BarcodeScanner.tsx`.
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
-  Before Claude writes, the seller grades the disc and the inlay separately in `ConditionPicker.tsx`
+  Grades picked on the scan screen show as a one-line summary with "Change" (no second picker).
+  Otherwise, before Claude writes, the seller grades the disc and the inlay separately in `ConditionPicker.tsx`
   (plus sealed, case, tested, defects; `src/lib/listing/condition.ts`). The eBay condition follows from the
   weaker of disc and inlay (`ebayConditionFromGrades`). It sets the
   draft's condition and condition text; Claude never guesses them. Claude writes the listing automatically once the CD is graded
