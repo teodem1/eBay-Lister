@@ -100,7 +100,8 @@ Server code:
   Package defaults to 65 g (`DEFAULT_PACKAGE_WEIGHT_KG`, edited in grams) and 12 × 15 × 1 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.
-  Publish always sends Brand with MPN (`withBrandAndMpn`: draft brand, else Record Label, else "Unbranded") to avoid eBay error 25002.
+  Publish leaves Brand and MPN empty for CDs/music (`isMusicDraft`, `withoutBrandAndMpn`); other items get them filled
+  (`withBrandAndMpn`). On eBay error 25002 (BrandMPN) it re-sends the item the other way once and publishes again.
 - `src/app/api/lookup/{barcode,photo}`, `src/app/api/price-suggestion` and `src/app/api/listing/{generate,publish}` — server routes.
 
 Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine).
