@@ -183,6 +183,24 @@ export async function searchActive(
   return normaliseAll(res.itemSummaries, "active", q);
 }
 
+/** Current listings with the item's barcode; by name when too few carry it. */
+async function searchActiveAny(
+  client: EbayClient,
+  q: ComparableQuery,
+): Promise<{ items: Comparable[]; notes: string[]; matchedBy: ComparableResult["matchedBy"] }> {
+  const items = await searchActive(client, q);
+  if (!q.gtin) return { items, notes: [], matchedBy: "keywords" };
+  if (items.length >= MIN_BARCODE_MATCHES || !q.keywords?.trim()) {
+    return { items, notes: [`Listings with this exact barcode (${q.gtin}).`], matchedBy: "barcode" };
+  }
+  const byName = await searchActive(client, { ...q, gtin: undefined });
+  return {
+    items: byName,
+    notes: [`Only ${items.length} listings carry this barcode, so listings were found by name.`],
+    matchedBy: "keywords",
+  };
+}
+
 /** True when the error means "this app is not approved for Marketplace Insights". */
 export function isAccessDenied(err: unknown): boolean {
   if (!(err instanceof EbayApiError)) return false;
@@ -254,17 +272,37 @@ async function searchSoldAny(
     // sandbox answers the search itself with 400, not only 401/403.
     if (!opts.soldCompsApiKey) throw err;
   }
-  const items = await searchSoldComps(q, {
+  const sc = {
     apiKey: opts.soldCompsApiKey,
     marketplaceId,
     fetch: opts.soldCompsFetch,
     lookbackDays: opts.soldLookbackDays,
-  });
+  };
   const notes = ["Sold prices from sold-comps.com, a third-party service, not from eBay directly."];
+  let items: Comparable[] = [];
+  let matchedBy: ComparableResult["matchedBy"] = "keywords";
+  // A barcode finds that exact pressing (the Canadian CD, not the vinyl or the
+  // Japanese issue), like scanning in eBay's app. Only when it finds too few
+  // sales is a second, by-name search spent (sold-comps.com quota is small).
+  if (q.gtin) {
+    items = await searchSoldComps(q, { ...sc, by: "barcode" });
+    if (items.length >= MIN_BARCODE_MATCHES || !q.keywords?.trim()) {
+      matchedBy = "barcode";
+      notes.push(`Sales of this exact barcode (${q.gtin}), so the same pressing.`);
+    } else {
+      notes.push(`Only ${items.length} sales carry this barcode, so sales were found by name.`);
+      items = await searchSoldComps(q, { ...sc, by: "keywords" });
+    }
+  } else {
+    items = await searchSoldComps(q, sc);
+  }
   const oldest = items.map((i) => i.soldDate).filter(Boolean).sort()[0];
   if (oldest) notes.push(`Oldest sale found: ${oldest}.`);
-  return { source: "sold_comps", marketplaceId, items, notes };
+  return { source: "sold_comps", marketplaceId, items, notes, matchedBy };
 }
+
+/** Fewer barcode matches than this and the search falls back to the item name. */
+export const MIN_BARCODE_MATCHES = 3;
 
 /**
  * Runs the active-listing and sold searches side by side so the screen can
@@ -277,13 +315,13 @@ export async function findBothComparables(
   opts: BothOptions = {},
 ): Promise<BothComparables> {
   const marketplaceId = client.config.marketplaceId;
-  const [active, sold] = await Promise.allSettled([searchActive(client, q), searchSoldAny(client, q, opts)]);
+  const [active, sold] = await Promise.allSettled([searchActiveAny(client, q), searchSoldAny(client, q, opts)]);
   const unavailable: BothComparables["unavailable"] = {};
   const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   let current: ComparableResult | null = null;
   if (active.status === "fulfilled") {
-    current = { source: "browse_active", marketplaceId, items: active.value, notes: [] };
+    current = { source: "browse_active", marketplaceId, ...active.value };
   } else {
     unavailable.current = `Current listings search failed: ${message(active.reason)}`;
   }

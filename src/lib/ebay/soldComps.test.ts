@@ -22,7 +22,12 @@ describe("buildSoldCompsUrl", () => {
 
   it("uses the barcode as keyword when there is no item text", () => {
     const u = new URL(buildSoldCompsUrl({ gtin: "0045496453435" }, opts));
-    expect(u.searchParams.get("keyword")).toBe("0045496453435");
+    expect(u.searchParams.get("keyword")).toBe("UPC045496453435");
+  });
+
+  it("searches the barcode like eBay's app does when asked to", () => {
+    const u = new URL(buildSoldCompsUrl({ keywords: "Genesis Wind & Wuthering", gtin: "075678269028" }, { ...opts, by: "barcode" }));
+    expect(u.searchParams.get("keyword")).toBe("UPC075678269028");
   });
 });
 

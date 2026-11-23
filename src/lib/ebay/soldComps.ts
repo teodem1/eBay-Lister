@@ -119,8 +119,25 @@ export function countryCode(location: string | null | undefined): string | null 
   return COUNTRY_CODES[last] ?? null;
 }
 
-export function buildSoldCompsUrl(q: ComparableQuery, opts: SoldCompsOptions): string {
-  const keyword = q.keywords?.trim() || q.gtin;
+/**
+ * The keyword eBay's own app searches when you scan a barcode: "UPC" plus the
+ * 12-digit UPC (or "EAN" plus 13 digits). It matches listings tagged with
+ * that barcode, so only that exact pressing comes back.
+ */
+export function barcodeKeyword(gtin: string): string {
+  const d = gtin.replace(/\D/g, "");
+  if (d.length === 12) return `UPC${d}`;
+  if (d.length === 13 && d.startsWith("0")) return `UPC${d.slice(1)}`;
+  if (d.length === 13) return `EAN${d}`;
+  return d;
+}
+
+export function buildSoldCompsUrl(
+  q: ComparableQuery,
+  opts: SoldCompsOptions & { by?: "barcode" | "keywords" },
+): string {
+  const keyword =
+    opts.by === "barcode" && q.gtin ? barcodeKeyword(q.gtin) : q.keywords?.trim() || (q.gtin && barcodeKeyword(q.gtin));
   if (!keyword) throw new Error("Sold search needs keywords or a barcode.");
   const days = opts.lookbackDays ?? DEFAULT_SOLD_LOOKBACK_DAYS;
   const since = new Date((opts.now ?? new Date()).getTime() - days * 86_400_000);
@@ -192,7 +209,10 @@ export function findImageUrl(raw: unknown): string | null {
   return walk(raw, 0);
 }
 
-export async function searchSoldComps(q: ComparableQuery, opts: SoldCompsOptions): Promise<Comparable[]> {
+export async function searchSoldComps(
+  q: ComparableQuery,
+  opts: SoldCompsOptions & { by?: "barcode" | "keywords" },
+): Promise<Comparable[]> {
   const doFetch = opts.fetch ?? fetch;
   const res = await doFetch(buildSoldCompsUrl(q, opts), {
     headers: { Authorization: `Bearer ${opts.apiKey}`, Accept: "application/json" },

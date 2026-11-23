@@ -74,4 +74,6 @@ export interface ComparableResult {
   items: Comparable[];
   /** Human-readable notes about caveats in the data (shown to the user). */
   notes: string[];
+  /** "barcode" when every comparable carries the item's own barcode (the same pressing). */
+  matchedBy?: "barcode" | "keywords";
 }
