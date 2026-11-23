@@ -12,14 +12,14 @@ export const CD_CONDITIONS = [
   { value: "USED_ACCEPTABLE", label: "Acceptable" },
 ] as const satisfies readonly { value: Condition; label: string }[];
 
-export const GRADES = ["Mint", "Near mint", "Very good", "Good", "Fair", "Poor"] as const;
+export const GRADES = ["Mint", "Near mint", "Very good+", "Very good", "Good", "Fair", "Poor"] as const;
 export type Grade = (typeof GRADES)[number];
 
 /** The parts of a CD the seller grades. Case and booklet can also be missing. */
 export const PARTS = [
   { key: "disc", label: "Disc" },
   { key: "case", label: "Case" },
-  { key: "booklet", label: "Booklet / artwork" },
+  { key: "booklet", label: "Inlay / booklet" },
 ] as const;
 export type PartKey = (typeof PARTS)[number]["key"];
 
@@ -61,6 +61,30 @@ export function conditionSummary(sc: SellerCondition): string {
   }
   // eBay caps the condition description at 1000 characters.
   return parts.join(" ").slice(0, 1000);
+}
+
+/** Short grades for the title, as record sellers write them. */
+const GRADE_ABBR: Record<Grade, string> = {
+  Mint: "M",
+  "Near mint": "NM",
+  "Very good+": "VG+",
+  "Very good": "VG",
+  Good: "G",
+  Fair: "F",
+  Poor: "P",
+};
+
+/**
+ * The condition part of the listing title, e.g. "CD: NM / Inlay: VG+".
+ * Empty when there is nothing to say; "Sealed" for a new sealed CD.
+ */
+export function conditionTitleSuffix(sc: SellerCondition): string {
+  if (sc.condition === "NEW") return "Sealed";
+  const parts: string[] = [];
+  if (sc.disc) parts.push(`CD: ${GRADE_ABBR[sc.disc]}`);
+  if (sc.booklet === "Missing") parts.push("No Inlay");
+  else if (sc.booklet) parts.push(`Inlay: ${GRADE_ABBR[sc.booklet]}`);
+  return parts.join(" / ");
 }
 
 /** A sealed CD has no part grades; a used one needs at least the disc graded. */

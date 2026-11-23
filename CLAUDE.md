@@ -42,7 +42,8 @@ Screens (phone first):
   Accepts `?q=&barcode=&price=` so earlier steps can prefill it.
   Before Claude writes, the seller picks the CD's condition in `ConditionPicker.tsx` (overall eBay
   condition, disc/case/booklet grades, tested, defects; `src/lib/listing/condition.ts`). It sets the
-  draft's condition and condition text; Claude never guesses them. Photos come from the camera or
+  draft's condition and condition text; Claude never guesses them. The title ends with the seller's
+  grades (`conditionTitleSuffix`, e.g. "CD: NM / Inlay: VG+"). Photos come from the camera or
   gallery in `PhotoPicker.tsx` and upload to eBay Picture Services through `/api/listing/photo`
   (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
@@ -63,7 +64,8 @@ Screens (phone first):
   categories, with search, category filter, sort, total inventory value and a JSON backup. Logic in `src/lib/collection/collection.ts`,
   storage in `src/lib/collection/store.ts` (localStorage on the device, no server DB). Album
   details come from MusicBrainz + Cover Art Archive (`src/lib/music/musicbrainz.ts`, no key),
-  added to lookup responses as `album`. `TabBar` in `ui.tsx` switches Scan / Collection.
+  added to lookup responses as `album`. When MusicBrainz misses a barcode, Claude Haiku reads artist and album
+  off the eBay titles (`src/lib/music/albumFromTitles.ts`). `TabBar` in `ui.tsx` switches Scan / Collection.
 
 Look and feel: design tokens (light + dark) and component classes (`.page`, `.card`, `.field`,
 `.btn btn-primary`, `.notice`, `.skeleton`...) live in `src/app/globals.css`; shared pieces

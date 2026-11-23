@@ -117,12 +117,16 @@ describe("trimTitle / sanitizeDescription", () => {
     const out = await generateListing(
       {
         query: "Radiohead OK Computer CD",
-        sellerCondition: { condition: "USED_VERY_GOOD", disc: "Near mint", case: "Very good", tested: true },
+        sellerCondition: { condition: "USED_VERY_GOOD", disc: "Near mint", case: "Very good", booklet: "Very good+", tested: true },
       },
       { anthropic: client, config },
     );
+    expect(out.draft.title.endsWith(" CD: NM / Inlay: VG+")).toBe(true);
+    expect(out.draft.title.length).toBeLessThanOrEqual(80);
     expect(out.draft.condition).toBe("USED_VERY_GOOD");
-    expect(out.draft.conditionDescription).toBe("Disc: near mint. Case: very good. Tested: plays through without skips.");
+    expect(out.draft.conditionDescription).toBe(
+      "Disc: near mint. Case: very good. Inlay / booklet: very good+. Tested: plays through without skips.",
+    );
     expect(out.guessedFields).not.toContain("condition");
     const text = parse.mock.calls[0][0].messages[0].content as string;
     expect(text).toContain("Seller's condition (use exactly this): USED_VERY_GOOD. Disc: near mint.");

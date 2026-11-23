@@ -2,7 +2,8 @@ import { getEbayClient } from "@/lib/ebay";
 import { errorResponse } from "@/lib/api-errors";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import type { LookupResponse } from "@/lib/lookup";
-import { albumByBarcode, safely } from "@/lib/music/musicbrainz";
+import { albumFromTitles } from "@/lib/music/albumFromTitles";
+import { albumByBarcode, albumByName, safely, type AlbumInfo } from "@/lib/music/musicbrainz";
 
 /** POST { code: "0045496453435" } -> eBay listings for that barcode. */
 export async function POST(request: Request) {
@@ -33,7 +34,22 @@ export async function POST(request: Request) {
       results = await ebay.searchItems({ q: gtin });
       notes.push("No listing is tagged with this barcode, so these are keyword matches.");
     }
-    const payload: LookupResponse = { source: "barcode", gtin, query, results, album: (await album) ?? undefined, notes };
+    let found: AlbumInfo | null = await album;
+    if (!found && results.items.length && process.env.ANTHROPIC_API_KEY) {
+      // MusicBrainz doesn't know this barcode: read the album name off the eBay titles,
+      // so the listing starts from "Artist Album", not a seller's title.
+      const guess = await safely(albumFromTitles(results.items.map((i) => i.title)));
+      if (guess) {
+        found = (await safely(albumByName(guess.title, guess.artist))) ?? {
+          title: guess.title,
+          artist: guess.artist,
+          genres: [],
+          mbid: "",
+          coverUrl: results.items[0]?.imageUrl,
+        };
+      }
+    }
+    const payload: LookupResponse = { source: "barcode", gtin, query, results, album: found ?? undefined, notes };
     return Response.json(payload);
   } catch (err) {
     return errorResponse(err);
