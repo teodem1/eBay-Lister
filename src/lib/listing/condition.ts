@@ -18,8 +18,8 @@ export type Grade = (typeof GRADES)[number];
 /** The parts of a CD the seller grades. Case and booklet can also be missing. */
 export const PARTS = [
   { key: "disc", label: "Disc" },
-  { key: "case", label: "Case" },
   { key: "booklet", label: "Inlay / booklet" },
+  { key: "case", label: "Case" },
 ] as const;
 export type PartKey = (typeof PARTS)[number]["key"];
 
@@ -87,8 +87,31 @@ export function conditionTitleSuffix(sc: SellerCondition): string {
   return parts.join(" / ");
 }
 
-/** A sealed CD has no part grades; a used one needs at least the disc graded. */
+/** Which eBay condition each grade maps to (eBay's music conditions). */
+const GRADE_CONDITION: Record<Grade, Condition> = {
+  Mint: "LIKE_NEW",
+  "Near mint": "LIKE_NEW",
+  "Very good+": "USED_VERY_GOOD",
+  "Very good": "USED_VERY_GOOD",
+  Good: "USED_GOOD",
+  Fair: "USED_ACCEPTABLE",
+  Poor: "USED_ACCEPTABLE",
+};
+
+/**
+ * The eBay condition for a used CD, from the worse of the disc and inlay
+ * grades (buyers judge by the weakest part). A missing inlay counts as Good.
+ */
+export function ebayConditionFromGrades(disc?: Grade, inlay?: Grade | "Missing"): Condition | undefined {
+  if (!disc) return undefined;
+  const order = Object.keys(GRADE_CONDITION) as Grade[];
+  const inlayGrade: Grade | undefined = inlay === "Missing" ? "Good" : inlay;
+  const worst = inlayGrade && order.indexOf(inlayGrade) > order.indexOf(disc) ? inlayGrade : disc;
+  return GRADE_CONDITION[worst];
+}
+
+/** A sealed CD needs nothing more; a used one needs the disc and the inlay graded. */
 export function conditionComplete(sc: Partial<SellerCondition>): sc is SellerCondition {
   if (!sc.condition) return false;
-  return sc.condition === "NEW" || !!sc.disc;
+  return sc.condition === "NEW" || (!!sc.disc && !!sc.booklet);
 }

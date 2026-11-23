@@ -125,7 +125,7 @@ describe("trimTitle / sanitizeDescription", () => {
     expect(out.draft.title.length).toBeLessThanOrEqual(80);
     expect(out.draft.condition).toBe("USED_VERY_GOOD");
     expect(out.draft.conditionDescription).toBe(
-      "Disc: near mint. Case: very good. Inlay / booklet: very good+. Tested: plays through without skips.",
+      "Disc: near mint. Inlay / booklet: very good+. Case: very good. Tested: plays through without skips.",
     );
     expect(out.guessedFields).not.toContain("condition");
     const text = parse.mock.calls[0][0].messages[0].content as string;

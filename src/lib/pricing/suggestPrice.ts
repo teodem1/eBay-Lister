@@ -206,7 +206,9 @@ export function suggestPrice(
   const shipping = shipValues.length ? stats(shipValues) : null;
   if (kept.length - shipValues.length > 0) {
     notes.push(
-      `${kept.length - shipValues.length} comparables had no shipping cost quoted and were counted as free shipping.`,
+      kept.length - shipValues.length === 1
+        ? "1 comparable had no shipping cost quoted and was counted as free shipping."
+        : `${kept.length - shipValues.length} comparables had no shipping cost quoted and were counted as free shipping.`,
     );
   }
 
