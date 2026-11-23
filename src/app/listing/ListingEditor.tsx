@@ -314,6 +314,9 @@ export default function ListingEditor({
           </div>
         </section>
 
+        {/* Photos first: shoot the CD while prices load and Claude writes the listing. */}
+        <PhotoPicker text={imageText} setText={setImageText} />
+
         <PriceSuggestionPanel
           check={priceCheck}
           loading={priceLoading}
@@ -659,7 +662,6 @@ export default function ListingEditor({
               />
             </div>
 
-            <PhotoPicker text={imageText} setText={setImageText} />
           </section>
         )}
       </main>
