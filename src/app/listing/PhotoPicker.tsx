@@ -8,8 +8,8 @@ import { resizeImage } from "@/lib/resize-image";
 const MAX_PHOTOS = 24; // eBay's limit
 
 async function uploadPhoto(file: File): Promise<string> {
-  // eBay shows photos up to 1600px; smaller uploads are faster on mobile data.
-  const blob = await resizeImage(file, 1600, 0.88);
+  // Square like a CD (centre crop), 1600px: eBay's largest size; smaller uploads are faster on mobile data.
+  const blob = await resizeImage(file, 1600, 0.88, { square: true });
   const form = new FormData();
   form.append("photo", blob, "photo.jpg");
   const res = await fetch("/api/listing/photo", { method: "POST", body: form });
@@ -164,7 +164,7 @@ export default function PhotoPicker({
       )}
 
       <p className="hint">
-        The first photo is the main one. Shoot the front cover, back, disc and any defects. Photos upload to eBay as you add them.
+        The first photo is the main one. Photos are cropped to a square like a CD, so keep the CD centred. Shoot the front cover, back, disc and any defects. Photos upload to eBay as you add them.
       </p>
 
       <button type="button" className="t-small font-medium text-brand-ink underline" onClick={() => setShowLinks((s) => !s)}>
