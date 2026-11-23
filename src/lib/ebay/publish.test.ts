@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getEbayConfig } from "./config";
-import { aspectsToEbay, barcodeIdentifiers, publishListing, withBrandAndMpn } from "./publish";
+import { aspectsToEbay, barcodeIdentifiers, publishListing, reviseListing, withBrandAndMpn } from "./publish";
 import { EbayApiError, EbaySellClient, nearestAllowedCondition, type FetchLike } from "./sell";
 import type { ListingDraft } from "../listing/types";
 
@@ -333,5 +333,30 @@ describe("best offer", () => {
     expect(offer.body).toMatchObject({
       listingPolicies: { bestOfferTerms: { bestOfferEnabled: true, autoDeclinePrice: { value: "187.42", currency: "CAD" } } },
     });
+  });
+});
+
+describe("reviseListing", () => {
+  it("replaces the item and offer of a live listing without publishing again", async () => {
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/inventory/v1/location/default-location": () => [200, {}],
+      "PUT /sell/inventory/v1/inventory_item/BC-123": () => [204],
+      "GET /sell/inventory/v1/offer": () => [200, { offers: [{ offerId: "O9" }] }],
+      "PUT /sell/inventory/v1/offer/O9": () => [204],
+    });
+    const result = await reviseListing(new EbaySellClient(config, fetchImpl), { ...draft, price: 12.5 });
+    expect(result).toEqual({ sku: "BC-123", offerId: "O9" });
+    const offer = calls.find((c) => c.method === "PUT" && c.url.endsWith("/offer/O9"))!;
+    expect(offer.body).toMatchObject({ pricingSummary: { price: { value: "12.50" } } });
+    expect(calls.some((c) => c.url.endsWith("/publish"))).toBe(false);
+  });
+
+  it("refuses when eBay has no offer for the SKU", async () => {
+    const { fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/inventory/v1/offer": () => [404, {}],
+    });
+    await expect(reviseListing(new EbaySellClient(config, fetchImpl), draft)).rejects.toThrow(/nothing to revise/);
   });
 });

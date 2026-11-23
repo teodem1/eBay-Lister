@@ -118,3 +118,62 @@ export async function publishListing(
   }
   return { sku: draft.sku, offerId, listingId };
 }
+
+/**
+ * Pushes edits to a listing that is already live. eBay revises a published
+ * listing when its inventory item or offer is replaced, so this re-sends both
+ * for the same SKU and does not publish again (that would fail for an ended
+ * listing and is not needed for a live one).
+ */
+export async function reviseListing(
+  client: EbaySellClient,
+  draft: ListingDraft,
+  defaults: { bestOfferMinPercent?: number } = {},
+): Promise<{ sku: string; offerId: string }> {
+  const offerId = await client.findOfferId(draft.sku);
+  if (!offerId) throw new Error(`No eBay offer found for SKU ${draft.sku}, so there is nothing to revise.`);
+  const locationKey = await client.ensureLocation();
+  const base = aspectsToEbay(draft.aspects);
+  const putItem = (withBrand: boolean) => {
+    const aspects = withBrand ? withBrandAndMpn(base, draft.brand, draft.mpn) : withoutBrandAndMpn(base);
+    const brandKey = Object.keys(aspects).find((k) => k.toLowerCase() === "brand");
+    return client.putInventoryItem({
+      sku: draft.sku,
+      title: draft.title,
+      descriptionHtml: draft.descriptionHtml,
+      condition: draft.condition,
+      conditionDescription: draft.conditionDescription,
+      aspects,
+      imageUrls: draft.imageUrls,
+      quantity: draft.quantity,
+      brand: withBrand && brandKey ? aspects[brandKey][0] : undefined,
+      mpn: withBrand ? draft.mpn?.trim() || undefined : undefined,
+      package: { weightKg: draft.packageWeightKg, dimensionsCm: draft.packageDimensionsCm },
+      ...barcodeIdentifiers(draft.barcode),
+    });
+  };
+  const putOffer = () =>
+    client.upsertOffer(
+      {
+        sku: draft.sku,
+        categoryId: draft.categoryId,
+        price: draft.price,
+        quantity: draft.quantity,
+        descriptionHtml: draft.descriptionHtml,
+        bestOfferMinPercent: draft.bestOfferMinPercent ?? defaults.bestOfferMinPercent,
+      },
+      locationKey,
+    );
+  let withBrand = !isMusicDraft(draft);
+  await putItem(withBrand);
+  try {
+    await putOffer();
+  } catch (err) {
+    // Listed the other way (eBay asked for Brand/MPN at publish): send it that way.
+    if (!isBrandMpnError(err)) throw err;
+    withBrand = !withBrand;
+    await putItem(withBrand);
+    await putOffer();
+  }
+  return { sku: draft.sku, offerId };
+}

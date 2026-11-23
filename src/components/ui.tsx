@@ -109,6 +109,7 @@ const ICONS = {
     </>
   ),
   alert: <path d="M12 9v4m0 3.5v.01M10.3 4.2 2.8 17.5A2 2 0 0 0 4.5 20.5h15a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z" />,
+  bolt: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />,
   external: <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
 } as const;
 
@@ -134,11 +135,12 @@ export function Icon({ name, size = 20, className = "", strokeWidth = 2 }: { nam
   );
 }
 
-/** Bottom tabs: Scan (/), To list and Collection. Pages using it add the `page-tabs` class. */
-export function TabBar({ active }: { active: "scan" | "tolist" | "collection" }) {
+/** Bottom tabs: Scan (/), To list, Auto and Collection. Pages using it add the `page-tabs` class. */
+export function TabBar({ active }: { active: "scan" | "tolist" | "auto" | "collection" }) {
   const tabs = [
     { key: "scan", href: "/", label: "Scan", icon: "scan" },
     { key: "tolist", href: "/to-list", label: "To list", icon: "stack" },
+    { key: "auto", href: "/auto", label: "Auto", icon: "bolt" },
     { key: "collection", href: "/collection", label: "Collection", icon: "disc" },
   ] as const;
   return (
@@ -146,7 +148,7 @@ export function TabBar({ active }: { active: "scan" | "tolist" | "collection" })
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
-      <ul className="mx-auto grid h-20 max-w-lg grid-cols-3">
+      <ul className="mx-auto grid h-20 max-w-lg grid-cols-4">
         {tabs.map((t) => {
           const on = t.key === active;
           return (
