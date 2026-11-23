@@ -57,6 +57,7 @@ Package: estimate the packed weight for shipping the item (item plus padding). I
 Description (descriptionHtml):
 - Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
 - Sections: short intro sentence, key features, condition, what's included, shipping note. Natural keyword use, no keyword stuffing.
+- Shipping note: the seller ships only to Canada and the United States. Say exactly that; never mention international or worldwide shipping.
 - Do not claim things the seller did not say (accessories included, original box, warranty, tested working). Put those in "checks" instead.
 
 Write the title, aspects values and description in the marketplace language given by the user.`;

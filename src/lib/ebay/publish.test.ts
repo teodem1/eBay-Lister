@@ -175,6 +175,13 @@ describe("helpers", () => {
       MPN: ["Does not apply"],
     });
     expect(withBrandAndMpn({ brand: ["Sony"], mpn: ["X1"] }, "Nintendo", "Y")).toEqual({ brand: ["Sony"], mpn: ["X1"] });
+    // A CD with no brand: the record label, else "Unbranded", so the MPN never goes without a Brand.
+    expect(withBrandAndMpn({ "Record Label": ["Atlantic"] })).toEqual({
+      "Record Label": ["Atlantic"],
+      Brand: ["Atlantic"],
+      MPN: ["Does not apply"],
+    });
+    expect(withBrandAndMpn({})).toEqual({ Brand: ["Unbranded"], MPN: ["Does not apply"] });
   });
 
   it("picks the closest condition a category allows", () => {

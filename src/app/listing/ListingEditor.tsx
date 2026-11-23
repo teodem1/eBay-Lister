@@ -7,6 +7,7 @@ import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listi
 import type { ComparableQuery } from "@/lib/ebay/types";
 import { conditionComplete, conditionSummary } from "@/lib/listing/condition";
 import ConditionPicker, { type ConditionDraft } from "./ConditionPicker";
+import DescriptionEditor from "./DescriptionEditor";
 import PhotoPicker from "./PhotoPicker";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
 import SaveToCollection from "./SaveToCollection";
@@ -71,7 +72,6 @@ export default function ListingEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [guessed, setGuessed] = useState<Set<string>>(new Set());
   const [imageText, setImageText] = useState("");
-  const [showPreview, setShowPreview] = useState(true);
   // "Shipping and offers" starts open when Claude guessed the package size.
   const [moreOpen, setMoreOpen] = useState(false);
   const [published, setPublished] = useState<PublishOk | null>(null);
@@ -620,44 +620,14 @@ export default function ListingEditor({
             </fieldset>
 
             <div className="card">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="t-headline flex items-center">
-                  Description{isGuess("description") && <GuessBadge />}
-                </h3>
-                <div className="flex rounded-full bg-surface-2 p-1 text-sm font-semibold" role="group" aria-label="Description view">
-                  {[
-                    ["Preview", true],
-                    ["HTML", false],
-                  ].map(([label, value]) => (
-                    <button
-                      key={String(label)}
-                      aria-pressed={showPreview === value}
-                      onClick={() => setShowPreview(value as boolean)}
-                      className={`min-h-10 rounded-full px-3.5 transition-colors ${
-                        showPreview === value ? "bg-surface text-foreground shadow-card" : "text-muted"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {showPreview ? (
-                // Preview in a sandboxed iframe so the HTML can't run scripts in the app.
-                <iframe
-                  title="Description preview"
-                  sandbox=""
-                  className="h-80 w-full rounded-xl border border-line bg-white"
-                  srcDoc={draft.descriptionHtml}
-                />
-              ) : (
-                <textarea
-                  className={`${field(isGuess("description"))} font-mono text-sm`}
-                  rows={10}
-                  value={draft.descriptionHtml}
-                  onChange={(e) => update("descriptionHtml", e.target.value, "description")}
-                />
-              )}
+              <h3 className="t-headline mb-3 flex items-center">
+                Description{isGuess("description") && <GuessBadge />}
+              </h3>
+              <DescriptionEditor
+                html={draft.descriptionHtml}
+                fieldClass={field(isGuess("description"))}
+                onChange={(html) => update("descriptionHtml", html, "description")}
+              />
             </div>
 
             <PhotoPicker text={imageText} setText={setImageText} />
