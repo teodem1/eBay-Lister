@@ -29,6 +29,8 @@ const ClaudeListingSchema = z.object({
     .array(z.enum(["title", "condition", "conditionDescription", "brand", "mpn", "description"]))
     .describe("Top-level fields that rely on assumptions"),
   checks: z.array(z.string()).describe("Short things the seller must verify before publishing"),
+  price: z.number().describe("Only when price evidence is given: the item price to list at; otherwise 0"),
+  priceReason: z.string().describe("Only when price evidence is given: one short sentence on why; otherwise empty"),
 });
 /** Default packed weight of one CD: 65 g. */
 export const DEFAULT_PACKAGE_WEIGHT_KG = 0.065;
@@ -59,6 +61,8 @@ Description (descriptionHtml):
 - Sections: short intro sentence, key features, condition, what's included, shipping note. Natural keyword use, no keyword stuffing.
 - Shipping note: the seller ships only to Canada and the United States. Say exactly that; never mention international or worldwide shipping.
 - Do not claim things the seller did not say (accessories included, original box, warranty, tested working). Put those in "checks" instead.
+
+Price: only when "Price evidence" is given. Pick the item price (shipping is charged separately) that should sell within a few weeks for the most money: weigh sold copies above asking prices, copies in the seller's condition above others, recent sales above old ones, and compare totals with shipping since buyers do. Stay inside the allowed range given. Give the reason in one short sentence (e.g. "Near mint copies sold for $16-19 in the last 3 months"). Without price evidence, price is 0 and priceReason is empty.
 
 Write the title, aspects values and description in the marketplace language given by the user.`;
 
@@ -139,6 +143,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     aspectHints.length
       ? `Item specifics for this category:\n${aspectHints.map((a) => `- ${a.name}${a.required ? " (required)" : ""}`).join("\n")}`
       : null,
+    input.priceEvidence ? `Price evidence:\n${input.priceEvidence}` : null,
     categories[0] && conditionsByCategory[categories[0].categoryId]
       ? `Allowed conditions for this category: ${conditionsByCategory[categories[0].categoryId].join(", ")}`
       : null,
@@ -206,5 +211,9 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     guessedFields,
     checks: out.checks,
     warnings,
+    claudePrice:
+      input.priceEvidence && Number.isFinite(out.price) && out.price > 0
+        ? { price: Math.round(out.price * 100) / 100, reason: (out.priceReason ?? "").trim() }
+        : undefined,
   };
 }

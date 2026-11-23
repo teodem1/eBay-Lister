@@ -12,7 +12,9 @@ import type { PriceCheck } from "../../app/listing/priceRequest";
 /** eBay.ca Music > CDs, used when the category search came back empty. */
 export const CD_CATEGORY_ID = "176984";
 
-/** At most this many photos per CD on the Auto tab (one is enough). */
+/** Photos asked for after each scan, in order: the front cover is the main photo. */
+export const AUTO_PHOTOS = ["Front cover", "Back cover"] as const;
+/** At most this many photos per CD on the Auto tab. */
 export const AUTO_MAX_PHOTOS = 4;
 
 export function autoState(item: BatchItem): AutoState {
@@ -24,7 +26,8 @@ export function missingForAuto(item: BatchItem): string | null {
   if (item.lookup === "queued" || item.lookup === "loading") return "Finding the album";
   if (item.lookup === "error" || !item.query) return "Album not found";
   if (!conditionComplete(item.condition ?? {})) return "Grade it";
-  if (!autoState(item).photos.length) return "Take a photo";
+  const photos = autoState(item).photos.length;
+  if (photos < AUTO_PHOTOS.length) return photos ? "Take the back cover photo" : "Take the cover photos";
   return null;
 }
 
@@ -64,6 +67,61 @@ export function pickAutoPrice(check: PriceCheck): { price: number; basis: string
     };
   }
   return null;
+}
+
+const money = (n: number) => n.toFixed(2);
+
+/**
+ * The price check as text for Claude, who picks the price on the Auto tab:
+ * the computed suggestions plus the copies behind them (sold first).
+ */
+export function priceEvidence(check: PriceCheck, max = 15): string {
+  const lines: string[] = [];
+  const block = (label: string, s: PriceCheck["sold"], items: PriceCheck["soldItems"]) => {
+    if (!s || s.usedCount === 0) {
+      lines.push(`${label}: none found.`);
+      return;
+    }
+    lines.push(
+      `${label} (${s.currency}, ${s.usedCount} copies, ${s.confidence} confidence): quick sale ${money(s.itemPrice.quickSale)}, typical ${money(s.itemPrice.recommended)}, high ${money(s.itemPrice.high)}. Assumed shipping ${money(s.assumedShipping ?? 0)}.`,
+    );
+    for (const c of items.slice(0, max)) {
+      const ship = c.shippingCost ? ` + ${money(c.shippingCost.value)} shipping` : "";
+      const when = c.soldDate ? `, sold ${c.soldDate.slice(0, 10)}` : "";
+      const cond = c.condition ? `, ${c.condition}` : "";
+      lines.push(`- ${money(c.price.value)}${ship}${when}${cond}: ${c.title}`);
+    }
+  };
+  block("Sold copies", check.sold, check.soldItems);
+  block("Listed now (asking prices)", check.current, check.currentItems);
+  const bounds = priceBounds(check);
+  if (bounds) lines.push(`Allowed range: ${money(bounds.min)} to ${money(bounds.max)}.`);
+  return lines.join("\n");
+}
+
+/** The range Claude's price must stay in: around what sold (or is listed), so a slip can't list at $1 or $500. */
+export function priceBounds(check: PriceCheck): { min: number; max: number } | null {
+  const s = check.sold && check.sold.usedCount > 0 ? check.sold : check.current && check.current.usedCount > 0 ? check.current : null;
+  if (!s) return null;
+  const min = Math.max(0.99, Math.round(s.itemPrice.quickSale * 0.85 * 100) / 100);
+  const max = Math.max(min, Math.round(s.itemPrice.high * 1.15 * 100) / 100);
+  return { min, max };
+}
+
+/**
+ * Claude's price when it gave one, kept inside priceBounds; else the computed
+ * price (pickAutoPrice).
+ */
+export function finalAutoPrice(
+  check: PriceCheck,
+  claude: { price: number; reason: string } | undefined,
+): { price: number; basis: string } | null {
+  const fallback = pickAutoPrice(check);
+  const bounds = priceBounds(check);
+  if (!claude || !bounds || !(claude.price > 0)) return fallback;
+  const price = Math.min(bounds.max, Math.max(bounds.min, claude.price));
+  const clamped = price !== claude.price ? ` (kept inside ${money(bounds.min)}-${money(bounds.max)})` : "";
+  return { price, basis: `Claude: ${claude.reason || "picked from sold and listed copies"}${clamped}` };
 }
 
 /** Claude's draft with the automatic price and the seller's photos, ready for /api/listing/publish. */

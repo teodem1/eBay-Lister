@@ -9,7 +9,10 @@ import {
   autoSummary,
   interruptedToWaiting,
   missingForAuto,
+  finalAutoPrice,
   pickAutoPrice,
+  priceBounds,
+  priceEvidence,
   readyForAuto,
   toListEntry,
 } from "./auto";
@@ -25,13 +28,19 @@ function cd(patch: Partial<BatchItem> = {}): BatchItem {
     lookup: "done",
     query: "Genesis Wind & Wuthering",
     condition: graded,
-    auto: { stage: "waiting", photos: ["https://i.ebayimg.com/1.jpg"] },
+    auto: { stage: "waiting", photos: ["https://i.ebayimg.com/1.jpg", "https://i.ebayimg.com/2.jpg"] },
     ...patch,
   };
 }
 
 const suggestion = (usedCount: number, recommended: number) =>
-  ({ usedCount, itemPrice: { recommended }, confidence: "medium" }) as unknown as PriceSuggestion;
+  ({
+    usedCount,
+    currency: "CAD",
+    assumedShipping: 5,
+    itemPrice: { quickSale: recommended * 0.8, recommended, high: recommended * 1.25 },
+    confidence: "medium",
+  }) as unknown as PriceSuggestion;
 const check = (sold: PriceSuggestion | null, current: PriceSuggestion | null): PriceCheck => ({
   sold,
   current,
@@ -46,7 +55,8 @@ describe("missingForAuto / readyForAuto", () => {
     expect(missingForAuto(cd({ lookup: "loading" }))).toBe("Finding the album");
     expect(missingForAuto(cd({ lookup: "error" }))).toBe("Album not found");
     expect(missingForAuto(cd({ condition: { disc: "Near mint" } }))).toBe("Grade it");
-    expect(missingForAuto(cd({ auto: { stage: "waiting", photos: [] } }))).toBe("Take a photo");
+    expect(missingForAuto(cd({ auto: { stage: "waiting", photos: [] } }))).toBe("Take the cover photos");
+    expect(missingForAuto(cd({ auto: { stage: "waiting", photos: ["front"] } }))).toBe("Take the back cover photo");
     expect(missingForAuto(cd())).toBeNull();
     expect(missingForAuto(cd({ condition: { condition: "NEW" } }))).toBeNull();
   });
@@ -101,5 +111,25 @@ describe("toListEntry", () => {
     expect(entry.auto).toBeUndefined();
     expect(entry.origin).toBe("stack");
     expect(entry.progress).toMatchObject({ imageText: "https://p/1.jpg\nhttps://p/2.jpg", condition: graded, priceCheck });
+  });
+});
+
+describe("Claude's price pick", () => {
+  const c = check(suggestion(6, 20), suggestion(9, 25));
+  it("gives Claude the sold copies and the allowed range", () => {
+    const text = priceEvidence({
+      ...c,
+      soldItems: [{ title: "Genesis Wind CD", price: { value: 18, currency: "CAD" }, shippingCost: { value: 4, currency: "CAD" }, soldDate: "2026-10-01T00:00:00Z", condition: "Very Good" } as never],
+    });
+    expect(text).toContain("Sold copies (CAD, 6 copies, medium confidence): quick sale 16.00, typical 20.00, high 25.00");
+    expect(text).toContain("- 18.00 + 4.00 shipping, sold 2026-10-01, Very Good: Genesis Wind CD");
+    expect(text).toContain("Allowed range: 13.60 to 28.75.");
+  });
+
+  it("keeps Claude's price inside the range, else falls back", () => {
+    expect(priceBounds(c)).toEqual({ min: 13.6, max: 28.75 });
+    expect(finalAutoPrice(c, { price: 22, reason: "Recent sales" })).toEqual({ price: 22, basis: "Claude: Recent sales" });
+    expect(finalAutoPrice(c, { price: 99, reason: "x" })?.price).toBe(28.75);
+    expect(finalAutoPrice(c, undefined)?.price).toBe(20);
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { autoDraft, autoState, interruptedToWaiting, pickAutoPrice, readyForAuto } from "@/lib/auto/auto";
+import { autoDraft, autoState, finalAutoPrice, interruptedToWaiting, pickAutoPrice, priceEvidence, readyForAuto } from "@/lib/auto/auto";
 import type { AutoState, BatchItem } from "@/lib/batch/queue";
 import { autoStore } from "@/lib/batch/store";
 import { itemFromListing } from "@/lib/collection/collection";
@@ -47,11 +47,11 @@ async function listOne(id: string): Promise<void> {
       check = result;
       patchAuto(id, { priceCheck: check });
     }
-    const picked = pickAutoPrice(check);
-    if (!picked) throw new Error("No sold or listed copies found, so there's no price to use. List it by hand.");
-    patchAuto(id, { price: picked.price, priceBasis: picked.basis });
+    // Nothing sold or listed: no basis for a price, so this CD is not listed automatically.
+    if (!pickAutoPrice(check)) throw new Error("No sold or listed copies found, so there's no price to go on. List it by hand.");
 
-    // 2. Claude writes it (kept if a later step failed, so the same SKU is re-sent).
+    // 2. Claude writes the listing and picks the price from the sold and listed copies
+    //    (kept if a later step failed, so the same SKU is re-sent).
     let draft = autoState(autoStore.get(id)!).draft;
     const photos = autoState(autoStore.get(id)!).photos;
     if (!draft) {
@@ -59,11 +59,13 @@ async function listOne(id: string): Promise<void> {
       const generated = await postJson<GeneratedListing>("/api/listing/generate", {
         query,
         barcode: start.barcode || undefined,
-        suggestedPrice: picked.price,
+        suggestedPrice: pickAutoPrice(check)!.price,
         sellerCondition: condition,
+        priceEvidence: priceEvidence(check),
       });
+      const picked = finalAutoPrice(check, generated.claudePrice)!;
       draft = autoDraft(generated, picked.price, photos);
-      patchAuto(id, { draft });
+      patchAuto(id, { draft, price: picked.price, priceBasis: picked.basis });
     } else {
       draft = { ...draft, imageUrls: photos };
     }
