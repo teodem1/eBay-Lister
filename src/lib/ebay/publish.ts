@@ -24,8 +24,9 @@ export function aspectsToEbay(aspects: ListingDraft["aspects"]): Record<string, 
 
 /**
  * Many categories refuse to publish without Brand and MPN item specifics
- * (25002 "Input data for tag <BrandMPN> is invalid or missing").
- * Fills them from the draft, with eBay's "Does not apply" for an unknown MPN.
+ * (25002 "Input data for tag <BrandMPN> is invalid or missing"), and eBay
+ * refuses an MPN without a Brand. Fills both: Brand from the draft, else the
+ * record label (CDs), else "Unbranded"; MPN from the draft, else "Does not apply".
  */
 export function withBrandAndMpn(
   aspects: Record<string, string[]>,
@@ -33,9 +34,9 @@ export function withBrandAndMpn(
   mpn?: string,
 ): Record<string, string[]> {
   const out = { ...aspects };
-  const has = (name: string) => Object.keys(out).some((k) => k.toLowerCase() === name.toLowerCase());
-  if (!has("Brand") && brand?.trim()) out.Brand = [brand.trim()];
-  if (!has("MPN")) out.MPN = [mpn?.trim() || "Does not apply"];
+  const key = (name: string) => Object.keys(out).find((k) => k.toLowerCase() === name.toLowerCase());
+  if (!key("Brand")) out.Brand = [brand?.trim() || (out[key("Record Label") ?? ""] ?? [])[0] || "Unbranded"];
+  if (!key("MPN")) out.MPN = [mpn?.trim() || "Does not apply"];
   return out;
 }
 
@@ -53,6 +54,7 @@ export async function publishListing(
   defaults: { bestOfferMinPercent?: number } = {},
 ): Promise<PublishResult> {
   const locationKey = await client.ensureLocation();
+  const aspects = withBrandAndMpn(aspectsToEbay(draft.aspects), draft.brand, draft.mpn);
 
   await client.putInventoryItem({
     sku: draft.sku,
@@ -60,11 +62,12 @@ export async function publishListing(
     descriptionHtml: draft.descriptionHtml,
     condition: draft.condition,
     conditionDescription: draft.conditionDescription,
-    aspects: withBrandAndMpn(aspectsToEbay(draft.aspects), draft.brand, draft.mpn),
+    aspects,
     imageUrls: draft.imageUrls,
     quantity: draft.quantity,
-    brand: draft.brand,
-    mpn: draft.mpn,
+    // The product's brand and MPN must agree with the item specifics.
+    brand: aspects[Object.keys(aspects).find((k) => k.toLowerCase() === "brand")!][0],
+    mpn: draft.mpn?.trim() || undefined,
     package: { weightKg: draft.packageWeightKg, dimensionsCm: draft.packageDimensionsCm },
     ...barcodeIdentifiers(draft.barcode),
   });
