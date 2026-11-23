@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import ToListCount from "./ToListCount";
 
 /** The app's price-tag mark, same shape as the launcher icon. */
 export function Logo({ size = 32 }: { size?: number }) {
@@ -80,6 +81,12 @@ const ICONS = {
       <circle cx="12" cy="13" r="3.5" />
     </>
   ),
+  stack: (
+    <>
+      <rect x="4" y="9" width="16" height="11" rx="2" />
+      <path d="M6.5 6h11M9 3h6" />
+    </>
+  ),
   barcode: <path d="M4 6v12M7 6v12M10 6v12M14 6v12M16 6v12M20 6v12" />,
   scan: <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9v6M11 9v6M14 9v6M17 9v6" />,
   disc: (
@@ -127,10 +134,11 @@ export function Icon({ name, size = 20, className = "", strokeWidth = 2 }: { nam
   );
 }
 
-/** Bottom tabs: Scan (/) and Collection. Pages using it add the `page-tabs` class. */
-export function TabBar({ active }: { active: "scan" | "collection" }) {
+/** Bottom tabs: Scan (/), To list and Collection. Pages using it add the `page-tabs` class. */
+export function TabBar({ active }: { active: "scan" | "tolist" | "collection" }) {
   const tabs = [
     { key: "scan", href: "/", label: "Scan", icon: "scan" },
+    { key: "tolist", href: "/to-list", label: "To list", icon: "stack" },
     { key: "collection", href: "/collection", label: "Collection", icon: "disc" },
   ] as const;
   return (
@@ -138,7 +146,7 @@ export function TabBar({ active }: { active: "scan" | "collection" }) {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
-      <ul className="mx-auto grid h-20 max-w-lg grid-cols-2">
+      <ul className="mx-auto grid h-20 max-w-lg grid-cols-3">
         {tabs.map((t) => {
           const on = t.key === active;
           return (
@@ -148,8 +156,9 @@ export function TabBar({ active }: { active: "scan" | "collection" }) {
                 aria-current={on ? "page" : undefined}
                 className={`flex h-full flex-col items-center justify-center gap-1 text-xs ${on ? "font-bold text-brand-ink" : "font-medium text-muted"}`}
               >
-                <span className={`flex h-8 w-16 items-center justify-center rounded-full transition-colors ${on ? "bg-brand-soft" : ""}`}>
+                <span className={`relative flex h-8 w-16 items-center justify-center rounded-full transition-colors ${on ? "bg-brand-soft" : ""}`}>
                   <Icon name={t.icon} size={22} strokeWidth={on ? 2.2 : 1.8} />
+                  {t.key === "tolist" && <ToListCount />}
                 </span>
                 {t.label}
               </Link>

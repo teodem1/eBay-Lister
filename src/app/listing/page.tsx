@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Spinner } from "@/components/ui";
 import { conditionFromParams } from "@/lib/listing/condition";
 import ListingEditor from "./ListingEditor";
+import ResumeListing from "./ResumeListing";
 
 type SearchParams = PageProps<"/listing">["searchParams"];
 
@@ -10,9 +11,12 @@ async function EditorFromParams({ searchParams }: { searchParams: SearchParams }
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const price = Number(one(params.price));
+  const batchId = one(params.batch);
+  const Editor = batchId ? ResumeListing : ListingEditor;
   return (
-    <ListingEditor
+    <Editor
       initial={{
+        batchId: batchId || undefined,
         query: one(params.q),
         barcode: one(params.barcode),
         price: Number.isFinite(price) && price > 0 ? price : undefined,
