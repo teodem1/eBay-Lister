@@ -45,7 +45,8 @@ Screens (phone first):
   Before Claude writes, the seller grades the disc and the inlay separately in `ConditionPicker.tsx`
   (plus sealed, case, tested, defects; `src/lib/listing/condition.ts`). The eBay condition follows from the
   weaker of disc and inlay (`ebayConditionFromGrades`). It sets the
-  draft's condition and condition text; Claude never guesses them. The title ends with the seller's
+  draft's condition and condition text; Claude never guesses them. Claude writes the listing automatically once the CD is graded
+  and the price check is back ("Write it again" rewrites it). The title ends with the seller's
   grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos come from the camera or
   gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`); "Take photo" opens `CdCamera.tsx`, a live
   camera on the main 1x back lens (`openMainBackCamera`) with a square CD guide (falls back to the phone camera), and they upload to eBay Picture Services through `/api/listing/photo`
