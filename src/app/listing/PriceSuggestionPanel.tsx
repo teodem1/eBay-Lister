@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { Comparable } from "@/lib/ebay/types";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
 import { Icon, Spinner, StepHeading } from "@/components/ui";
+import { isHomeCopy, otherVersion } from "@/lib/pricing/version";
 import { formatMoney, type PriceCheck } from "./priceRequest";
 
 type Option = { key: keyof PriceSuggestion["itemPrice"]; label: string };
@@ -15,22 +17,76 @@ const OPTIONS: Option[] = [
 
 const total = (c: Comparable) => c.price.value + (c.shippingCost?.value ?? 0);
 
+/** eBay serves the same photo in several sizes; ask for the large one. */
+function largeImage(url: string): string {
+  return url.replace(/\/s-l\d+(\.\w+)$/, "/s-l1600$1");
+}
+
+type Preview = { title: string; imageUrl: string | null; url: string | null };
+
+/** Full-screen photo of a sale or listing, with a link to it on eBay. */
+function PhotoPreview({ preview, onClose }: { preview: Preview; onClose: () => void }) {
+  // Portal to <body>: the price cards animate with a transform, which would trap a fixed overlay.
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={preview.title}
+      className="fixed inset-0 z-50 flex flex-col bg-black/85 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] fade-in"
+      onClick={onClose}
+    >
+      <div className="flex justify-end">
+        <button type="button" className="icon-btn bg-surface" aria-label="Close photo" onClick={onClose}>
+          <Icon name="close" />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center py-3">
+        {preview.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- eBay-hosted photo
+          <img src={largeImage(preview.imageUrl)} alt={preview.title} className="max-h-full max-w-full rounded-xl object-contain" />
+        ) : (
+          <p className="t-small text-center text-white/80">No photo came with this sale. Open it on eBay to see the listing photos.</p>
+        )}
+      </div>
+      <div className="mx-auto w-full max-w-lg space-y-3" onClick={(e) => e.stopPropagation()}>
+        <p className="t-small line-clamp-3 text-white">{preview.title}</p>
+        {preview.url && (
+          <a href={preview.url} target="_blank" rel="noreferrer" className="btn btn-secondary w-full">
+            <Icon name="external" /> Open on eBay
+          </a>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function ComparableList({
   items,
   sold,
   currency,
   selected,
   onPick,
+  keywords,
+  homeCountry,
 }: {
   items: Comparable[];
   sold: boolean;
   currency: string;
   selected: number | undefined;
   onPick: (price: number) => void;
+  keywords: string;
+  /** Set when the price uses only this country's copies; the list starts filtered to them. */
+  homeCountry: string | null;
 }) {
   const [sort, setSort] = useState<"price" | "date">(sold ? "date" : "price");
   const [showAll, setShowAll] = useState(false);
-  const sorted = [...items].sort((a, b) =>
+  const [onlyHome, setOnlyHome] = useState(homeCountry !== null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const homeItems = homeCountry ? items.filter((c) => isHomeCopy(c, homeCountry) && !otherVersion(c.title, keywords)) : [];
+  const homeName = homeCountry === "CA" ? "Canadian" : homeCountry;
+  const listed = onlyHome && homeCountry ? homeItems : items;
+  const sorted = [...listed].sort((a, b) =>
     sort === "price" ? total(a) - total(b) : (b.soldDate ?? "").localeCompare(a.soldDate ?? ""),
   );
   const shown = showAll ? sorted : sorted.slice(0, 15);
@@ -38,28 +94,48 @@ function ComparableList({
 
   return (
     <div className="mt-3">
-      {sold && (
-        <div className="mb-2 flex gap-2" role="group" aria-label="Sort sales">
-          {(["date", "price"] as const).map((k) => (
+      {preview && <PhotoPreview preview={preview} onClose={() => setPreview(null)} />}
+      {homeCountry && (
+        <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1" role="group" aria-label="Which copies">
+          <button type="button" aria-pressed={onlyHome} onClick={() => setOnlyHome(true)} className="chip-toggle">
+            {onlyHome && <Icon name="check" size={16} strokeWidth={2.4} />}
+            {homeName} copies ({homeItems.length})
+          </button>
+          <button type="button" aria-pressed={!onlyHome} onClick={() => setOnlyHome(false)} className="chip-toggle">
+            {!onlyHome && <Icon name="check" size={16} strokeWidth={2.4} />}
+            All ({items.length})
+          </button>
+        </div>
+      )}
+      <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1" role="group" aria-label={sold ? "Sort sales" : "Sort listings"}>
+        {(["date", "price"] as const)
+          .filter((k) => sold || k === "price")
+          .map((k) => (
             <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)} className="chip-toggle">
               {sort === k && <Icon name="check" size={16} strokeWidth={2.4} />}
               {k === "date" ? "Newest first" : "Cheapest first"}
             </button>
           ))}
-        </div>
-      )}
+      </div>
       <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
         {shown.map((c) => {
           const active = selected === c.price.value;
           return (
             <li key={c.itemId} className="flex items-center gap-3 p-2.5">
-              {c.imageUrl ? (
-                // eBay thumbnails come from many hosts, so a plain img keeps it simple.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.imageUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-surface-2 object-cover" />
-              ) : (
-                <div className="h-12 w-12 shrink-0 rounded-lg bg-surface-2" />
-              )}
+              <button
+                type="button"
+                className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-muted"
+                aria-label={`See the photo of ${c.title || "this item"}`}
+                onClick={() => setPreview({ title: c.title || c.itemId, imageUrl: c.imageUrl ?? null, url: c.url ?? null })}
+              >
+                {c.imageUrl ? (
+                  // eBay thumbnails come from many hosts, so a plain img keeps it simple.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <Icon name="disc" />
+                )}
+              </button>
               <div className="min-w-0 flex-1">
                 {c.url ? (
                   <a href={c.url} target="_blank" rel="noreferrer" className="t-small line-clamp-2 font-medium underline-offset-2 hover:underline">
@@ -159,7 +235,9 @@ function PriceCard({
   missing,
   selected,
   onPick,
+  keywords,
 }: {
+  keywords: string;
   title: string;
   subtitle: string;
   /** What each comparable is, e.g. "sales" or "listings". */
@@ -174,6 +252,9 @@ function PriceCard({
   const money = (n: number) => formatMoney(n, suggestion?.currency ?? "CAD");
   const has = suggestion !== null && suggestion.usedCount > 0;
   const [open, setOpen] = useState(false);
+  // The strip shows the copies the price came from (Canadian ones when it used only those).
+  const home = suggestion?.version?.homeCountry;
+  const stripItems = home ? items.filter((c) => isHomeCopy(c, home) && !otherVersion(c.title, keywords)) : items;
 
   return (
     <div className="card">
@@ -215,7 +296,7 @@ function PriceCard({
             })}
           </div>
           {items.length >= 3 && (
-            <PriceStrip values={items.map((c) => c.price.value)} selected={selected} currency={suggestion.currency} />
+            <PriceStrip values={stripItems.map((c) => c.price.value)} selected={selected} currency={suggestion.currency} />
           )}
           <div className="mt-3 flex flex-wrap gap-1.5">
             <span className="fact">
@@ -261,6 +342,8 @@ function PriceCard({
               currency={suggestion?.currency ?? "CAD"}
               selected={selected}
               onPick={onPick}
+              keywords={keywords}
+              homeCountry={suggestion?.version?.homeCountry ?? null}
             />
           )}
         </>
@@ -360,6 +443,7 @@ export default function PriceSuggestionPanel({
             missing={check.unavailable.sold}
             selected={selected}
             onPick={onPick}
+            keywords={check.keywords}
           />
           <PriceCard
             title="Current listings"
@@ -370,6 +454,7 @@ export default function PriceSuggestionPanel({
             missing={check.unavailable.current}
             selected={selected}
             onPick={onPick}
+            keywords={check.keywords}
           />
         </div>
       )}

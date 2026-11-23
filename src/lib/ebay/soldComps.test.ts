@@ -137,3 +137,14 @@ describe("searchSoldComps", () => {
     await expect(searchSoldComps({ keywords: "x" }, { ...opts, fetch: f })).rejects.toThrow(/429/);
   });
 });
+
+describe("findImageUrl", () => {
+  it("finds the photo under any field name", async () => {
+    const { findImageUrl } = await import("./soldComps");
+    expect(findImageUrl({ imageUrl: "https://i.ebayimg.com/a/s-l225.jpg" })).toBe("https://i.ebayimg.com/a/s-l225.jpg");
+    expect(findImageUrl({ url: "https://www.ebay.ca/itm/1", photos: ["https://i.ebayimg.com/images/g/x/s-l500.webp"] })).toBe(
+      "https://i.ebayimg.com/images/g/x/s-l500.webp",
+    );
+    expect(findImageUrl({ url: "https://www.ebay.ca/itm/1", title: "CD" })).toBeNull();
+  });
+});
