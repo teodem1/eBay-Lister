@@ -6,7 +6,7 @@ import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/conditions";
 import { TITLE_MAX } from "@/lib/listing/limits";
 import type { GeneratedListing, ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
-import { conditionComplete, conditionSummary } from "@/lib/listing/condition";
+import { conditionComplete, conditionSummary, conditionTitleSuffix } from "@/lib/listing/condition";
 import ConditionPicker, { type ConditionDraft } from "./ConditionPicker";
 import DescriptionEditor from "./DescriptionEditor";
 import PhotoPicker from "./PhotoPicker";
@@ -66,6 +66,8 @@ export default function ListingEditor({
   // The seller's own condition, asked before Claude writes anything.
   const [cond, setCond] = useState<ConditionDraft>(initial.condition ?? {});
   const condReady = conditionComplete(cond);
+  // Graded on the scan screen: no need to ask again here (the picker opens only on "Change").
+  const [editCond, setEditCond] = useState(() => !conditionComplete(initial.condition ?? {}));
   const [loading, setLoading] = useState<"generate" | "publish" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
@@ -326,7 +328,19 @@ export default function ListingEditor({
           onRefresh={refreshSuggestion}
         />
 
-        <ConditionPicker n={3} value={cond} onChange={changeCondition} />
+        {editCond || !condReady ? (
+          <ConditionPicker n={3} value={cond} onChange={changeCondition} />
+        ) : (
+          <div className="card flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="t-caption text-muted">Your CD&apos;s condition</p>
+              <p className="t-small font-medium">{conditionTitleSuffix(cond).replace(/^\(|\)$/g, "")}</p>
+            </div>
+            <button type="button" className="btn btn-secondary min-h-10 px-3 text-sm" onClick={() => setEditCond(true)}>
+              Change
+            </button>
+          </div>
+        )}
 
         {!condReady && (
           <p className="t-small px-1 text-muted">
