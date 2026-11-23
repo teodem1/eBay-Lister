@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import type { Comparable } from "@/lib/ebay/types";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
 import { Icon, Spinner, StepHeading } from "@/components/ui";
 import { isHomeCopy, otherVersion } from "@/lib/pricing/version";
+import ComparableSheet from "./ComparableSheet";
 import { formatMoney, type PriceCheck } from "./priceRequest";
 
 type Option = { key: keyof PriceSuggestion["itemPrice"]; label: string };
@@ -16,50 +16,6 @@ const OPTIONS: Option[] = [
 ];
 
 const total = (c: Comparable) => c.price.value + (c.shippingCost?.value ?? 0);
-
-/** eBay serves the same photo in several sizes; ask for the large one. */
-function largeImage(url: string): string {
-  return url.replace(/\/s-l\d+(\.\w+)$/, "/s-l1600$1");
-}
-
-type Preview = { title: string; imageUrl: string | null; url: string | null };
-
-/** Full-screen photo of a sale or listing, with a link to it on eBay. */
-function PhotoPreview({ preview, onClose }: { preview: Preview; onClose: () => void }) {
-  // Portal to <body>: the price cards animate with a transform, which would trap a fixed overlay.
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={preview.title}
-      className="fixed inset-0 z-50 flex flex-col bg-black/85 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] fade-in"
-      onClick={onClose}
-    >
-      <div className="flex justify-end">
-        <button type="button" className="icon-btn bg-surface" aria-label="Close photo" onClick={onClose}>
-          <Icon name="close" />
-        </button>
-      </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center py-3">
-        {preview.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- eBay-hosted photo
-          <img src={largeImage(preview.imageUrl)} alt={preview.title} className="max-h-full max-w-full rounded-xl object-contain" />
-        ) : (
-          <p className="t-small text-center text-white/80">No photo came with this sale. Open it on eBay to see the listing photos.</p>
-        )}
-      </div>
-      <div className="mx-auto w-full max-w-lg space-y-3" onClick={(e) => e.stopPropagation()}>
-        <p className="t-small line-clamp-3 text-white">{preview.title}</p>
-        {preview.url && (
-          <a href={preview.url} target="_blank" rel="noreferrer" className="btn btn-secondary w-full">
-            <Icon name="external" /> Open on eBay
-          </a>
-        )}
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 function ComparableList({
   items,
@@ -82,7 +38,7 @@ function ComparableList({
   const [sort, setSort] = useState<"price" | "date">(sold ? "date" : "price");
   const [showAll, setShowAll] = useState(false);
   const [onlyHome, setOnlyHome] = useState(homeCountry !== null);
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [open, setOpen] = useState<Comparable | null>(null);
   const homeItems = homeCountry ? items.filter((c) => isHomeCopy(c, homeCountry) && !otherVersion(c.title, keywords)) : [];
   const homeName = homeCountry === "CA" ? "Canadian" : homeCountry;
   const listed = onlyHome && homeCountry ? homeItems : items;
@@ -94,7 +50,7 @@ function ComparableList({
 
   return (
     <div className="mt-3">
-      {preview && <PhotoPreview preview={preview} onClose={() => setPreview(null)} />}
+      {open && <ComparableSheet item={open} sold={sold} onClose={() => setOpen(null)} />}
       {homeCountry && (
         <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1" role="group" aria-label="Which copies">
           <button type="button" aria-pressed={onlyHome} onClick={() => setOnlyHome(true)} className="chip-toggle">
@@ -125,8 +81,8 @@ function ComparableList({
               <button
                 type="button"
                 className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-muted"
-                aria-label={`See the photo of ${c.title || "this item"}`}
-                onClick={() => setPreview({ title: c.title || c.itemId, imageUrl: c.imageUrl ?? null, url: c.url ?? null })}
+                aria-label={`See details of ${c.title || "this item"}`}
+                onClick={() => setOpen(c)}
               >
                 {c.imageUrl ? (
                   // eBay thumbnails come from many hosts, so a plain img keeps it simple.
@@ -137,13 +93,13 @@ function ComparableList({
                 )}
               </button>
               <div className="min-w-0 flex-1">
-                {c.url ? (
-                  <a href={c.url} target="_blank" rel="noreferrer" className="t-small line-clamp-2 font-medium underline-offset-2 hover:underline">
-                    {c.title || c.itemId}
-                  </a>
-                ) : (
-                  <p className="t-small line-clamp-2 font-medium">{c.title || c.itemId}</p>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setOpen(c)}
+                  className="t-small line-clamp-2 text-left font-medium underline-offset-2 hover:underline"
+                >
+                  {c.title || c.itemId}
+                </button>
                 <p className="t-caption mt-0.5 truncate text-muted">
                   {[
                     c.soldDate && shortDate(c.soldDate),
