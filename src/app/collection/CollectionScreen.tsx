@@ -16,6 +16,7 @@ import {
   type SortKey,
 } from "@/lib/collection/collection";
 import { collectionStore, useCollection } from "@/lib/collection/store";
+import { saveTextFile } from "@/lib/native/share";
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "recent", label: "Recently added" },
@@ -450,36 +451,46 @@ function Backup({ items }: { items: CollectionItem[] }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const [saving, setSaving] = useState(false);
+  const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState("");
+
   async function exportFile() {
     const name = `cd-collection-${new Date().toISOString().slice(0, 10)}.json`;
-    const file = new File([JSON.stringify({ version: 1, items }, null, 2)], name, { type: "application/json" });
-    // The Android app can't download files, but it can share them (Drive, email...).
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: "CD collection backup" });
-        return;
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-      }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const result = await saveTextFile(name, JSON.stringify({ version: 1, items }, null, 2), "CD collection backup");
+      const text = {
+        shared: `Backup ready (${name}). Keep it somewhere safe, like Google Drive or an email to yourself.`,
+        downloaded: `Backup saved to your downloads as ${name}.`,
+        copied: "Backup copied. Paste it into a note or an email to yourself. To restore, use \"Paste a backup\" below.",
+        cancelled: null,
+      }[result];
+      if (text) setMessage({ ok: true, text });
+    } catch (err) {
+      setMessage({ ok: false, text: `Couldn't save the backup: ${(err as Error).message}` });
+    } finally {
+      setSaving(false);
     }
-    const url = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  async function importFile(file: File) {
+  function restore(json: string) {
     try {
-      const imported = parseBackup(await file.text());
+      const imported = parseBackup(json);
       const merged = mergeBackup(collectionStore.all(), imported);
       const added = merged.length - collectionStore.all().length;
       collectionStore.replace(merged);
       setMessage({ ok: true, text: `Imported ${added} ${added === 1 ? "CD" : "CDs"}.` });
+      return true;
     } catch (err) {
-      setMessage({ ok: false, text: `Couldn't read that file: ${(err as Error).message}` });
+      setMessage({ ok: false, text: `Couldn't read that backup: ${(err as Error).message}` });
+      return false;
     }
+  }
+
+  async function importFile(file: File) {
+    restore(await file.text());
   }
 
   return (
@@ -492,8 +503,8 @@ function Backup({ items }: { items: CollectionItem[] }) {
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn btn-secondary" onClick={exportFile}>
-          Save backup
+        <button type="button" className="btn btn-secondary" onClick={exportFile} disabled={saving}>
+          {saving ? "Saving…" : "Save backup"}
         </button>
         <button type="button" className="btn btn-secondary" onClick={() => fileRef.current?.click()}>
           Restore
@@ -510,7 +521,41 @@ function Backup({ items }: { items: CollectionItem[] }) {
           e.target.value = "";
         }}
       />
-      {message && <p className={`notice ${message.ok ? "notice-ok" : "notice-bad"}`}>{message.text}</p>}
+      <button type="button" className="link self-start t-small" onClick={() => setPasting((p) => !p)} aria-expanded={pasting}>
+        Paste a backup
+      </button>
+      {pasting && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="paste-backup" className="sr-only">
+            Backup text
+          </label>
+          <textarea
+            id="paste-backup"
+            className="field min-h-24 font-mono t-caption"
+            placeholder="Paste the backup text here"
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={!pasted.trim()}
+            onClick={() => {
+              if (restore(pasted)) {
+                setPasted("");
+                setPasting(false);
+              }
+            }}
+          >
+            Restore from pasted text
+          </button>
+        </div>
+      )}
+      {message && (
+        <p role="status" className={`notice ${message.ok ? "notice-ok" : "notice-bad"}`}>
+          {message.text}
+        </p>
+      )}
     </section>
   );
 }
