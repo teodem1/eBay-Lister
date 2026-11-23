@@ -241,7 +241,7 @@ export default function ListingEditor({
   const dims = draft?.packageDimensionsCm;
   const optionsSummary = draft
     ? [
-        draft.packageWeightKg ? `${draft.packageWeightKg} kg` : "No weight",
+        draft.packageWeightKg ? `${Math.round(draft.packageWeightKg * 1000)} g` : "No weight",
         dims && dims.length && dims.width && dims.height ? `${dims.length}×${dims.width}×${dims.height} cm` : null,
         `Promoted ${draft.promotedPercent ?? "default"}${draft.promotedPercent !== undefined ? "%" : ""}`,
         `Offers ${draft.bestOfferMinPercent === 0 ? "off" : draft.bestOfferMinPercent !== undefined ? `≥ ${draft.bestOfferMinPercent}%` : "default"}`,
@@ -489,16 +489,17 @@ export default function ListingEditor({
                   <legend className="label">Package, packed (for calculated shipping)</legend>
                   <div className="grid grid-cols-4 gap-2">
                     <label className="block">
-                      <span className="t-caption text-muted">Weight kg</span>
+                      <span className="t-caption text-muted">Weight g</span>
                       <input
                         className={`${field(isGuess("package"))} px-2.5`}
                         type="number"
                         inputMode="decimal"
                         min="0"
-                        step="0.01"
-                        value={draft.packageWeightKg ?? ""}
+                        step="1"
+                        // Stored in kg for eBay; the seller types grams.
+                        value={draft.packageWeightKg !== undefined ? Math.round(draft.packageWeightKg * 1000) : ""}
                         onChange={(e) =>
-                          update("packageWeightKg", e.target.value ? Number(e.target.value) : undefined, "package")
+                          update("packageWeightKg", Number(e.target.value) > 0 ? Number(e.target.value) / 1000 : undefined, "package")
                         }
                       />
                     </label>

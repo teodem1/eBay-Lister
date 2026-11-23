@@ -46,7 +46,7 @@ Screens (phone first):
   (plus sealed, case, tested, defects; `src/lib/listing/condition.ts`). The eBay condition follows from the
   weaker of disc and inlay (`ebayConditionFromGrades`). It sets the
   draft's condition and condition text; Claude never guesses them. The title ends with the seller's
-  grades (`conditionTitleSuffix`, e.g. "CD: NM / Inlay: VG+"). Photos come from the camera or
+  grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos come from the camera or
   gallery in `PhotoPicker.tsx` and upload to eBay Picture Services through `/api/listing/photo`
   (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
@@ -94,7 +94,7 @@ Server code:
 - `src/lib/ebay/config.ts` — env settings for both clients.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
-  Package size defaults to 12 × 15 × 1 cm (`DEFAULT_PACKAGE_CM`, a CD mailer); Claude only estimates the weight.
+  Package defaults to 65 g (`DEFAULT_PACKAGE_WEIGHT_KG`, edited in grams) and 12 × 15 × 1 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.
   Publish always sends Brand with MPN (`withBrandAndMpn`: draft brand, else Record Label, else "Unbranded") to avoid eBay error 25002.
