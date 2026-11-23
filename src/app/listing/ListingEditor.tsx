@@ -294,7 +294,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
 
         {!condReady && (
           <p className="t-small px-1 text-muted">
-            {cond.condition ? "Grade the disc to continue." : "Pick the condition to continue."}
+            Grade the disc and the inlay (or tick sealed) to continue.
           </p>
         )}
         <button
