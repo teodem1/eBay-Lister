@@ -48,7 +48,7 @@ Screens (phone first):
   draft's condition and condition text; Claude never guesses them. The title ends with the seller's
   grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos come from the camera or
   gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`); "Take photo" opens `CdCamera.tsx`, a live
-  camera with a square CD guide (falls back to the phone camera), and they upload to eBay Picture Services through `/api/listing/photo`
+  camera on the main 1x back lens (`openMainBackCamera`) with a square CD guide (falls back to the phone camera), and they upload to eBay Picture Services through `/api/listing/photo`
   (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
@@ -100,7 +100,8 @@ Server code:
   Package defaults to 65 g (`DEFAULT_PACKAGE_WEIGHT_KG`, edited in grams) and 12 × 15 × 1 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.
-  Publish always sends Brand with MPN (`withBrandAndMpn`: draft brand, else Record Label, else "Unbranded") to avoid eBay error 25002.
+  Publish leaves Brand and MPN empty for CDs/music (`isMusicDraft`, `withoutBrandAndMpn`); other items get them filled
+  (`withBrandAndMpn`). On eBay error 25002 (BrandMPN) it re-sends the item the other way once and publishes again.
 - `src/app/api/lookup/{barcode,photo}`, `src/app/api/price-suggestion` and `src/app/api/listing/{generate,publish}` — server routes.
 
 Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine).

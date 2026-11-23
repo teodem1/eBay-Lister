@@ -119,6 +119,43 @@ describe("publishListing", () => {
     expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/location/default-location"))).toBe(false);
   });
 
+  it("leaves Brand and MPN empty for a CD, and fills them if eBay asks (25002)", async () => {
+    let publishes = 0;
+    const { calls, fetchImpl } = fakeEbay({
+      "POST /identity/v1/oauth2/token": token,
+      "GET /sell/inventory/v1/location/default-location": () => [200, {}],
+      "PUT /sell/inventory/v1/inventory_item/BC-123": () => [204],
+      "GET /sell/inventory/v1/offer": () => [200, { offers: [{ offerId: "O9" }] }],
+      "PUT /sell/inventory/v1/offer/O9": () => [204],
+      "POST /sell/inventory/v1/offer/O9/publish": () =>
+        ++publishes === 1
+          ? [400, { errors: [{ errorId: 25002, message: "A user error has occurred. Input data for tag <BrandMPN> is invalid or missing." }] }]
+          : [200, { listingId: "L9" }],
+    });
+    const cd = {
+      ...draft,
+      title: "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)",
+      categoryName: "Music > CDs",
+      brand: "Atlantic",
+      mpn: "7567-82690-2",
+      aspects: [
+        { name: "Record Label", value: "Atlantic", guessed: false },
+        { name: "MPN", value: "7567-82690-2", guessed: true },
+      ],
+    };
+    const result = await publishListing(new EbaySellClient(config, fetchImpl), cd);
+    expect(result.listingId).toBe("L9");
+    const puts = calls.filter((c) => c.method === "PUT" && c.url.includes("inventory_item"));
+    expect(puts).toHaveLength(2);
+    const first = puts[0].body as { product: { aspects: Record<string, string[]>; brand?: string; mpn?: string } };
+    expect(first.product.aspects).toEqual({ "Record Label": ["Atlantic"] });
+    expect(first.product.brand).toBeUndefined();
+    expect(first.product.mpn).toBeUndefined();
+    const second = puts[1].body as { product: { aspects: Record<string, string[]>; brand?: string } };
+    expect(second.product.aspects.Brand).toEqual(["Atlantic"]);
+    expect(second.product.brand).toBe("Atlantic");
+  });
+
   it("surfaces the eBay error message and failing step", async () => {
     const { fetchImpl } = fakeEbay({
       "POST /identity/v1/oauth2/token": token,
