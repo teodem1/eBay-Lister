@@ -47,7 +47,8 @@ Screens (phone first):
   weaker of disc and inlay (`ebayConditionFromGrades`). It sets the
   draft's condition and condition text; Claude never guesses them. The title ends with the seller's
   grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos come from the camera or
-  gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`), and upload to eBay Picture Services through `/api/listing/photo`
+  gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`); "Take photo" opens `CdCamera.tsx`, a live
+  camera with a square CD guide (falls back to the phone camera), and they upload to eBay Picture Services through `/api/listing/photo`
   (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
@@ -62,6 +63,8 @@ Screens (phone first):
   With a barcode, sold (sold-comps keyword = bare 12-digit UPC) and current (Browse `gtin`)
   searches return that exact pressing; only with fewer than 3 matches do they search by name (a second
   sold-comps call). Barcode matches skip the Canadian-copies filter.
+
+  After a successful publish the screen returns to `/`, which shows "Published on eBay" once (`lastPublished.ts`).
 
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { resizeImage } from "@/lib/resize-image";
@@ -12,6 +12,7 @@ import { isNativeApp } from "@/lib/native/platform";
 import { itemFromLookup } from "@/lib/collection/collection";
 import { stashScanned } from "@/lib/collection/store";
 import { conditionParams } from "@/lib/listing/condition";
+import { takePublished, type LastPublished } from "@/lib/listing/lastPublished";
 import ConditionPicker, { type ConditionDraft } from "@/app/listing/ConditionPicker";
 import { AppBar, Icon, Spinner, TabBar } from "./ui";
 
@@ -29,6 +30,13 @@ export default function ItemLookup() {
   const [manualCode, setManualCode] = useState("");
   // Small copy of the last photo, used as the cover when nothing better is found.
   const [thumb, setThumb] = useState<string | undefined>();
+  // Back here right after publishing: say so once.
+  const [justPublished, setJustPublished] = useState<LastPublished | null>(null);
+  useEffect(() => {
+    const p = takePublished();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage is only readable after mount
+    if (p) setJustPublished(p);
+  }, []);
 
   async function run(label: string, request: () => Promise<Response>, preview?: string) {
     setStatus({ kind: "loading", label, preview });
@@ -117,6 +125,22 @@ export default function ItemLookup() {
     <>
       <AppBar title="eBay Lister" />
       <main className="page page-tabs">
+        {justPublished && (
+          <div className="notice notice-ok fade-in flex items-start gap-3" role="status">
+            <Icon name="check" className="mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">Published on eBay</p>
+              <p className="line-clamp-2">{justPublished.title}</p>
+              <a className="font-semibold underline" href={justPublished.url} target="_blank" rel="noreferrer">
+                Open listing {justPublished.listingId}
+              </a>
+              {justPublished.promotionError && <p className="text-warn-ink">{justPublished.promotionError}</p>}
+            </div>
+            <button type="button" className="icon-btn -m-2" aria-label="Dismiss" onClick={() => setJustPublished(null)}>
+              <Icon name="close" size={18} />
+            </button>
+          </div>
+        )}
         <header className="pt-1">
           <h1 className="t-display">What are you selling?</h1>
           <p className="mt-1 text-muted">Scan or snap it. We find it on eBay and check what it sells for.</p>
