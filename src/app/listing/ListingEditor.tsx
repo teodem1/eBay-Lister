@@ -143,6 +143,20 @@ export default function ListingEditor({
     if (body) startPriceCheck(body);
   }, [initial.query, initial.barcode, initialCondition, startPriceCheck]);
 
+  // Claude writes the listing on its own, once: as soon as the CD is graded and the price
+  // check is back (its price goes into the listing). "Write it again" stays for a rewrite.
+  const autoWritten = useRef(false);
+  const generateRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (autoWritten.current || generated || loading !== null || priceLoading) return;
+    if (!condReady || !query.trim()) return;
+    const t = setTimeout(() => {
+      autoWritten.current = true;
+      generateRef.current();
+    }, 600);
+    return () => clearTimeout(t);
+  }, [condReady, query, priceLoading, generated, loading]);
+
   function update<K extends keyof Draft>(key: K, value: Draft[K], guessKey: string = key as string) {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
     setGuessed((g) => {
@@ -153,6 +167,7 @@ export default function ListingEditor({
   }
 
   async function generate() {
+    autoWritten.current = true;
     setLoading("generate");
     setError(null);
     setPublished(null);
@@ -229,6 +244,9 @@ export default function ListingEditor({
     }
   }
 
+  useEffect(() => {
+    generateRef.current = generate;
+  });
   const isGuess = (k: string) => guessed.has(k);
   const guessCount = guessed.size + (draft?.aspects.filter((a) => a.guessed).length ?? 0);
 
@@ -308,7 +326,7 @@ export default function ListingEditor({
 
         {!condReady && (
           <p className="t-small px-1 text-muted">
-            Grade the disc and the inlay (or tick sealed) to continue.
+            Grade the disc and the inlay (or tick sealed). Claude then writes the listing on its own.
           </p>
         )}
         <button
@@ -322,7 +340,8 @@ export default function ListingEditor({
             </>
           ) : (
             <>
-              <SparkIcon /> {draft ? "Write it again" : "Write listing with Claude"}
+              <SparkIcon />{" "}
+              {draft ? "Write it again" : condReady && priceLoading ? "Checking prices first…" : "Write listing with Claude"}
             </>
           )}
         </button>
