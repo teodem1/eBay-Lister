@@ -184,7 +184,12 @@ export function suggestPrice(
   }
   if (!sameCurrency.length) return null;
 
-  const version = selectSameVersion(sameCurrency, { keywords: opts.keywords, homeCountry: opts.homeCountry, unit: opts.unit });
+  // Barcode matches are already the seller's exact pressing, wherever the seller is.
+  const version = selectSameVersion(sameCurrency, {
+    keywords: opts.keywords,
+    homeCountry: result.matchedBy === "barcode" ? undefined : opts.homeCountry,
+    unit: opts.unit,
+  });
   notes.push(...version.notes);
   const kept = removeOutliers(version.items);
   const outliersRemoved = version.items.length - kept.length;

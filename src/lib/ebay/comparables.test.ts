@@ -199,4 +199,49 @@ describe("findBothComparables", () => {
     );
     await expect(findBothComparables(new EbayClient(config, fetchMock), { keywords: "x" })).rejects.toThrow(/500/);
   });
+
+  describe("with a barcode", () => {
+    const ebayFetch = (browseCount: number) =>
+      vi.fn<FetchLike>(async (url) => {
+        const u = String(url);
+        if (u.includes("oauth2/token")) return json(200, { access_token: "t", expires_in: 7200 });
+        if (u.includes("/buy/marketplace_insights/")) return json(403, { errors: [{ errorId: 1100 }] });
+        if (u.includes("/buy/browse/")) {
+          const byBarcode = new URL(u).searchParams.has("gtin");
+          return json(200, { itemSummaries: Array(byBarcode ? browseCount : 5).fill(activeItem) });
+        }
+        throw new Error("unexpected " + u);
+      });
+    const sale = (id: string) => ({ itemId: id, soldPrice: "15.00", soldCurrency: "CAD", endedAt: "2026-11-01" });
+    const q = { keywords: "Genesis Wind & Wuthering", gtin: "075678269028" };
+
+    it("prices the exact pressing from barcode matches", async () => {
+      const soldCompsFetch = vi.fn<(url: string) => Promise<Response>>(async () => json(200, { items: [sale("1"), sale("2"), sale("3")] }));
+      const res = await findBothComparables(new EbayClient(config, ebayFetch(4)), q, {
+        soldCompsApiKey: "sc_test",
+        soldCompsFetch,
+      });
+      expect(soldCompsFetch).toHaveBeenCalledTimes(1);
+      expect(new URL(String(soldCompsFetch.mock.calls[0][0])).searchParams.get("keyword")).toBe("UPC075678269028");
+      expect(res.sold?.matchedBy).toBe("barcode");
+      expect(res.current?.matchedBy).toBe("barcode");
+    });
+
+    it("searches by name when too few sales carry the barcode", async () => {
+      const soldCompsFetch = vi
+        .fn()
+        .mockResolvedValueOnce(json(200, { items: [sale("1")] }))
+        .mockResolvedValueOnce(json(200, { items: [sale("1"), sale("2"), sale("3"), sale("4")] }));
+      const res = await findBothComparables(new EbayClient(config, ebayFetch(0)), q, {
+        soldCompsApiKey: "sc_test",
+        soldCompsFetch,
+      });
+      expect(soldCompsFetch).toHaveBeenCalledTimes(2);
+      expect(new URL(String(soldCompsFetch.mock.calls[1][0])).searchParams.get("keyword")).toBe("Genesis Wind & Wuthering");
+      expect(res.sold?.matchedBy).toBe("keywords");
+      expect(res.sold?.items).toHaveLength(4);
+      expect(res.current?.items).toHaveLength(5);
+      expect(res.current?.matchedBy).toBe("keywords");
+    });
+  });
 });

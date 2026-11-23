@@ -52,6 +52,9 @@ Screens (phone first):
   Prices use only Canadian copies (sold from CA or titled Canadian) when there are 3+, and leave out
   other versions the item text doesn't name (Japanese, vinyl, signed, lots): `src/lib/pricing/version.ts`.
   Tapping a sale's thumbnail opens a large photo with a link to eBay.
+  With a barcode, sold (sold-comps keyword `UPC<12 digits>`, like eBay's app) and current (Browse `gtin`)
+  searches return that exact pressing; only with fewer than 3 matches do they search by name (a second
+  sold-comps call). Barcode matches skip the Canadian-copies filter.
 
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
