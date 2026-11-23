@@ -55,7 +55,9 @@ Screens (phone first):
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
   Prices use only Canadian copies (sold from CA or titled Canadian) when there are 3+, and leave out
   other versions the item text doesn't name (Japanese, vinyl, signed, lots): `src/lib/pricing/version.ts`.
-  Tapping a sale's thumbnail opens a large photo with a link to eBay. Only CDs are searched and shown
+  Tapping a sale or listing (thumbnail or title) opens `ComparableSheet.tsx`: photos, description, CD and inlay
+  condition, country of origin and "Open on eBay", read from Browse getItem through `/api/comparable`
+  (`src/lib/ebay/itemDetails.ts`; ended sales fall back to what the title says). Only CDs are searched and shown
   (`cdKeywords`, `onlyCds`) unless the item text names another format; the notes box is not shown.
   With a barcode, sold (sold-comps keyword = bare 12-digit UPC) and current (Browse `gtin`)
   searches return that exact pressing; only with fewer than 3 matches do they search by name (a second
