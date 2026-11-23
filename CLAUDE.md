@@ -68,6 +68,14 @@ Screens (phone first):
 
   After a successful publish (the green "Published" notice shows for 1.5 s) the app reloads `/` fresh for the next CD.
 
+- `/to-list` — `src/app/to-list/ToListScreen.tsx` ("To list" tab): CDs scanned but not listed yet, saved on the
+  phone (`src/lib/batch/queue.ts` logic, `src/lib/batch/store.ts` localStorage). "Scan a stack" keeps the scanner
+  open (`BarcodeScanner continuous`; in the APK the ML Kit scanner reopens after each CD) and album names load in the
+  background two at a time (`/api/lookup/barcode`, no sold-comps calls). A CD started on the Scan screen joins the
+  list too (`batchStore.fromScan`). Opening one goes to `/listing?...&batch=<id>` (`ResumeListing.tsx`), which saves
+  grades, photos, the price check and Claude's draft on the entry as the seller goes and restores them on return
+  (a saved price check is reused, so it costs one sold-comps call per CD). Publishing marks it listed; a CD from a
+  scanned stack then opens the next one (`/to-list?next=1`).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in

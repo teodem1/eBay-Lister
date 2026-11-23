@@ -12,6 +12,8 @@ import DescriptionEditor from "./DescriptionEditor";
 import PhotoPicker from "./PhotoPicker";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
 import SaveToCollection from "./SaveToCollection";
+import { batchStore } from "@/lib/batch/store";
+import { nextPending, type ListingProgress } from "@/lib/batch/queue";
 import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, type PriceCheck } from "./priceRequest";
 
 type Draft = GeneratedListing["draft"];
@@ -58,10 +60,20 @@ function GuessBadge() {
 export default function ListingEditor({
   initial,
 }: {
-  initial: { query: string; barcode: string; price?: number; condition?: ConditionDraft };
+  initial: {
+    query: string;
+    barcode: string;
+    price?: number;
+    condition?: ConditionDraft;
+    /** The CD's entry on the To list tab; progress is saved there as the seller goes. */
+    batchId?: string;
+    /** Progress saved earlier for this CD (grades, photos, price check, draft). */
+    saved?: ListingProgress;
+  };
 }) {
-  const [query, setQuery] = useState(initial.query);
-  const [barcode, setBarcode] = useState(initial.barcode);
+  const saved = initial.saved;
+  const [query, setQuery] = useState(saved?.query ?? initial.query);
+  const [barcode, setBarcode] = useState(saved?.barcode ?? initial.barcode);
   const [notes, setNotes] = useState("");
   // The seller's own condition, asked before Claude writes anything.
   const [cond, setCond] = useState<ConditionDraft>(initial.condition ?? {});
@@ -71,29 +83,34 @@ export default function ListingEditor({
   const [loading, setLoading] = useState<"generate" | "publish" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
-  const [generated, setGenerated] = useState<GeneratedListing | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [guessed, setGuessed] = useState<Set<string>>(new Set());
-  const [imageText, setImageText] = useState("");
+  const [generated, setGenerated] = useState<GeneratedListing | null>(saved?.generated ?? null);
+  const [draft, setDraft] = useState<Draft | null>(saved?.draft ?? null);
+  const [guessed, setGuessed] = useState<Set<string>>(() => new Set(saved?.guessed ?? []));
+  const [imageText, setImageText] = useState(saved?.imageText ?? "");
   // "Shipping and offers" starts open when Claude guessed the package size.
   const [moreOpen, setMoreOpen] = useState(false);
   const [published, setPublished] = useState<PublishOk | null>(null);
-  // Once published (and saved to the Collection), start fresh on the main screen for the next CD.
+  // Where to go once published: the next CD of a scanned stack, else the Scan screen.
+  const [afterPublish, setAfterPublish] = useState("/");
+  // Once published (and saved to the Collection), start fresh for the next CD.
   // A full load, so the previous scan result isn't kept by the router cache.
   useEffect(() => {
     if (!published) return;
-    const t = setTimeout(() => window.location.replace("/"), 1500);
+    const t = setTimeout(() => window.location.replace(afterPublish), 1500);
     return () => clearTimeout(t);
-  }, [published]);
+  }, [published, afterPublish]);
   // The price to list at: from ?price=, a suggestion option, or typed by the user.
-  const [price, setPrice] = useState<number | undefined>(initial.price);
-  const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(null);
-  const [priceLoading, setPriceLoading] = useState(() => priceSuggestionBody(initial.query, initial.barcode) !== null);
+  const [price, setPrice] = useState<number | undefined>(saved?.price ?? initial.price);
+  // A saved price check is reused: sold-comps allows 100 checks a month.
+  const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(saved?.priceCheck ?? null);
+  const [priceLoading, setPriceLoading] = useState(
+    () => !saved?.priceCheck && priceSuggestionBody(initial.query, initial.barcode) !== null,
+  );
   // The grades from the scan screen narrow the first price check to copies in that condition.
   const initialCondition = initial.condition?.condition;
   const [priceError, setPriceError] = useState<string | null>(null);
   // Once the user picks or types a price, a (re)loaded suggestion no longer overwrites it.
-  const priceChosen = useRef(initial.price !== undefined);
+  const priceChosen = useRef(initial.price !== undefined || !!saved?.priceChosen);
   const priceRequestId = useRef(0);
 
   function choosePrice(value: number | undefined) {
@@ -140,11 +157,40 @@ export default function ListingEditor({
     startPriceCheck(body);
   }
 
-  // Coming from the lookup screen: check prices straight away.
+  // Coming from the lookup screen: check prices straight away (unless this CD's check was saved).
+  const hasSavedCheck = !!saved?.priceCheck;
   useEffect(() => {
+    if (hasSavedCheck) return;
     const body = priceSuggestionBody(initial.query, initial.barcode, initialCondition);
     if (body) startPriceCheck(body);
-  }, [initial.query, initial.barcode, initialCondition, startPriceCheck]);
+    // Counts toward the price checks shown on the To list tab.
+    if (body && initial.batchId) batchStore.update(initial.batchId, (x) => ({ ...x, openedAt: x.openedAt ?? new Date().toISOString() }));
+  }, [initial.query, initial.barcode, initial.batchId, initialCondition, startPriceCheck, hasSavedCheck]);
+
+  // Saves the progress on the To list tab as the seller goes, so leaving the app loses nothing.
+  useEffect(() => {
+    const id = initial.batchId;
+    if (!id || published) return;
+    const t = setTimeout(() => {
+      const item = batchStore.get(id);
+      if (!item || item.status !== "pending") return;
+      const progress: ListingProgress = {
+        query,
+        barcode,
+        condition: cond,
+        imageText,
+        price,
+        priceChosen: priceChosen.current,
+        priceCheck: priceCheck ?? undefined,
+        generated: generated ?? undefined,
+        draft: draft ?? undefined,
+        guessed: [...guessed],
+        savedAt: new Date().toISOString(),
+      };
+      batchStore.update(id, { progress });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [initial.batchId, published, query, barcode, cond, imageText, price, priceCheck, generated, draft, guessed]);
 
   // Claude writes the listing on its own, once: as soon as the CD is graded and the price
   // check is back (its price goes into the listing). "Write it again" stays for a rewrite.
@@ -239,6 +285,20 @@ export default function ListingEditor({
         throw new Error(data.error ?? "Publish failed");
       }
       const ok = data as PublishOk;
+      if (initial.batchId) {
+        const id = initial.batchId;
+        const item = batchStore.get(id);
+        batchStore.update(id, (x) => ({
+          ...x,
+          status: "listed",
+          listingId: ok.listingId,
+          listingUrl: ok.url,
+          doneAt: new Date().toISOString(),
+          progress: undefined,
+        }));
+        // Part of a scanned stack: go straight to the next CD on the To list tab.
+        if (item?.origin === "stack" && nextPending(batchStore.all(), id)) setAfterPublish("/to-list?next=1");
+      }
       setPublished(ok);
     } catch (e) {
       setError((e as Error).message);
@@ -281,7 +341,10 @@ export default function ListingEditor({
 
   return (
     <>
-      <AppBar title="Create listing" back={{ href: "/", label: "Find another item" }} />
+      <AppBar
+        title="Create listing"
+        back={initial.batchId ? { href: "/to-list", label: "Back to To list" } : { href: "/", label: "Find another item" }}
+      />
       <main className={`page ${draft ? "pb-36" : ""}`}>
         <section className="flex flex-col gap-3">
           <StepHeading n={1} title="Item" />
@@ -696,6 +759,7 @@ export default function ListingEditor({
                   </p>
                   {published.promoted && <p>Promoted at {published.promoted.percent}% ad rate.</p>}
                   {published.promotionError && <p className="text-warn-ink">{published.promotionError}</p>}
+                  {afterPublish !== "/" && <p className="font-medium">Opening the next CD…</p>}
                 </div>
               </div>
             )}

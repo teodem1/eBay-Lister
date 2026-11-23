@@ -3,15 +3,18 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { resizeImage } from "@/lib/resize-image";
 import { normalizeGtin } from "@/lib/identify/barcode";
-import { listingHref, listingQuery, type LookupError, type LookupResponse } from "@/lib/lookup";
+import { listingQuery, type LookupError, type LookupResponse } from "@/lib/lookup";
 import { takeItemPhoto } from "@/lib/native/camera";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
 import { itemFromLookup } from "@/lib/collection/collection";
 import { stashScanned } from "@/lib/collection/store";
 import { conditionParams } from "@/lib/listing/condition";
+import { batchStore } from "@/lib/batch/store";
+import { batchListingHref } from "@/lib/batch/queue";
 import ConditionPicker, { type ConditionDraft } from "@/app/listing/ConditionPicker";
 import { AppBar, Icon, Spinner, TabBar } from "./ui";
 
@@ -173,6 +176,11 @@ export default function ItemLookup() {
               </button>
             </form>
           </div>
+
+          <Link href="/to-list?scan=1" className="btn btn-secondary h-12 w-full">
+            <Icon name="stack" size={20} strokeWidth={1.8} />
+            Scan a stack of CDs
+          </Link>
         </section>
 
         {status.kind === "idle" && <HowItWorks />}
@@ -257,13 +265,19 @@ function LoadingResults({ label, preview }: { label: string; preview?: string })
 function Results({ data, preview, thumb }: { data: LookupResponse; preview?: string; thumb?: string }) {
   // Disc and inlay grades, picked here so the listing screen prices copies in the same condition.
   const [cond, setCond] = useState<ConditionDraft>({});
+  const router = useRouter();
   /**
    * Hands what the scan found (cover, album details) to the listing screen,
-   * which adds the CD to the Collection once the listing is reviewed.
+   * which adds the CD to the Collection once the listing is reviewed. The CD
+   * also goes on the To list tab, which keeps the listing's progress until it is published.
    */
   function handOff() {
     const item = itemFromLookup(data);
-    stashScanned(item && { ...item, coverUrl: item.coverUrl ?? thumb, query: listingQuery(data) });
+    const scanned = item && { ...item, coverUrl: item.coverUrl ?? thumb };
+    stashScanned(scanned && { ...scanned, query: listingQuery(data) });
+    const queued = batchStore.fromScan(data, cond);
+    if (scanned) batchStore.update(queued.id, { scanned, coverUrl: queued.coverUrl ?? thumb });
+    router.push(batchListingHref(queued, conditionParams(cond)));
   }
 
   const id = data.identification;
@@ -316,10 +330,10 @@ function Results({ data, preview, thumb }: { data: LookupResponse; preview?: str
         value={cond}
         onChange={setCond}
       />
-      <Link href={listingHref(data, conditionParams(cond))} onClick={handOff} className="btn btn-primary btn-lg w-full">
+      <button type="button" onClick={handOff} className="btn btn-primary btn-lg w-full">
         Create listing
         <Icon name="arrow" />
-      </Link>
+      </button>
 
       {/* Similar eBay listings are shown on the listing screen's price step, not here. */}
     </section>
