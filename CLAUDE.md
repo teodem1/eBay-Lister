@@ -47,7 +47,7 @@ Screens (phone first):
   weaker of disc and inlay (`ebayConditionFromGrades`). It sets the
   draft's condition and condition text; Claude never guesses them. The title ends with the seller's
   grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos come from the camera or
-  gallery in `PhotoPicker.tsx` and upload to eBay Picture Services through `/api/listing/photo`
+  gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`), and upload to eBay Picture Services through `/api/listing/photo`
   (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
