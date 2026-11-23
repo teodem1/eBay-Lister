@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { openMainBackCamera } from "@/lib/native/mainCamera";
 
 /**
  * In-app camera for listing photos, with a square guide to centre the CD.
@@ -31,11 +32,8 @@ export default function CdCamera({
   useEffect(() => {
     let stream: MediaStream | undefined;
     let cancelled = false;
-    navigator.mediaDevices
-      ?.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 2560 }, height: { ideal: 2560 } },
-        audio: false,
-      })
+    // The main 1x back lens, not the ultra-wide.
+    (navigator.mediaDevices ? openMainBackCamera() : Promise.reject(new Error("no camera")))
       .then(async (s) => {
         stream = s;
         if (cancelled) return s.getTracks().forEach((t) => t.stop());
@@ -45,7 +43,6 @@ export default function CdCamera({
         setReady(true);
       })
       .catch(() => !cancelled && unavailable.current());
-    if (!navigator.mediaDevices) unavailable.current();
     return () => {
       cancelled = true;
       stream?.getTracks().forEach((t) => t.stop());
