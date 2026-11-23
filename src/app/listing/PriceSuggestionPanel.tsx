@@ -195,7 +195,7 @@ function PriceCard({
 }: {
   keywords: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   /** What each comparable is, e.g. "sales" or "listings". */
   unit: string;
   suggestion: PriceSuggestion | null;
@@ -217,7 +217,7 @@ function PriceCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="t-headline">{title}</h3>
-          <p className="t-small text-muted">{subtitle}</p>
+          {subtitle && <p className="t-small text-muted">{subtitle}</p>}
         </div>
         {sold ? (
           <span className="chip shrink-0 border border-line-strong text-foreground">Sold</span>
@@ -315,13 +315,6 @@ function ConfidenceDots({ level }: { level: "low" | "medium" | "high" }) {
   );
 }
 
-function soldSubtitle(items: Comparable[]): string {
-  const dates = items.map((i) => i.soldDate).filter((d): d is string => Boolean(d)).sort();
-  return dates.length
-    ? `What buyers paid, ${shortDate(dates[0])} to ${shortDate(dates[dates.length - 1])}`
-    : "What buyers paid in the past year";
-}
-
 export default function PriceSuggestionPanel({
   check,
   loading,
@@ -342,7 +335,6 @@ export default function PriceSuggestionPanel({
       <StepHeading
         n={2}
         title="Price"
-        hint="Pick a price, or type your own later."
         action={
           <button
             type="button"
@@ -384,7 +376,6 @@ export default function PriceSuggestionPanel({
         <div className={`space-y-3 fade-in ${loading ? "opacity-60" : ""}`}>
           <PriceCard
             title="Last sold"
-            subtitle={soldSubtitle(check.soldItems)}
             unit="sales"
             suggestion={check.sold}
             items={check.soldItems}
@@ -396,7 +387,6 @@ export default function PriceSuggestionPanel({
           />
           <PriceCard
             title="Current listings"
-            subtitle="What similar items are listed at"
             unit="listings"
             suggestion={check.current}
             items={check.currentItems}

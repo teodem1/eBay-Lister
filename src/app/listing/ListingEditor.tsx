@@ -284,7 +284,7 @@ export default function ListingEditor({
       <AppBar title="Create listing" back={{ href: "/", label: "Find another item" }} />
       <main className={`page ${draft ? "pb-36" : ""}`}>
         <section className="flex flex-col gap-3">
-          <StepHeading n={1} title="Item" hint="What you're selling." />
+          <StepHeading n={1} title="Item" />
           <div className="card space-y-4">
             <label className="block">
               <span className="label">Item</span>
@@ -373,7 +373,6 @@ export default function ListingEditor({
             <StepHeading
               n={4}
               title="Review"
-              hint="Amber fields are Claude's guesses."
               action={
                 guessCount > 0 ? (
                   <span className="chip shrink-0 bg-warn-soft py-1 text-warn-ink">
@@ -673,7 +672,6 @@ export default function ListingEditor({
                 >
                   <Icon name="plus" size={18} /> Add specific
                 </button>
-                <p className="t-caption text-muted">Several values: separate with |</p>
               </div>
             </fieldset>
 
