@@ -1,9 +1,10 @@
 // Shared shapes for the listing draft that the review screen edits and the publish route sends to eBay.
 import { z } from "zod";
 import { CONDITIONS, type Condition } from "../ebay/sell";
-import { SellerConditionSchema } from "./condition";
+import { SellerConditionSchema } from "./conditionSchema";
 
-export const TITLE_MAX = 80; // eBay hard limit
+export { TITLE_MAX } from "./limits";
+import { TITLE_MAX } from "./limits";
 
 export const AspectSchema = z.object({
   name: z.string().min(1),

@@ -91,6 +91,10 @@ Server code:
 - `src/lib/ebay/comparables.ts` — Marketplace Insights sold search with Browse fallback.
 - `src/lib/pricing/` — price suggestion from comparables; served by `src/app/api/price-suggestion/route.ts`. See `docs/sold-price-data.md`.
 - `src/lib/ebay/sell.ts` — user-token client (OAuth, Inventory API, Taxonomy). `fetch` is injectable for tests.
+  eBay condition enums live in `src/lib/ebay/conditions.ts` (re-exported by `sell.ts`) so screens can use them
+  without bundling the client. Likewise zod schemas stay out of screen code: `SellerConditionSchema` is in
+  `src/lib/listing/conditionSchema.ts`, `TITLE_MAX` in `src/lib/listing/limits.ts`. Screens import types only from
+  `src/lib/listing/types.ts`.
 - `src/lib/ebay/publish.ts` — publish flow: location → inventory item → offer (create or update) → publish.
   Ported from `ebay_handler.py` in teodem1/ebay-item-listings-anthropic-claude.
 - `src/lib/ebay/oauth.ts` + `src/app/api/ebay/{connect,callback}` — one-time eBay sign-in that shows the refresh token for `EBAY_REFRESH_TOKEN` (needs `EBAY_RUNAME`).
