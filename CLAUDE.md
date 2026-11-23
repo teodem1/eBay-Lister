@@ -34,8 +34,10 @@ while developing).
 ## Structure
 
 Screens (phone first):
-- `/` — `src/components/ItemLookup.tsx`: photo, barcode scan, eBay matches. "Create listing"
-  hands the identified item to the listing screen.
+- `/` — `src/components/ItemLookup.tsx`: photo or barcode scan, then the album and the seller's disc and
+  inlay grades (`ConditionPicker compact`). "Create listing" hands both to the listing screen
+  (`?disc=&inlay=&sealed=`, `conditionParams`), whose price check then keeps only copies in that condition
+  (`sameCondition`). No eBay matches are listed here; they show on the price step.
   In the APK the buttons use the native camera and ML Kit scanner via `src/lib/native/`;
   in a browser, barcode scan uses the live scanner in `BarcodeScanner.tsx`.
 - `/listing` — `src/app/listing/ListingEditor.tsx`: Claude-written listing, review, publish.

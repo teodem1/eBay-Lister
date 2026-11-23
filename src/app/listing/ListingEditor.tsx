@@ -53,12 +53,16 @@ function GuessBadge() {
   );
 }
 
-export default function ListingEditor({ initial }: { initial: { query: string; barcode: string; price?: number } }) {
+export default function ListingEditor({
+  initial,
+}: {
+  initial: { query: string; barcode: string; price?: number; condition?: ConditionDraft };
+}) {
   const [query, setQuery] = useState(initial.query);
   const [barcode, setBarcode] = useState(initial.barcode);
   const [notes, setNotes] = useState("");
   // The seller's own condition, asked before Claude writes anything.
-  const [cond, setCond] = useState<ConditionDraft>({});
+  const [cond, setCond] = useState<ConditionDraft>(initial.condition ?? {});
   const condReady = conditionComplete(cond);
   const [loading, setLoading] = useState<"generate" | "publish" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +79,8 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   const [price, setPrice] = useState<number | undefined>(initial.price);
   const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(null);
   const [priceLoading, setPriceLoading] = useState(() => priceSuggestionBody(initial.query, initial.barcode) !== null);
+  // The grades from the scan screen narrow the first price check to copies in that condition.
+  const initialCondition = initial.condition?.condition;
   const [priceError, setPriceError] = useState<string | null>(null);
   // Once the user picks or types a price, a (re)loaded suggestion no longer overwrites it.
   const priceChosen = useRef(initial.price !== undefined);
@@ -114,7 +120,7 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
   );
 
   function refreshSuggestion() {
-    const body = priceSuggestionBody(query, barcode);
+    const body = priceSuggestionBody(query, barcode, conditionComplete(cond) ? cond.condition : undefined);
     if (!body) {
       setPriceError("Enter the item or a barcode first.");
       return;
@@ -126,9 +132,9 @@ export default function ListingEditor({ initial }: { initial: { query: string; b
 
   // Coming from the lookup screen: check prices straight away.
   useEffect(() => {
-    const body = priceSuggestionBody(initial.query, initial.barcode);
+    const body = priceSuggestionBody(initial.query, initial.barcode, initialCondition);
     if (body) startPriceCheck(body);
-  }, [initial.query, initial.barcode, startPriceCheck]);
+  }, [initial.query, initial.barcode, initialCondition, startPriceCheck]);
 
   function update<K extends keyof Draft>(key: K, value: Draft[K], guessKey: string = key as string) {
     setDraft((d) => (d ? { ...d, [key]: value } : d));

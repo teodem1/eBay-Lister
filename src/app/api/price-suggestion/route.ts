@@ -16,10 +16,11 @@ import { findBothComparables } from "@/lib/ebay/comparables";
 import { soldLookbackDays } from "@/lib/ebay/soldComps";
 import type { ComparableQuery, ComparableResult } from "@/lib/ebay/types";
 import { suggestPrice } from "@/lib/pricing/suggestPrice";
-import { onlyCds } from "@/lib/pricing/version";
+import { onlyCds, sameCondition } from "@/lib/pricing/version";
+import type { Condition } from "@/lib/ebay/sell";
 
 export async function POST(request: Request) {
-  let body: ComparableQuery & { myShippingCost?: number };
+  let body: ComparableQuery & { myShippingCost?: number; sellerCondition?: Condition };
   try {
     body = await request.json();
   } catch {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { myShippingCost, ...query } = body;
+    const { myShippingCost, sellerCondition, ...query } = body;
     const ebay = getEbayClient();
     // Quote shipping to the marketplace's own country unless told otherwise
     // (EBAY_CA -> CA).
@@ -45,7 +46,9 @@ export async function POST(request: Request) {
     // The current price is shown as what similar items are listed at, so no
     // asking-to-sold discount is applied to it.
     // The seller lists CDs: cassettes, vinyl, lots and signed copies never reach the screen.
-    const cdsOnly = (r: ComparableResult | null) => r && { ...r, items: onlyCds(r.items, query.keywords) };
+    // With the seller's grades, only copies in that condition count (sealed vs used, same grade).
+    const cdsOnly = (r: ComparableResult | null) =>
+      r && { ...r, items: sameCondition(onlyCds(r.items, query.keywords), sellerCondition) };
     const suggest = (raw: ComparableResult | null, unit: string, r = cdsOnly(raw)) =>
       r
         ? {

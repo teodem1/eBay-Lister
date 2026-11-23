@@ -22,12 +22,13 @@ export interface LookupError {
   error: string;
 }
 
-/** Hands the identified item to the listing screen (/listing reads q and barcode). */
-export function listingHref(data: LookupResponse): string {
+/** Hands the identified item (and the seller's grades) to the listing screen. */
+export function listingHref(data: LookupResponse, condition: Record<string, string> = {}): string {
   const q = listingQuery(data);
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (data.gtin) params.set("barcode", data.gtin);
+  for (const [k, v] of Object.entries(condition)) params.set(k, v);
   const qs = params.toString();
   return qs ? `/listing?${qs}` : "/listing";
 }

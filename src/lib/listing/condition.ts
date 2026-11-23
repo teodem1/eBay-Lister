@@ -115,3 +115,33 @@ export function conditionComplete(sc: Partial<SellerCondition>): sc is SellerCon
   if (!sc.condition) return false;
   return sc.condition === "NEW" || (!!sc.disc && !!sc.booklet);
 }
+
+/** The seller's grades as URL params, so the scan screen can hand them to the listing screen. */
+export function conditionParams(sc: Partial<SellerCondition>): Record<string, string> {
+  const p: Record<string, string> = {};
+  if (sc.condition === "NEW") p.sealed = "1";
+  if (sc.disc) p.disc = sc.disc;
+  if (sc.booklet) p.inlay = sc.booklet;
+  if (sc.case) p.case = sc.case;
+  if (sc.tested) p.tested = "1";
+  if (sc.notes) p.defects = sc.notes;
+  return p;
+}
+
+/** Reads conditionParams back; unknown values are ignored. */
+export function conditionFromParams(get: (key: string) => string | undefined): Partial<SellerCondition> {
+  const grade = (v?: string) => (GRADES as readonly string[]).includes(v ?? "") ? (v as Grade) : undefined;
+  const part = (v?: string) => (v === "Missing" ? ("Missing" as const) : grade(v));
+  if (get("sealed") === "1") return { condition: "NEW", notes: get("defects") || undefined };
+  const disc = grade(get("disc"));
+  const booklet = part(get("inlay"));
+  const out: Partial<SellerCondition> = {
+    disc,
+    booklet,
+    case: part(get("case")),
+    tested: get("tested") === "1" || undefined,
+    notes: get("defects") || undefined,
+    condition: ebayConditionFromGrades(disc, booklet),
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined)) as Partial<SellerCondition>;
+}

@@ -44,3 +44,14 @@ describe("ebayConditionFromGrades", () => {
     expect(ebayConditionFromGrades(undefined, "Mint")).toBeUndefined();
   });
 });
+
+describe("conditionParams / conditionFromParams", () => {
+  it("round-trips the grades through the URL", async () => {
+    const { conditionParams, conditionFromParams } = await import("./condition");
+    const p = conditionParams({ condition: "USED_VERY_GOOD", disc: "Near mint", booklet: "Very good+" });
+    expect(p).toEqual({ disc: "Near mint", inlay: "Very good+" });
+    expect(conditionFromParams((k) => p[k])).toEqual({ disc: "Near mint", booklet: "Very good+", condition: "USED_VERY_GOOD" });
+    expect(conditionFromParams((k) => ({ sealed: "1" })[k])).toEqual({ condition: "NEW" });
+    expect(conditionFromParams((k) => ({ disc: "Great" })[k])).toEqual({});
+  });
+});

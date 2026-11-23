@@ -6,12 +6,13 @@ import Link from "next/link";
 import { resizeImage } from "@/lib/resize-image";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import { listingHref, listingQuery, type LookupError, type LookupResponse } from "@/lib/lookup";
-import type { ItemSummary } from "@/lib/ebay/client";
 import { takeItemPhoto } from "@/lib/native/camera";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
 import { itemFromLookup } from "@/lib/collection/collection";
 import { stashScanned } from "@/lib/collection/store";
+import { conditionParams } from "@/lib/listing/condition";
+import ConditionPicker, { type ConditionDraft } from "@/app/listing/ConditionPicker";
 import { AppBar, Icon, Spinner, TabBar } from "./ui";
 
 const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
@@ -254,6 +255,8 @@ function LoadingResults({ label, preview }: { label: string; preview?: string })
 }
 
 function Results({ data, preview, thumb }: { data: LookupResponse; preview?: string; thumb?: string }) {
+  // Disc and inlay grades, picked here so the listing screen prices copies in the same condition.
+  const [cond, setCond] = useState<ConditionDraft>({});
   /**
    * Hands what the scan found (cover, album details) to the listing screen,
    * which adds the CD to the Collection once the listing is reviewed.
@@ -305,68 +308,22 @@ function Results({ data, preview, thumb }: { data: LookupResponse; preview?: str
             {n}
           </p>
         ))}
-        <Link href={listingHref(data)} onClick={handOff} className="btn btn-primary btn-lg mt-4 w-full">
-          Create listing
-          <Icon name="arrow" />
-        </Link>
       </div>
 
-      <div className="flex items-baseline justify-between px-1">
-        <h3 className="t-headline">{data.results.items.length ? "Similar on eBay" : "No similar items on eBay"}</h3>
-        {data.results.items.length > 0 && (
-          <span className="t-small text-muted">{data.results.total.toLocaleString()} found</span>
-        )}
-      </div>
-      <ul className="card divide-y divide-line overflow-hidden p-0">
-        {data.results.items.map((item) => (
-          <ListingCard key={item.itemId} item={item} />
-        ))}
-      </ul>
+      <ConditionPicker
+        compact
+        hint="Grade it now so the suggested price matches copies in the same condition."
+        value={cond}
+        onChange={setCond}
+      />
+      <Link href={listingHref(data, conditionParams(cond))} onClick={handOff} className="btn btn-primary btn-lg w-full">
+        Create listing
+        <Icon name="arrow" />
+      </Link>
+
+      {/* Similar eBay listings are shown on the listing screen's price step, not here. */}
     </section>
   );
-}
-
-function ListingCard({ item }: { item: ItemSummary }) {
-  return (
-    <li>
-      <a
-        href={item.itemWebUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex gap-3 p-3 transition-colors active:bg-surface-2"
-      >
-        {item.imageUrl ? (
-          // eBay image hosts vary, so a plain img avoids next/image domain config.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl bg-surface-2 object-cover" />
-        ) : (
-          <div className="h-16 w-16 shrink-0 rounded-xl bg-surface-2" />
-        )}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <p className="t-small line-clamp-2">{item.title}</p>
-          <p className="t-caption mt-auto truncate pt-1 text-muted">
-            {item.shippingCost
-              ? Number(item.shippingCost.value) === 0
-                ? "Free shipping"
-                : `+${money(item.shippingCost)} shipping`
-              : "Shipping n/a"}
-            {item.itemCountry && ` · from ${item.itemCountry}`}
-            {item.condition && ` · ${item.condition}`}
-          </p>
-        </div>
-        <p className="shrink-0 text-base font-bold tabular-nums tracking-tight">{money(item.price)}</p>
-      </a>
-    </li>
-  );
-}
-
-function money(p?: { value: string; currency: string }) {
-  if (!p) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(Number(p.value));
-  } catch {
-    return `${p.value} ${p.currency}`;
-  }
 }
 
 function ConfidenceBadge({ level }: { level: "high" | "medium" | "low" }) {
