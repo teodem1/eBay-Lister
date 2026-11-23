@@ -7,22 +7,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AppBar, Icon, Spinner, TabBar } from "@/components/ui";
 import ConditionPicker, { type ConditionDraft } from "@/app/listing/ConditionPicker";
 import { normalizeGtin } from "@/lib/identify/barcode";
-import type { LookupError, LookupResponse } from "@/lib/lookup";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
 import { stashScanned } from "@/lib/collection/store";
 import { conditionComplete, conditionParams } from "@/lib/listing/condition";
 import {
-  applyLookup,
   batchItemName,
   batchListingHref,
-  lookupsToStart,
   nextPending,
   progressLabel,
   summarize,
   type BatchItem,
 } from "@/lib/batch/queue";
 import { batchStore, useBatch } from "@/lib/batch/store";
+import CdCover from "@/components/CdCover";
+import { useBackgroundLookups } from "@/lib/batch/useBackgroundLookups";
 
 const BarcodeScanner = dynamic(() => import("@/components/BarcodeScanner"), { ssr: false });
 
@@ -63,7 +62,7 @@ export default function ToListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
-  useBackgroundLookups(items, hydrated);
+  useBackgroundLookups(batchStore, items, hydrated);
 
   function addCode(raw: string): string | null {
     const gtin = normalizeGtin(raw);
@@ -199,36 +198,6 @@ export default function ToListScreen() {
   );
 }
 
-/** Looks up album names for newly queued CDs, two at a time (eBay Browse + MusicBrainz, no sold-price checks). */
-function useBackgroundLookups(items: BatchItem[], hydrated: boolean) {
-  const inFlight = useRef(new Set<string>());
-  useEffect(() => {
-    if (!hydrated) return;
-    for (const item of lookupsToStart(items, inFlight.current)) {
-      inFlight.current.add(item.id);
-      batchStore.update(item.id, { lookup: "loading" });
-      fetch("/api/lookup/barcode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: item.barcode }),
-      })
-        .then(async (res) => {
-          const json = (await res.json()) as LookupResponse | LookupError;
-          if (!res.ok || "error" in json) throw new Error("error" in json ? json.error : `Error ${res.status}`);
-          batchStore.update(item.id, (x) => applyLookup(x, json));
-        })
-        .catch((err: unknown) => {
-          batchStore.update(item.id, { lookup: "error", error: err instanceof Error ? err.message : "Lookup failed" });
-        })
-        .finally(() => {
-          inFlight.current.delete(item.id);
-          // Wake the effect up for the next ones in line.
-          batchStore.update(item.id, (x) => ({ ...x }));
-        });
-    }
-  }, [items, hydrated]);
-}
-
 function PriceCheckNote({ used, pending }: { used: number; pending: number }) {
   return (
     <p className="t-small flex gap-2 px-1 text-muted">
@@ -269,7 +238,7 @@ function QueueRow({ item, open, onToggle }: { item: BatchItem; open: boolean; on
         aria-expanded={open}
         className="flex w-full items-center gap-3 p-3 text-left transition-colors active:bg-surface-2"
       >
-        <Cover item={item} />
+        <CdCover item={item} />
         <div className="flex min-w-0 flex-1 flex-col">
           <p className="truncate font-semibold">{loading && !item.title ? "Finding the album…" : batchItemName(item)}</p>
           <p className="t-small truncate text-muted">
@@ -337,7 +306,7 @@ function DoneList({ items }: { items: BatchItem[] }) {
       <ul className="card divide-y divide-line overflow-hidden p-0">
         {items.map((item) => (
           <li key={item.id} className="flex items-center gap-3 p-3">
-            <Cover item={item} small />
+            <CdCover item={item} small />
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{batchItemName(item)}</p>
               <p className="t-small text-muted">{item.status === "listed" ? "Listed" : "Skipped"}</p>
@@ -356,27 +325,6 @@ function DoneList({ items }: { items: BatchItem[] }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-function Cover({ item, small = false }: { item: BatchItem; small?: boolean }) {
-  const size = small ? "h-10 w-10" : "h-14 w-14";
-  const [failed, setFailed] = useState(false);
-  if (item.coverUrl && !failed) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={item.coverUrl}
-        alt=""
-        onError={() => setFailed(true)}
-        className={`${size} shrink-0 rounded-lg border border-line bg-surface-2 object-cover`}
-      />
-    );
-  }
-  return (
-    <div className={`${size} flex shrink-0 items-center justify-center rounded-lg bg-surface-2 text-subtle`}>
-      <Icon name="disc" size={small ? 20 : 26} strokeWidth={1.5} />
-    </div>
   );
 }
 

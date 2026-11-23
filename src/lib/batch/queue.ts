@@ -60,7 +60,32 @@ export interface BatchItem {
   listingId?: string;
   listingUrl?: string;
   doneAt?: string;
+  /** Only on the Auto tab: photos, the automatic price, and what was published. */
+  auto?: AutoState;
 }
+
+export type AutoStage = "waiting" | "pricing" | "writing" | "publishing" | "published" | "failed";
+
+/** An Auto tab CD's run: one photo, a price from the sold-price check, Claude's draft, the publish. */
+export interface AutoState {
+  stage: AutoStage;
+  /** eBay-hosted photo URLs, main photo first. */
+  photos: string[];
+  /** Kept so a retry never spends a second sold-price check. */
+  priceCheck?: PriceCheck;
+  price?: number;
+  /** How the price was picked, e.g. "Median of 6 sold". */
+  priceBasis?: string;
+  /** The listing as it is on eBay (after any edits). */
+  draft?: ListingDraftLike;
+  error?: string;
+  promotedPercent?: number;
+  promotionError?: string;
+  revisedAt?: string;
+}
+
+/** The published draft (same shape as ListingDraft, kept loose to avoid importing zod here). */
+export type ListingDraftLike = GeneratedListing["draft"] & { price: number };
 
 export type AddResult = { items: BatchItem[]; added: BatchItem } | { items: BatchItem[]; duplicate: BatchItem };
 

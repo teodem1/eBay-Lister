@@ -8,7 +8,7 @@ import { resizeImage } from "@/lib/resize-image";
 
 const MAX_PHOTOS = 24; // eBay's limit
 
-async function uploadPhoto(file: File): Promise<string> {
+export async function uploadPhoto(file: File): Promise<string> {
   // Square like a CD (centre crop), 1600px: eBay's largest size; smaller uploads are faster on mobile data.
   const blob = await resizeImage(file, 1600, 0.88, { square: true });
   const form = new FormData();

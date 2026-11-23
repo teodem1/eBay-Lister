@@ -76,6 +76,16 @@ Screens (phone first):
   grades, photos, the price check and Claude's draft on the entry as the seller goes and restores them on return
   (a saved price check is reused, so it costs one sold-comps call per CD). Publishing marks it listed; a CD from a
   scanned stack then opens the next one (`/to-list?next=1`).
+- `/auto` — `src/app/auto/AutoScreen.tsx` ("Auto" tab, a test of listing with no review screen; the other tabs are
+  unchanged): scan a stack, then per CD only the disc/inlay grade (`ConditionPicker compact`) and one photo (`CdCamera`,
+  closes after one shot). "Auto list N CDs" runs `useAutoRun.ts`, two CDs at a time: one price check (saved on the CD
+  so a retry never spends a second sold-comps call) → `pickAutoPrice` (last-sold recommended, else current, else it
+  fails rather than guess) → `/api/listing/generate` → `/api/listing/publish` (server defaults for shipping, Best Offer,
+  promotion) → saved to the Collection. Its list is a second batch store (`autoStore`, key `ebay-lister:auto:v1`,
+  `createBatchStore` in `src/lib/batch/store.ts`); logic in `src/lib/auto/auto.ts`. A failed CD shows "Try again" or
+  "List by hand" (moves it to To list with grades, photos and price check). Published CDs show as results; "Edit"
+  (`EditPublishedSheet.tsx`: title, price, description) sends the draft to `/api/listing/revise`
+  (`reviseListing` in `publish.ts`: replaces the inventory item and offer of the same SKU, no republish).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in
@@ -84,7 +94,7 @@ Screens (phone first):
   storage in `src/lib/collection/store.ts` (localStorage on the device, no server DB). Album
   details come from MusicBrainz + Cover Art Archive (`src/lib/music/musicbrainz.ts`, no key),
   added to lookup responses as `album`. When MusicBrainz misses a barcode, Claude Haiku reads artist and album
-  off the eBay titles (`src/lib/music/albumFromTitles.ts`). `TabBar` in `ui.tsx` switches Scan / Collection.
+  off the eBay titles (`src/lib/music/albumFromTitles.ts`). `TabBar` in `ui.tsx` switches Scan / To list / Auto / Collection.
 
 Look and feel: design tokens (light + dark) and component classes (`.page`, `.card`, `.field`,
 `.btn btn-primary`, `.notice`, `.skeleton`...) live in `src/app/globals.css`; shared pieces
