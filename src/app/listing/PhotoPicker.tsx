@@ -157,16 +157,18 @@ export default function PhotoPicker({
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn btn-secondary" disabled={full} onClick={() => setCamera(true)}>
-          <Icon name="camera" /> Take photo
+        <button type="button" className="btn btn-secondary h-14 px-5" disabled={full} onClick={() => setCamera(true)}>
+          <Icon name="camera" size={22} strokeWidth={1.8} />
+          Take photo
         </button>
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-secondary h-14 px-5"
           disabled={full}
           onClick={async () => add(await pickFromGallery())}
         >
-          <Icon name="plus" /> Gallery
+          <Icon name="plus" size={22} strokeWidth={1.8} />
+          Gallery
         </button>
       </div>
 
