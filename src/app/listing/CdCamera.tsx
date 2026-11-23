@@ -24,6 +24,26 @@ export default function CdCamera({
   const [ready, setReady] = useState(false);
   const [flash, setFlash] = useState(false);
   const [count, setCount] = useState(0);
+  // Guide side in px: fits inside the visible camera picture (never zooms the picture in).
+  const [guideSide, setGuideSide] = useState<number | null>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const fit = () => {
+      if (!video.videoWidth) return;
+      const box = video.getBoundingClientRect();
+      const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
+      setGuideSide(Math.round(0.92 * Math.min(video.videoWidth * scale, video.videoHeight * scale)));
+    };
+    video.addEventListener("loadedmetadata", fit);
+    video.addEventListener("resize", fit);
+    window.addEventListener("resize", fit);
+    return () => {
+      video.removeEventListener("loadedmetadata", fit);
+      video.removeEventListener("resize", fit);
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
   const unavailable = useRef(onUnavailable);
   useEffect(() => {
     unavailable.current = onUnavailable;
@@ -53,10 +73,10 @@ export default function CdCamera({
     const video = videoRef.current;
     const guide = guideRef.current;
     if (!video || !guide || !video.videoWidth) return;
-    // The video fills the screen (object-cover): map the guide's box back to video pixels.
+    // The whole camera picture is shown (object-contain, no zoom): map the guide's box back to video pixels.
     const box = video.getBoundingClientRect();
     const g = guide.getBoundingClientRect();
-    const scale = Math.max(box.width / video.videoWidth, box.height / video.videoHeight);
+    const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
     const offX = (video.videoWidth * scale - box.width) / 2;
     const offY = (video.videoHeight * scale - box.height) / 2;
     const side = Math.min(g.width / scale, video.videoWidth, video.videoHeight);
@@ -83,10 +103,11 @@ export default function CdCamera({
   // Portal to <body>: the listing cards animate with a transform, which would trap a fixed overlay.
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black fade-in" role="dialog" aria-modal aria-label="Take listing photos">
-      <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline muted />
+      <video ref={videoRef} className="absolute inset-0 h-full w-full object-contain" playsInline muted />
       {/* Square guide the size of the CD, with a disc outline to line up with */}
       <div
         ref={guideRef}
+        style={guideSide ? { width: guideSide } : undefined}
         className="pointer-events-none absolute left-1/2 top-1/2 aspect-square w-[min(84vw,60vh)] -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"
       >
         <div className="absolute inset-[6%] rounded-full border border-dashed border-white/50" />
