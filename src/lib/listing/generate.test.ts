@@ -17,7 +17,6 @@ const claudeOut: ClaudeListing = {
     { name: "Couleur", value: "Blanc", guessed: true },
   ],
   descriptionHtml: '<p onclick="x()">Bonne console</p><script>alert(1)</script>',
-  packageWeightKg: 0,
   guessedFields: ["condition"],
   checks: ["Confirm the original box is included"],
 };
@@ -58,12 +57,11 @@ describe("generateListing", () => {
     expect(req.messages[0].content).toContain("en-CA");
   });
 
-  it("swaps a condition the category refuses and keeps the package estimate", async () => {
+  it("swaps a condition the category refuses and uses the default package", async () => {
     const { client, parse } = fakeAnthropic({
       ...claudeOut,
       condition: "USED_GOOD",
       guessedFields: [],
-      packageWeightKg: 0.456,
     });
     const ebay = {
       getCategoryTreeId: vi.fn().mockResolvedValue("2"),
@@ -80,9 +78,8 @@ describe("generateListing", () => {
     expect(out.guessedFields).toContain("condition");
     expect(out.warnings.join(" ")).toMatch(/USED_GOOD/);
     expect(out.conditionsByCategory["117042"]).toHaveLength(3);
-    expect(out.draft.packageWeightKg).toBe(0.46);
+    expect(out.draft.packageWeightKg).toBe(0.065);
     expect(out.draft.packageDimensionsCm).toEqual({ length: 12, width: 15, height: 1 });
-    expect(out.guessedFields).toContain("package");
     expect(parse.mock.calls[0][0].messages[0].content).toContain("Allowed conditions for this category: NEW, USED_EXCELLENT");
   });
 
@@ -119,7 +116,7 @@ describe("trimTitle / sanitizeDescription", () => {
       },
       { anthropic: client, config },
     );
-    expect(out.draft.title.endsWith(" CD: NM / Inlay: VG+")).toBe(true);
+    expect(out.draft.title.endsWith(" CD (Disc: Near Mint / Inlay: Very Good+)")).toBe(true);
     expect(out.draft.title.length).toBeLessThanOrEqual(80);
     expect(out.draft.condition).toBe("USED_VERY_GOOD");
     expect(out.draft.conditionDescription).toBe(

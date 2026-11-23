@@ -63,28 +63,35 @@ export function conditionSummary(sc: SellerCondition): string {
   return parts.join(" ").slice(0, 1000);
 }
 
-/** Short grades for the title, as record sellers write them. */
-const GRADE_ABBR: Record<Grade, string> = {
-  Mint: "M",
-  "Near mint": "NM",
-  "Very good+": "VG+",
-  "Very good": "VG",
-  Good: "G",
-  Fair: "F",
-  Poor: "P",
-};
+/** A grade as the title writes it: "Near mint" -> "Near Mint", "Very good+" -> "Very Good+". */
+const titleCase = (g: string) => g.replace(/\b\w/g, (c) => c.toUpperCase());
 
 /**
- * The condition part of the listing title, e.g. "CD: NM / Inlay: VG+".
- * Empty when there is nothing to say; "Sealed" for a new sealed CD.
+ * The condition part of the listing title, e.g. "(Disc: Near Mint / Inlay: Very Good+)".
+ * Empty when there is nothing to say; "(Sealed)" for a new sealed CD.
  */
 export function conditionTitleSuffix(sc: SellerCondition): string {
-  if (sc.condition === "NEW") return "Sealed";
+  if (sc.condition === "NEW") return "(Sealed)";
   const parts: string[] = [];
-  if (sc.disc) parts.push(`CD: ${GRADE_ABBR[sc.disc]}`);
-  if (sc.booklet === "Missing") parts.push("No Inlay");
-  else if (sc.booklet) parts.push(`Inlay: ${GRADE_ABBR[sc.booklet]}`);
-  return parts.join(" / ");
+  if (sc.disc) parts.push(`Disc: ${titleCase(sc.disc)}`);
+  if (sc.booklet) parts.push(`Inlay: ${titleCase(sc.booklet)}`);
+  return parts.length ? `(${parts.join(" / ")})` : "";
+}
+
+/**
+ * The listing title for a graded CD: "Artist Album CD (Disc: Near Mint / Inlay: Near Mint)".
+ * Any format word Claude left at the end of the album name is dropped first.
+ */
+export function cdTitle(album: string, sc: SellerCondition, max = 80): string {
+  const suffix = `CD ${conditionTitleSuffix(sc)}`.trim();
+  let name = album.replace(/\s+/g, " ").replace(/[\s\-–,]*\b(compact disc|cd)\b\s*$/i, "").trim();
+  const room = max - suffix.length - 1;
+  if (name.length > room) {
+    const cut = name.slice(0, room + 1);
+    const space = cut.lastIndexOf(" ");
+    name = (space > room * 0.6 ? cut.slice(0, space) : name.slice(0, room)).trim();
+  }
+  return `${name} ${suffix}`;
 }
 
 /** Which eBay condition each grade maps to (eBay's music conditions). */

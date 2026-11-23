@@ -5,7 +5,7 @@ import { z } from "zod";
 import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
 import { cdKeywords } from "../pricing/version";
-import { conditionSummary, conditionTitleSuffix } from "./condition";
+import { cdTitle, conditionSummary } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
 export const MODEL = "claude-opus-5-5";
@@ -25,12 +25,14 @@ const ClaudeListingSchema = z.object({
     }),
   ),
   descriptionHtml: z.string(),
-  packageWeightKg: z.number().describe("Estimated packed weight in kg including box and padding; 0 if no idea"),
   guessedFields: z
     .array(z.enum(["title", "condition", "conditionDescription", "brand", "mpn", "description"]))
     .describe("Top-level fields that rely on assumptions"),
   checks: z.array(z.string()).describe("Short things the seller must verify before publishing"),
 });
+/** Default packed weight of one CD: 65 g. */
+export const DEFAULT_PACKAGE_WEIGHT_KG = 0.065;
+
 /** Default package size in cm (a CD mailer): 12 long, 15 wide, 1 thick. */
 export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 1 } as const;
 
@@ -43,7 +45,7 @@ Title rules:
 - Put the words buyers search first. No ALL CAPS words except acronyms, no "L@@K", no emojis, no punctuation spam, no words like "wow" or "rare" unless true.
 - Never invent a model number, size or spec. If unsure, leave it out of the title.
 - For music, start with the artist and the album name as given in "Item" (never a seller's listing title), then format and useful specifics (year, country of pressing, label, edition).
-- When the seller gives their condition, do not put any condition words in the title: the app appends the seller's grades itself.
+- When the seller gives their condition (a CD), the title is ONLY the artist and the album name as given in "Item", e.g. "Genesis Wind & Wuthering": no label, genre, year, format or condition words. The app adds " CD (Disc: ... / Inlay: ...)" itself.
 
 Item specifics:
 - Fill every aspect the category lists, required ones first, using eBay's usual values (e.g. "Apple", "128 GB").
@@ -51,8 +53,6 @@ Item specifics:
 - Mark guessed=true whenever the value is not stated by the seller and not certain from the barcode or exact model. If you have no reasonable value, give an empty string and guessed=true.
 
 Condition: when the seller gives their condition, use exactly that condition and describe the item's condition using only the seller's words and grades: never add defects, wear or claims (like "tested") they did not state, and never use the condition of other eBay listings. Otherwise pick only from the allowed conditions listed for the category, when a list is given.
-
-Package: estimate the packed weight for shipping the item (item plus padding). It is always an estimate.
 
 Description (descriptionHtml):
 - Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
@@ -162,9 +162,8 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   const out = response.parsed_output;
   if (!out) throw new Error(`Claude returned no listing (stop reason: ${response.stop_reason}).`);
 
-  // The seller's grades end the title ("CD: NM / Inlay: VG+"); Claude's part is trimmed to fit.
-  const suffix = input.sellerCondition ? conditionTitleSuffix(input.sellerCondition) : "";
-  const title = suffix ? `${trimTitle(out.title, TITLE_MAX - suffix.length - 1)} ${suffix}` : trimTitle(out.title);
+  // A graded CD gets the seller's title template: "Artist Album CD (Disc: Near Mint / Inlay: Near Mint)".
+  const title = input.sellerCondition ? cdTitle(out.title, input.sellerCondition, TITLE_MAX) : trimTitle(out.title);
   // The seller's condition wins over Claude's; it is a fact, not a guess.
   const seller = input.sellerCondition;
   const guessedFields: string[] = seller
@@ -178,7 +177,6 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     warnings.push(`eBay doesn't accept "${wanted}" in this category, so the condition was set to "${condition}".`);
     if (!guessedFields.includes("condition")) guessedFields.push("condition");
   }
-  if (out.packageWeightKg > 0) guessedFields.push("package"); // the weight is always an estimate
   if (!input.suggestedPrice) warnings.push("No suggested price was passed in. Enter a price before publishing.");
 
   return {
@@ -199,7 +197,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       mpn: out.mpn || undefined,
       promotedPercent: deps.config.promotedPercent || undefined,
       bestOfferMinPercent: deps.config.bestOfferMinPercent || undefined,
-      packageWeightKg: out.packageWeightKg > 0 ? Math.round(out.packageWeightKg * 100) / 100 : undefined,
+      packageWeightKg: DEFAULT_PACKAGE_WEIGHT_KG,
       // The seller's standard CD mailer size; editable on the review step.
       packageDimensionsCm: { ...DEFAULT_PACKAGE_CM },
     },

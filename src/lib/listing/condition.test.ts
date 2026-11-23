@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conditionComplete, conditionSummary, conditionTitleSuffix, ebayConditionFromGrades } from "./condition";
+import { conditionComplete, conditionSummary, cdTitle, conditionTitleSuffix, ebayConditionFromGrades } from "./condition";
 
 describe("conditionSummary", () => {
   it("writes the seller's grades as one condition text", () => {
@@ -27,10 +27,22 @@ describe("conditionComplete", () => {
 
 describe("conditionTitleSuffix", () => {
   it("gives the CD and inlay grades for the title", () => {
-    expect(conditionTitleSuffix({ condition: "USED_VERY_GOOD", disc: "Near mint", booklet: "Very good+" })).toBe("CD: NM / Inlay: VG+");
-    expect(conditionTitleSuffix({ condition: "USED_GOOD", disc: "Good", booklet: "Missing" })).toBe("CD: G / No Inlay");
-    expect(conditionTitleSuffix({ condition: "USED_GOOD", disc: "Very good" })).toBe("CD: VG");
-    expect(conditionTitleSuffix({ condition: "NEW" })).toBe("Sealed");
+    expect(conditionTitleSuffix({ condition: "USED_VERY_GOOD", disc: "Near mint", booklet: "Very good+" })).toBe(
+      "(Disc: Near Mint / Inlay: Very Good+)",
+    );
+    expect(conditionTitleSuffix({ condition: "USED_GOOD", disc: "Good", booklet: "Missing" })).toBe("(Disc: Good / Inlay: Missing)");
+    expect(conditionTitleSuffix({ condition: "USED_GOOD", disc: "Very good" })).toBe("(Disc: Very Good)");
+    expect(conditionTitleSuffix({ condition: "NEW" })).toBe("(Sealed)");
+  });
+
+  it("builds the CD title from the album name", () => {
+    const sc = { condition: "LIKE_NEW" as const, disc: "Near mint" as const, booklet: "Near mint" as const };
+    expect(cdTitle("Genesis Wind & Wuthering", sc)).toBe("Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)");
+    expect(cdTitle("Genesis Wind & Wuthering CD", sc)).toBe("Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)");
+    expect(cdTitle("Genesis Wind & Wuthering", { condition: "NEW" })).toBe("Genesis Wind & Wuthering CD (Sealed)");
+    const long = cdTitle("Some Artist With A Long Name The Very Long Album Title Deluxe", sc);
+    expect(long.length).toBeLessThanOrEqual(80);
+    expect(long.endsWith(" CD (Disc: Near Mint / Inlay: Near Mint)")).toBe(true);
   });
 });
 
