@@ -344,20 +344,6 @@ export default function ListingEditor({
               }
             />
 
-            {(generated.warnings.length > 0 || generated.checks.length > 0) && (
-              <div className="notice notice-warn flex gap-2.5">
-                <Icon name="alert" className="mt-0.5" />
-                <div>
-                  <p className="font-semibold">Check before publishing</p>
-                  <ul className="mt-1 list-disc pl-5">
-                    {[...generated.warnings, ...generated.checks].map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-
             <div className="card space-y-4">
               <h3 className="t-headline">Basics</h3>
               <label className="block">

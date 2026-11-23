@@ -94,6 +94,7 @@ Server code:
 - `src/lib/ebay/config.ts` — env settings for both clients.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
+  Package size defaults to 12 × 15 × 1 cm (`DEFAULT_PACKAGE_CM`, a CD mailer); Claude only estimates the weight.
 - `src/app/api/lookup/{barcode,photo}`, `src/app/api/price-suggestion` and `src/app/api/listing/{generate,publish}` — server routes.
 
 Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine).

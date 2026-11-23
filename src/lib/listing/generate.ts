@@ -4,6 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
+import { cdKeywords } from "../pricing/version";
 import { conditionSummary, conditionTitleSuffix } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
@@ -25,14 +26,14 @@ const ClaudeListingSchema = z.object({
   ),
   descriptionHtml: z.string(),
   packageWeightKg: z.number().describe("Estimated packed weight in kg including box and padding; 0 if no idea"),
-  packageDimensionsCm: z
-    .object({ length: z.number(), width: z.number(), height: z.number() })
-    .describe("Estimated shipping box size in cm; zeros if no idea"),
   guessedFields: z
     .array(z.enum(["title", "condition", "conditionDescription", "brand", "mpn", "description"]))
     .describe("Top-level fields that rely on assumptions"),
   checks: z.array(z.string()).describe("Short things the seller must verify before publishing"),
 });
+/** Default package size in cm (a CD mailer): 12 long, 15 wide, 1 thick. */
+export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 1 } as const;
+
 export type ClaudeListing = z.infer<typeof ClaudeListingSchema>;
 
 const SYSTEM = `You write eBay listings that rank well in eBay search (Cassini) and convert.
@@ -51,7 +52,7 @@ Item specifics:
 
 Condition: when the seller gives their condition, use exactly that condition and describe the item's condition using only the seller's words and grades: never add defects, wear or claims (like "tested") they did not state, and never use the condition of other eBay listings. Otherwise pick only from the allowed conditions listed for the category, when a list is given.
 
-Package: estimate the packed weight and a sensible box size for shipping the item (item plus box and padding). These are always estimates.
+Package: estimate the packed weight for shipping the item (item plus padding). It is always an estimate.
 
 Description (descriptionHtml):
 - Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
@@ -90,6 +91,15 @@ export function makeSku(barcode?: string): string {
   return (digits ? `BC-${digits}-${suffix}` : `ITEM-${suffix}${Math.random().toString(36).slice(2, 6)}`).toUpperCase();
 }
 
+/**
+ * The seller lists CDs: search categories as a CD and put Music > CDs first, so
+ * eBay's suggestion doesn't land in Records (vinyl) and refuse the CD conditions.
+ */
+export function cdCategoryFirst(categories: CategorySuggestion[]): CategorySuggestion[] {
+  const i = categories.findIndex((c) => /^CDs?$/i.test(c.categoryName));
+  return i > 0 ? [categories[i], ...categories.slice(0, i), ...categories.slice(i + 1)] : categories;
+}
+
 export async function generateListing(input: ItemInput, deps: GenerateDeps): Promise<GeneratedListing> {
   const warnings: string[] = [];
   let categories: CategorySuggestion[] = [];
@@ -99,7 +109,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   if (deps.ebay) {
     try {
       const treeId = await deps.ebay.getCategoryTreeId();
-      categories = await deps.ebay.suggestCategories(input.query, treeId);
+      categories = cdCategoryFirst(await deps.ebay.suggestCategories(cdKeywords(input.query), treeId));
       if (categories[0]) aspectHints = await deps.ebay.getCategoryAspects(categories[0].categoryId, treeId);
     } catch (err) {
       warnings.push(`Could not look up the eBay category: ${(err as Error).message}`);
@@ -167,9 +177,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     warnings.push(`eBay doesn't accept "${wanted}" in this category, so the condition was set to "${condition}".`);
     if (!guessedFields.includes("condition")) guessedFields.push("condition");
   }
-  const dims = out.packageDimensionsCm;
-  const hasDims = dims.length > 0 && dims.width > 0 && dims.height > 0;
-  if (out.packageWeightKg > 0 || hasDims) guessedFields.push("package"); // always an estimate
+  if (out.packageWeightKg > 0) guessedFields.push("package"); // the weight is always an estimate
   if (!input.suggestedPrice) warnings.push("No suggested price was passed in. Enter a price before publishing.");
 
   return {
@@ -191,9 +199,8 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       promotedPercent: deps.config.promotedPercent || undefined,
       bestOfferMinPercent: deps.config.bestOfferMinPercent || undefined,
       packageWeightKg: out.packageWeightKg > 0 ? Math.round(out.packageWeightKg * 100) / 100 : undefined,
-      packageDimensionsCm: hasDims
-        ? { length: Math.ceil(dims.length), width: Math.ceil(dims.width), height: Math.ceil(dims.height) }
-        : undefined,
+      // The seller's standard CD mailer size; editable on the review step.
+      packageDimensionsCm: { ...DEFAULT_PACKAGE_CM },
     },
     categorySuggestions: categories,
     conditionsByCategory,
