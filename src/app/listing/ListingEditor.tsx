@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/sell";
 import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
@@ -9,7 +8,6 @@ import type { ComparableQuery } from "@/lib/ebay/types";
 import { conditionComplete, conditionSummary } from "@/lib/listing/condition";
 import ConditionPicker, { type ConditionDraft } from "./ConditionPicker";
 import DescriptionEditor from "./DescriptionEditor";
-import { stashPublished } from "@/lib/listing/lastPublished";
 import PhotoPicker from "./PhotoPicker";
 import PriceSuggestionPanel from "./PriceSuggestionPanel";
 import SaveToCollection from "./SaveToCollection";
@@ -77,13 +75,13 @@ export default function ListingEditor({
   // "Shipping and offers" starts open when Claude guessed the package size.
   const [moreOpen, setMoreOpen] = useState(false);
   const [published, setPublished] = useState<PublishOk | null>(null);
-  const router = useRouter();
-  // Once published (and saved to the Collection), go back to the main screen for the next CD.
+  // Once published (and saved to the Collection), start fresh on the main screen for the next CD.
+  // A full load, so the previous scan result isn't kept by the router cache.
   useEffect(() => {
     if (!published) return;
-    const t = setTimeout(() => router.replace("/"), 1500);
+    const t = setTimeout(() => window.location.replace("/"), 1500);
     return () => clearTimeout(t);
-  }, [published, router]);
+  }, [published]);
   // The price to list at: from ?price=, a suggestion option, or typed by the user.
   const [price, setPrice] = useState<number | undefined>(initial.price);
   const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(null);
@@ -223,7 +221,6 @@ export default function ListingEditor({
         throw new Error(data.error ?? "Publish failed");
       }
       const ok = data as PublishOk;
-      stashPublished({ listingId: ok.listingId, url: ok.url, title: draft.title, promotionError: ok.promotionError });
       setPublished(ok);
     } catch (e) {
       setError((e as Error).message);

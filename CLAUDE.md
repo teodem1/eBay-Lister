@@ -64,7 +64,7 @@ Screens (phone first):
   searches return that exact pressing; only with fewer than 3 matches do they search by name (a second
   sold-comps call). Barcode matches skip the Canadian-copies filter.
 
-  After a successful publish the screen returns to `/`, which shows "Published on eBay" once (`lastPublished.ts`).
+  After a successful publish (the green "Published" notice shows for 1.5 s) the app reloads `/` fresh for the next CD.
 
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
