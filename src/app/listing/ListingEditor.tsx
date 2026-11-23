@@ -389,6 +389,18 @@ export default function ListingEditor({
               }
             />
 
+            {/* Description first, right after the price step's listings. */}
+            <div className="card">
+              <h3 className="t-headline mb-3 flex items-center">
+                Description{isGuess("description") && <GuessBadge />}
+              </h3>
+              <DescriptionEditor
+                html={draft.descriptionHtml}
+                fieldClass={field(isGuess("description"))}
+                onChange={(html) => update("descriptionHtml", html, "description")}
+              />
+            </div>
+
             <div className="card space-y-4">
               <h3 className="t-headline">Basics</h3>
               <label className="block">
@@ -664,17 +676,6 @@ export default function ListingEditor({
                 <p className="t-caption text-muted">Several values: separate with |</p>
               </div>
             </fieldset>
-
-            <div className="card">
-              <h3 className="t-headline mb-3 flex items-center">
-                Description{isGuess("description") && <GuessBadge />}
-              </h3>
-              <DescriptionEditor
-                html={draft.descriptionHtml}
-                fieldClass={field(isGuess("description"))}
-                onChange={(html) => update("descriptionHtml", html, "description")}
-              />
-            </div>
 
           </section>
         )}
