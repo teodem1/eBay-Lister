@@ -79,3 +79,27 @@ describe("CD-only search", () => {
     expect(titles).toEqual(["GENESIS - Wind & Wuthering 82690-2 ATCO CD"]);
   });
 });
+
+describe("sameCondition", () => {
+  const cc = (condition: string, price: number) => ({ ...c("Wind & Wuthering CD", "CA", price), condition }) as Comparable;
+  const items = [
+    cc("Brand New", 30),
+    cc("New", 28),
+    cc("Brand New", 32),
+    cc("Pre-Owned", 12),
+    cc("Very Good", 14),
+    cc("Very Good", 15),
+    cc("Very Good", 13),
+    cc("Good", 9),
+  ];
+  it("keeps sealed copies for a sealed CD", async () => {
+    const { sameCondition } = await import("./version");
+    expect(sameCondition(items, "NEW").map((i) => i.price.value)).toEqual([30, 28, 32]);
+  });
+  it("keeps the same grade when there are enough, else all used copies", async () => {
+    const { sameCondition } = await import("./version");
+    expect(sameCondition(items, "USED_VERY_GOOD").map((i) => i.price.value)).toEqual([14, 15, 13]);
+    expect(sameCondition(items, "USED_GOOD").map((i) => i.price.value)).toEqual([12, 14, 15, 13, 9]);
+    expect(sameCondition(items, undefined)).toHaveLength(8);
+  });
+});

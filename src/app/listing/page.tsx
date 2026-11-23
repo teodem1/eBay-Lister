@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Spinner } from "@/components/ui";
+import { conditionFromParams } from "@/lib/listing/condition";
 import ListingEditor from "./ListingEditor";
 
 type SearchParams = PageProps<"/listing">["searchParams"];
@@ -15,6 +16,8 @@ async function EditorFromParams({ searchParams }: { searchParams: SearchParams }
         query: one(params.q),
         barcode: one(params.barcode),
         price: Number.isFinite(price) && price > 0 ? price : undefined,
+        // Disc and inlay grades picked on the scan screen.
+        condition: conditionFromParams((k) => one(params[k]) || undefined),
       }}
     />
   );

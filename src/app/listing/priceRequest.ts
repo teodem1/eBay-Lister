@@ -1,4 +1,5 @@
 import type { Comparable, ComparableQuery } from "@/lib/ebay/types";
+import type { Condition } from "@/lib/ebay/sell";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
 
 /** A product barcode (UPC/EAN/GTIN) is 8 to 14 digits. */
@@ -12,10 +13,15 @@ export function isGtin(code: string): boolean {
  * the item text always goes along as keywords. Returns null when there is
  * nothing to search on.
  */
-export function priceSuggestionBody(query: string, barcode: string): ComparableQuery | null {
+export function priceSuggestionBody(
+  query: string,
+  barcode: string,
+  sellerCondition?: Condition,
+): (ComparableQuery & { sellerCondition?: Condition }) | null {
   const keywords = query.trim();
   const code = barcode.trim();
-  const body: ComparableQuery = {};
+  const body: ComparableQuery & { sellerCondition?: Condition } = {};
+  if (sellerCondition) body.sellerCondition = sellerCondition;
   if (keywords) body.keywords = keywords;
   if (isGtin(code)) body.gtin = code;
   return body.keywords || body.gtin ? body : null;

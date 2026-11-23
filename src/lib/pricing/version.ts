@@ -9,6 +9,7 @@
  * Pure functions, shared by the price route and the price screen.
  */
 import type { Comparable } from "../ebay/types";
+import type { Condition } from "../ebay/sell";
 
 /** Other versions, by a title word. Each is skipped if the seller's keywords use it too. */
 const OTHER_VERSIONS: { label: string; re: RegExp }[] = [
@@ -98,4 +99,30 @@ export function selectSameVersion(
     }
   }
   return { items: kept, otherVersionsLeftOut, homeCountry, notes };
+}
+
+/** A comparable's eBay condition text ("Pre-Owned", "Very Good", "Brand New"...) as a condition group. */
+export function conditionGroup(text: string | null): { isNew: boolean; level: Condition | null } {
+  const t = (text ?? "").toLowerCase();
+  if (/like new/.test(t)) return { isNew: false, level: "LIKE_NEW" };
+  if (/\bnew\b|sealed/.test(t) && !/open box|other|defect/.test(t)) return { isNew: true, level: "NEW" };
+  if (/very good/.test(t)) return { isNew: false, level: "USED_VERY_GOOD" };
+  if (/acceptable/.test(t)) return { isNew: false, level: "USED_ACCEPTABLE" };
+  if (/\bgood\b/.test(t)) return { isNew: false, level: "USED_GOOD" };
+  return { isNew: false, level: null }; // "Pre-Owned", "Used": used, level unknown
+}
+
+/**
+ * Comparables in the seller's condition: sealed copies for a sealed CD, used
+ * ones otherwise, and the same eBay grade (Like new, Very good...) when at
+ * least MIN_MATCHES copies have it. Too few matches and the wider set is kept.
+ */
+export function sameCondition(items: Comparable[], condition: Condition | undefined): Comparable[] {
+  if (!condition) return items;
+  const wantNew = condition === "NEW";
+  const sameGroup = items.filter((c) => conditionGroup(c.condition).isNew === wantNew);
+  if (sameGroup.length < MIN_MATCHES) return items;
+  if (wantNew) return sameGroup;
+  const sameLevel = sameGroup.filter((c) => conditionGroup(c.condition).level === condition);
+  return sameLevel.length >= MIN_MATCHES ? sameLevel : sameGroup;
 }
