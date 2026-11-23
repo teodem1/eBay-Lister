@@ -4,6 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
+import { cdKeywords } from "../pricing/version";
 import { conditionSummary, conditionTitleSuffix } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
@@ -90,6 +91,15 @@ export function makeSku(barcode?: string): string {
   return (digits ? `BC-${digits}-${suffix}` : `ITEM-${suffix}${Math.random().toString(36).slice(2, 6)}`).toUpperCase();
 }
 
+/**
+ * The seller lists CDs: search categories as a CD and put Music > CDs first, so
+ * eBay's suggestion doesn't land in Records (vinyl) and refuse the CD conditions.
+ */
+export function cdCategoryFirst(categories: CategorySuggestion[]): CategorySuggestion[] {
+  const i = categories.findIndex((c) => /^CDs?$/i.test(c.categoryName));
+  return i > 0 ? [categories[i], ...categories.slice(0, i), ...categories.slice(i + 1)] : categories;
+}
+
 export async function generateListing(input: ItemInput, deps: GenerateDeps): Promise<GeneratedListing> {
   const warnings: string[] = [];
   let categories: CategorySuggestion[] = [];
@@ -99,7 +109,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   if (deps.ebay) {
     try {
       const treeId = await deps.ebay.getCategoryTreeId();
-      categories = await deps.ebay.suggestCategories(input.query, treeId);
+      categories = cdCategoryFirst(await deps.ebay.suggestCategories(cdKeywords(input.query), treeId));
       if (categories[0]) aspectHints = await deps.ebay.getCategoryAspects(categories[0].categoryId, treeId);
     } catch (err) {
       warnings.push(`Could not look up the eBay category: ${(err as Error).message}`);

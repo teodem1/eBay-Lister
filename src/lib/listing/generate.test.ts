@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { getEbayConfig } from "../ebay/config";
 import type { EbaySellClient } from "../ebay/sell";
-import { generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
+import { cdCategoryFirst, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
 
 const config = getEbayConfig({});
 
@@ -129,5 +129,14 @@ describe("trimTitle / sanitizeDescription", () => {
     const text = parse.mock.calls[0][0].messages[0].content as string;
     expect(text).toContain("Seller's condition (use exactly this): USED_VERY_GOOD. Disc: near mint.");
     expect(text).not.toContain("condition unknown");
+  });
+});
+
+describe("cdCategoryFirst", () => {
+  it("puts Music > CDs ahead of Records", () => {
+    const rec = { categoryId: "176985", categoryName: "Records", path: "Music > Records" };
+    const cd = { categoryId: "176984", categoryName: "CDs", path: "Music > CDs" };
+    expect(cdCategoryFirst([rec, cd]).map((c) => c.categoryId)).toEqual(["176984", "176985"]);
+    expect(cdCategoryFirst([rec])).toEqual([rec]);
   });
 });
