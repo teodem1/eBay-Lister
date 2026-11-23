@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
-import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/sell";
-import { TITLE_MAX, type GeneratedListing, type ListingDraft } from "@/lib/listing/types";
+import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/conditions";
+import { TITLE_MAX } from "@/lib/listing/limits";
+import type { GeneratedListing, ListingDraft } from "@/lib/listing/types";
 import type { ComparableQuery } from "@/lib/ebay/types";
 import { conditionComplete, conditionSummary } from "@/lib/listing/condition";
 import ConditionPicker, { type ConditionDraft } from "./ConditionPicker";

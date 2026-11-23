@@ -11,6 +11,8 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  // Only the device-check page uses it: don't make every page download it up front.
+  preload: false,
 });
 
 export const metadata: Metadata = {

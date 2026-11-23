@@ -1,19 +1,5 @@
-import {
-  BarcodeFormat,
-  BarcodeScanner,
-} from "@capacitor-mlkit/barcode-scanning";
 import { isCancel, pickFileFromInput } from "./camera";
 import { isNativeApp } from "./platform";
-
-/** Product barcodes found on retail items (EAN/UPC), plus common extras. */
-const PRODUCT_FORMATS = [
-  BarcodeFormat.Ean13,
-  BarcodeFormat.Ean8,
-  BarcodeFormat.UpcA,
-  BarcodeFormat.UpcE,
-  BarcodeFormat.Code128,
-  BarcodeFormat.QrCode,
-];
 
 /**
  * Scan a product barcode and return its digits, or null if cancelled / not found.
@@ -28,6 +14,17 @@ export async function scanBarcode(): Promise<string | null> {
 }
 
 async function scanNative(): Promise<string | null> {
+  // Loaded only in the Android app, so browsers never download the plugin.
+  const { BarcodeFormat, BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+  /** Product barcodes found on retail items (EAN/UPC), plus common extras. */
+  const PRODUCT_FORMATS = [
+    BarcodeFormat.Ean13,
+    BarcodeFormat.Ean8,
+    BarcodeFormat.UpcA,
+    BarcodeFormat.UpcE,
+    BarcodeFormat.Code128,
+    BarcodeFormat.QrCode,
+  ];
   try {
     const { available } =
       await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();

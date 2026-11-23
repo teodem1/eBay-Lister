@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { EbayApiError, EbayClient } from "./client";
+import { EbayApiError, EbayClient, REFUSED_SCOPE_TTL_MS } from "./client";
 import { readEbayConfig, EbayConfigError } from "./config";
 
 const config = { clientId: "id", clientSecret: "secret", env: "sandbox" as const, marketplaceId: "EBAY_FR" };
@@ -32,6 +32,31 @@ function fakeFetch() {
 }
 
 describe("EbayClient", () => {
+  it("remembers a refused scope for an hour instead of asking eBay on every price check", async () => {
+    let now = 1_000_000;
+    const fetchMock = vi.fn(async () => jsonResponse({ error: "invalid_scope" }, 400));
+    const client = new EbayClient(config, fetchMock as unknown as typeof fetch, () => now);
+    const scope = "https://api.ebay.com/oauth/api_scope/buy.marketplace.insights";
+
+    await expect(client.getAppToken(scope)).rejects.toBeInstanceOf(EbayApiError);
+    const second = await client.getAppToken(scope).catch((e: EbayApiError) => e);
+    expect(second).toBeInstanceOf(EbayApiError);
+    expect((second as EbayApiError).body).toContain("invalid_scope");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now += REFUSED_SCOPE_TTL_MS + 1;
+    await expect(client.getAppToken(scope)).rejects.toBeInstanceOf(EbayApiError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not remember other token failures", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ error: "server_error" }, 500));
+    const client = new EbayClient(config, fetchMock as unknown as typeof fetch);
+    await expect(client.getAppToken()).rejects.toBeInstanceOf(EbayApiError);
+    await expect(client.getAppToken()).rejects.toBeInstanceOf(EbayApiError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("gets a token, then searches by barcode on the sandbox host", async () => {
     const fetchMock = fakeFetch();
     const client = new EbayClient(config, fetchMock as unknown as typeof fetch);
