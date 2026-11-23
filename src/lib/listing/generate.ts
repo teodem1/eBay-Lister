@@ -25,14 +25,14 @@ const ClaudeListingSchema = z.object({
   ),
   descriptionHtml: z.string(),
   packageWeightKg: z.number().describe("Estimated packed weight in kg including box and padding; 0 if no idea"),
-  packageDimensionsCm: z
-    .object({ length: z.number(), width: z.number(), height: z.number() })
-    .describe("Estimated shipping box size in cm; zeros if no idea"),
   guessedFields: z
     .array(z.enum(["title", "condition", "conditionDescription", "brand", "mpn", "description"]))
     .describe("Top-level fields that rely on assumptions"),
   checks: z.array(z.string()).describe("Short things the seller must verify before publishing"),
 });
+/** Default package size in cm (a CD mailer): 12 long, 15 wide, 1 thick. */
+export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 1 } as const;
+
 export type ClaudeListing = z.infer<typeof ClaudeListingSchema>;
 
 const SYSTEM = `You write eBay listings that rank well in eBay search (Cassini) and convert.
@@ -51,7 +51,7 @@ Item specifics:
 
 Condition: when the seller gives their condition, use exactly that condition and describe the item's condition using only the seller's words and grades: never add defects, wear or claims (like "tested") they did not state, and never use the condition of other eBay listings. Otherwise pick only from the allowed conditions listed for the category, when a list is given.
 
-Package: estimate the packed weight and a sensible box size for shipping the item (item plus box and padding). These are always estimates.
+Package: estimate the packed weight for shipping the item (item plus padding). It is always an estimate.
 
 Description (descriptionHtml):
 - Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
@@ -167,9 +167,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     warnings.push(`eBay doesn't accept "${wanted}" in this category, so the condition was set to "${condition}".`);
     if (!guessedFields.includes("condition")) guessedFields.push("condition");
   }
-  const dims = out.packageDimensionsCm;
-  const hasDims = dims.length > 0 && dims.width > 0 && dims.height > 0;
-  if (out.packageWeightKg > 0 || hasDims) guessedFields.push("package"); // always an estimate
+  if (out.packageWeightKg > 0) guessedFields.push("package"); // the weight is always an estimate
   if (!input.suggestedPrice) warnings.push("No suggested price was passed in. Enter a price before publishing.");
 
   return {
@@ -191,9 +189,8 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       promotedPercent: deps.config.promotedPercent || undefined,
       bestOfferMinPercent: deps.config.bestOfferMinPercent || undefined,
       packageWeightKg: out.packageWeightKg > 0 ? Math.round(out.packageWeightKg * 100) / 100 : undefined,
-      packageDimensionsCm: hasDims
-        ? { length: Math.ceil(dims.length), width: Math.ceil(dims.width), height: Math.ceil(dims.height) }
-        : undefined,
+      // The seller's standard CD mailer size; editable on the review step.
+      packageDimensionsCm: { ...DEFAULT_PACKAGE_CM },
     },
     categorySuggestions: categories,
     conditionsByCategory,

@@ -18,7 +18,6 @@ const claudeOut: ClaudeListing = {
   ],
   descriptionHtml: '<p onclick="x()">Bonne console</p><script>alert(1)</script>',
   packageWeightKg: 0,
-  packageDimensionsCm: { length: 0, width: 0, height: 0 },
   guessedFields: ["condition"],
   checks: ["Confirm the original box is included"],
 };
@@ -65,7 +64,6 @@ describe("generateListing", () => {
       condition: "USED_GOOD",
       guessedFields: [],
       packageWeightKg: 0.456,
-      packageDimensionsCm: { length: 20.2, width: 15, height: 8 },
     });
     const ebay = {
       getCategoryTreeId: vi.fn().mockResolvedValue("2"),
@@ -83,7 +81,7 @@ describe("generateListing", () => {
     expect(out.warnings.join(" ")).toMatch(/USED_GOOD/);
     expect(out.conditionsByCategory["117042"]).toHaveLength(3);
     expect(out.draft.packageWeightKg).toBe(0.46);
-    expect(out.draft.packageDimensionsCm).toEqual({ length: 21, width: 15, height: 8 });
+    expect(out.draft.packageDimensionsCm).toEqual({ length: 12, width: 15, height: 1 });
     expect(out.guessedFields).toContain("package");
     expect(parse.mock.calls[0][0].messages[0].content).toContain("Allowed conditions for this category: NEW, USED_EXCELLENT");
   });
