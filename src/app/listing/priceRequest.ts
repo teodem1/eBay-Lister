@@ -39,6 +39,8 @@ export interface PriceCheck {
   soldItems: Comparable[];
   /** Why a price is missing, shown to the user. */
   unavailable: { current?: string; sold?: string };
+  /** The item text the check searched for (decides which titles are other versions). */
+  keywords: string;
 }
 
 /** The price to prefill: last-sold recommended when there is one, else current. */
@@ -63,6 +65,7 @@ export async function fetchPriceSuggestion(
     return {
       current: data.current?.suggestion ?? null,
       sold: data.sold?.suggestion ?? null,
+      keywords: body.keywords ?? "",
       currentItems: data.current?.comparables?.items ?? [],
       soldItems: data.sold?.comparables?.items ?? [],
       unavailable: data.unavailable ?? {},

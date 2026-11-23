@@ -161,8 +161,35 @@ export function normaliseSoldCompsItem(
     soldDate: raw.endedAt ?? null,
     quantitySold: 1,
     url: raw.url ?? null,
-    imageUrl: raw.imageUrl ?? raw.image ?? raw.thumbnail ?? null,
+    imageUrl: findImageUrl(raw),
   };
+}
+
+/**
+ * The item's photo. The provider's docs don't name an image field, so known
+ * names are tried first, then any https value that looks like an image
+ * (i.ebayimg.com or an image file), including inside nested objects or lists.
+ */
+export function findImageUrl(raw: unknown): string | null {
+  const r = raw as Record<string, unknown>;
+  for (const k of ["imageUrl", "image", "thumbnail", "thumbnailUrl", "galleryUrl", "pictureUrl", "img"]) {
+    const v = r?.[k];
+    if (typeof v === "string" && /^https?:\/\//.test(v)) return v;
+  }
+  const looksLikeImage = (v: string) =>
+    /^https?:\/\//.test(v) && (/ebayimg\.com/i.test(v) || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(v));
+  const seen = new Set<unknown>();
+  const walk = (v: unknown, depth: number): string | null => {
+    if (typeof v === "string") return looksLikeImage(v) ? v : null;
+    if (!v || typeof v !== "object" || depth > 3 || seen.has(v)) return null;
+    seen.add(v);
+    for (const x of Array.isArray(v) ? v : Object.values(v)) {
+      const found = walk(x, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(raw, 0);
 }
 
 export async function searchSoldComps(q: ComparableQuery, opts: SoldCompsOptions): Promise<Comparable[]> {

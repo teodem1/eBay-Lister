@@ -51,6 +51,7 @@ describe("fetchPriceSuggestion", () => {
       currentItems: [{ itemId: "1" }],
       soldItems: [],
       unavailable: { sold: "not approved" },
+      keywords: "x",
     });
     expect(f).toHaveBeenCalledWith("/api/price-suggestion", expect.objectContaining({ method: "POST" }));
   });
@@ -74,15 +75,15 @@ describe("defaultPrice", () => {
     ({ usedCount, itemPrice: { quickSale: 1, recommended, high: 2 } }) as PriceSuggestion;
 
   it("prefers the last-sold price", () => {
-    expect(defaultPrice({ current: s(300), sold: s(250), unavailable: {}, currentItems: [], soldItems: [] })).toBe(250);
+    expect(defaultPrice({ current: s(300), sold: s(250), unavailable: {}, currentItems: [], soldItems: [], keywords: "" })).toBe(250);
   });
 
   it("falls back to the current price without sold data", () => {
-    expect(defaultPrice({ current: s(300), sold: null, unavailable: {}, currentItems: [], soldItems: [] })).toBe(300);
-    expect(defaultPrice({ current: s(300), sold: s(250, 0), unavailable: {}, currentItems: [], soldItems: [] })).toBe(300);
+    expect(defaultPrice({ current: s(300), sold: null, unavailable: {}, currentItems: [], soldItems: [], keywords: "" })).toBe(300);
+    expect(defaultPrice({ current: s(300), sold: s(250, 0), unavailable: {}, currentItems: [], soldItems: [], keywords: "" })).toBe(300);
   });
 
   it("is undefined with no data", () => {
-    expect(defaultPrice({ current: null, sold: null, unavailable: {}, currentItems: [], soldItems: [] })).toBeUndefined();
+    expect(defaultPrice({ current: null, sold: null, unavailable: {}, currentItems: [], soldItems: [], keywords: "" })).toBeUndefined();
   });
 });

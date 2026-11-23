@@ -14,6 +14,7 @@
  *  5. If the data are active asking prices (no sold data), discount them.
  */
 import type { Comparable, ComparableResult, ComparableSource } from "../ebay/types";
+import { selectSameVersion } from "./version";
 
 export interface PriceOptions {
   /** What the seller will charge for shipping. Default: median comparable shipping. */
@@ -27,6 +28,12 @@ export interface PriceOptions {
   recencyHalfLifeDays?: number;
   /** "Now", for recency weighting. Injected for tests. */
   now?: Date;
+  /** The seller's item text; other versions it doesn't mention (Japanese, vinyl...) are left out. */
+  keywords?: string;
+  /** Price from copies of this country (e.g. "CA") when there are enough. */
+  homeCountry?: string;
+  /** What a comparable is called in notes ("sales", "listings"). */
+  unit?: string;
 }
 
 export interface Stats {
@@ -68,6 +75,8 @@ export interface PriceSuggestion {
   /** Comparables skipped because their currency differs from the majority. */
   otherCurrencySkipped: number;
   notes: string[];
+  /** Which comparables the prices use: other versions left out, home-country copies only. */
+  version: { otherVersionsLeftOut: number; homeCountry: string | null };
 }
 
 const DAY_MS = 86_400_000;
@@ -175,8 +184,10 @@ export function suggestPrice(
   }
   if (!sameCurrency.length) return null;
 
-  const kept = removeOutliers(sameCurrency);
-  const outliersRemoved = sameCurrency.length - kept.length;
+  const version = selectSameVersion(sameCurrency, { keywords: opts.keywords, homeCountry: opts.homeCountry, unit: opts.unit });
+  notes.push(...version.notes);
+  const kept = removeOutliers(version.items);
+  const outliersRemoved = version.items.length - kept.length;
 
   const now = (opts.now ?? new Date()).getTime();
   const halfLife = opts.recencyHalfLifeDays ?? 30;
@@ -226,5 +237,6 @@ export function suggestPrice(
     outliersRemoved,
     otherCurrencySkipped,
     notes,
+    version: { otherVersionsLeftOut: version.otherVersionsLeftOut, homeCountry: version.homeCountry },
   };
 }

@@ -43,11 +43,23 @@ export async function POST(request: Request) {
     });
     // The current price is shown as what similar items are listed at, so no
     // asking-to-sold discount is applied to it.
-    const suggest = (r: ComparableResult | null) =>
-      r ? { suggestion: suggestPrice(r, { myShippingCost, activeListingDiscount: 0 }), comparables: r } : null;
+    const suggest = (r: ComparableResult | null, unit: string) =>
+      r
+        ? {
+            suggestion: suggestPrice(r, {
+              myShippingCost,
+              activeListingDiscount: 0,
+              // Most of the seller's CDs are Canadian pressings: price from Canadian copies.
+              homeCountry: query.destinationCountry,
+              keywords: query.keywords,
+              unit,
+            }),
+            comparables: r,
+          }
+        : null;
     return Response.json({
-      current: suggest(both.current),
-      sold: suggest(both.sold),
+      current: suggest(both.current, "listings"),
+      sold: suggest(both.sold, "sales"),
       unavailable: both.unavailable,
     });
   } catch (err) {

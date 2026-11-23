@@ -49,6 +49,9 @@ Screens (phone first):
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
   `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
+  Prices use only Canadian copies (sold from CA or titled Canadian) when there are 3+, and leave out
+  other versions the item text doesn't name (Japanese, vinyl, signed, lots): `src/lib/pricing/version.ts`.
+  Tapping a sale's thumbnail opens a large photo with a link to eBay.
 
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
