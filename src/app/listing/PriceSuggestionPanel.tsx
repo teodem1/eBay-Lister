@@ -314,13 +314,6 @@ function PriceCard({
               </span>
             ))}
           </div>
-          {suggestion.notes.length > 0 && (
-            <ul className="notice notice-warn t-small mt-3 list-disc pl-8">
-              {suggestion.notes.map((n) => (
-                <li key={n}>{n}</li>
-              ))}
-            </ul>
-          )}
         </>
       ) : null}
 

@@ -222,7 +222,7 @@ describe("findBothComparables", () => {
         soldCompsFetch,
       });
       expect(soldCompsFetch).toHaveBeenCalledTimes(1);
-      expect(new URL(String(soldCompsFetch.mock.calls[0][0])).searchParams.get("keyword")).toBe("UPC075678269028");
+      expect(new URL(String(soldCompsFetch.mock.calls[0][0])).searchParams.get("keyword")).toBe("075678269028");
       expect(res.sold?.matchedBy).toBe("barcode");
       expect(res.current?.matchedBy).toBe("barcode");
     });
@@ -237,7 +237,7 @@ describe("findBothComparables", () => {
         soldCompsFetch,
       });
       expect(soldCompsFetch).toHaveBeenCalledTimes(2);
-      expect(new URL(String(soldCompsFetch.mock.calls[1][0])).searchParams.get("keyword")).toBe("Genesis Wind & Wuthering");
+      expect(new URL(String(soldCompsFetch.mock.calls[1][0])).searchParams.get("keyword")).toBe("Genesis Wind & Wuthering CD -vinyl -lp -cassette -tape -record");
       expect(res.sold?.matchedBy).toBe("keywords");
       expect(res.sold?.items).toHaveLength(4);
       expect(res.current?.items).toHaveLength(5);

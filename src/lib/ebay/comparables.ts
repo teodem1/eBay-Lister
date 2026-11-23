@@ -24,6 +24,7 @@ import type {
   Money,
 } from "./types";
 import { searchSoldComps, type SoldCompsOptions } from "./soldComps";
+import { cdKeywords } from "../pricing/version";
 
 // ---- Raw eBay response shapes (only the fields we use) ----
 
@@ -88,7 +89,7 @@ function searchParams(q: ComparableQuery): Record<string, string | undefined> {
   }
   return {
     // A GTIN/EPID match is much more precise than keywords, so prefer it.
-    q: q.gtin || q.epid ? undefined : q.keywords,
+    q: q.gtin || q.epid ? undefined : q.keywords && cdKeywords(q.keywords),
     gtin: q.gtin,
     epid: q.epid,
     category_ids: q.categoryId,

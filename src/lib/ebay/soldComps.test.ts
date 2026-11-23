@@ -7,7 +7,7 @@ describe("buildSoldCompsUrl", () => {
   it("searches ebay.ca for the last year by default", () => {
     const u = new URL(buildSoldCompsUrl({ keywords: "Switch OLED", gtin: "0045496453435" }, opts));
     expect(u.origin + u.pathname).toBe("https://api.sold-comps.com/v1/scrape");
-    expect(u.searchParams.get("keyword")).toBe("Switch OLED");
+    expect(u.searchParams.get("keyword")).toBe("Switch OLED CD -vinyl -lp -cassette -tape -record");
     expect(u.searchParams.get("ebaySite")).toBe("ebay.ca");
     expect(u.searchParams.get("soldAfter")).toBe("2025-11-22");
   });
@@ -22,12 +22,12 @@ describe("buildSoldCompsUrl", () => {
 
   it("uses the barcode as keyword when there is no item text", () => {
     const u = new URL(buildSoldCompsUrl({ gtin: "0045496453435" }, opts));
-    expect(u.searchParams.get("keyword")).toBe("UPC045496453435");
+    expect(u.searchParams.get("keyword")).toBe("045496453435");
   });
 
-  it("searches the barcode like eBay's app does when asked to", () => {
+  it("searches the bare UPC when asked to", () => {
     const u = new URL(buildSoldCompsUrl({ keywords: "Genesis Wind & Wuthering", gtin: "075678269028" }, { ...opts, by: "barcode" }));
-    expect(u.searchParams.get("keyword")).toBe("UPC075678269028");
+    expect(u.searchParams.get("keyword")).toBe("075678269028");
   });
 });
 

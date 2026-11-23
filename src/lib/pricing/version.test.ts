@@ -58,3 +58,24 @@ describe("selectSameVersion", () => {
     expect(r.notes.join(" ")).toContain("Only 0 Canadian sales");
   });
 });
+
+describe("CD-only search", () => {
+  it("adds CD and excludes other formats", async () => {
+    const { cdKeywords, onlyCds } = await import("./version");
+    expect(cdKeywords("Genesis Wind & Wuthering")).toBe("Genesis Wind & Wuthering CD");
+    expect(cdKeywords("Genesis Wind & Wuthering CD", { exclude: true })).toBe(
+      "Genesis Wind & Wuthering CD -vinyl -lp -cassette -tape -record",
+    );
+    expect(cdKeywords("Genesis Wind & Wuthering vinyl LP", { exclude: true })).toBe("Genesis Wind & Wuthering vinyl LP");
+    const titles = onlyCds(
+      [
+        c("Genesis Wind & Wuthering 1976 Cassette", "US"),
+        c("Genesis, Wind & Wuthering Record VG+/VG++, Atco", "US"),
+        c("CASSETTE TAPES 60s 70's 80's 90's MADONNA", "US"),
+        c("GENESIS - Wind & Wuthering 82690-2 ATCO CD", "CA"),
+      ],
+      "Genesis Wind & Wuthering",
+    ).map((i) => i.title);
+    expect(titles).toEqual(["GENESIS - Wind & Wuthering 82690-2 ATCO CD"]);
+  });
+});

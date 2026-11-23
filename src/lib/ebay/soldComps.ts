@@ -21,6 +21,7 @@
  * keyword when there is no item text.
  */
 import type { Comparable, ComparableQuery } from "./types";
+import { cdKeywords } from "../pricing/version";
 
 export const SOLD_COMPS_BASE = "https://api.sold-comps.com";
 
@@ -120,15 +121,15 @@ export function countryCode(location: string | null | undefined): string | null 
 }
 
 /**
- * The keyword eBay's own app searches when you scan a barcode: "UPC" plus the
- * 12-digit UPC (or "EAN" plus 13 digits). It matches listings tagged with
- * that barcode, so only that exact pressing comes back.
+ * The barcode as eBay's web search matches it: the bare 12-digit UPC (an
+ * EAN-13 starting with 0 is the same UPC), else the digits as scanned.
+ * Listings tagged with that barcode come back, so only that exact pressing.
+ * ("UPC0756..." as eBay's app types it found 0 sales through sold-comps.com
+ * in a live test on 2026-11-23, so bare digits are used.)
  */
 export function barcodeKeyword(gtin: string): string {
   const d = gtin.replace(/\D/g, "");
-  if (d.length === 12) return `UPC${d}`;
-  if (d.length === 13 && d.startsWith("0")) return `UPC${d.slice(1)}`;
-  if (d.length === 13) return `EAN${d}`;
+  if (d.length === 13 && d.startsWith("0")) return d.slice(1);
   return d;
 }
 
@@ -137,7 +138,9 @@ export function buildSoldCompsUrl(
   opts: SoldCompsOptions & { by?: "barcode" | "keywords" },
 ): string {
   const keyword =
-    opts.by === "barcode" && q.gtin ? barcodeKeyword(q.gtin) : q.keywords?.trim() || (q.gtin && barcodeKeyword(q.gtin));
+    opts.by === "barcode" && q.gtin
+      ? barcodeKeyword(q.gtin)
+      : (q.keywords?.trim() && cdKeywords(q.keywords, { exclude: true })) || (q.gtin && barcodeKeyword(q.gtin));
   if (!keyword) throw new Error("Sold search needs keywords or a barcode.");
   const days = opts.lookbackDays ?? DEFAULT_SOLD_LOOKBACK_DAYS;
   const since = new Date((opts.now ?? new Date()).getTime() - days * 86_400_000);
