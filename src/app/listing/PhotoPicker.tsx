@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon, Spinner } from "@/components/ui";
 import { isCancel, takeItemPhoto } from "@/lib/native/camera";
+import CdCamera from "./CdCamera";
 import { resizeImage } from "@/lib/resize-image";
 
 const MAX_PHOTOS = 24; // eBay's limit
@@ -84,7 +85,8 @@ export default function PhotoPicker({
     }
   }
 
-  // The phone's own camera, like the scan screen's Photo button.
+  // In-app camera with a square CD guide; the phone's own camera if it can't open.
+  const [camera, setCamera] = useState(false);
   async function systemCamera() {
     try {
       const file = await takeItemPhoto();
@@ -98,6 +100,16 @@ export default function PhotoPicker({
 
   return (
     <div className="card space-y-3">
+      {camera && (
+        <CdCamera
+          onShot={(file) => add([file])}
+          onClose={() => setCamera(false)}
+          onUnavailable={() => {
+            setCamera(false);
+            systemCamera();
+          }}
+        />
+      )}
       <div className="flex items-baseline justify-between gap-2">
         <span className="t-headline">Photos</span>
         <span className="t-small text-muted tabular-nums">
@@ -145,7 +157,7 @@ export default function PhotoPicker({
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn btn-secondary h-14 px-5" disabled={full} onClick={systemCamera}>
+        <button type="button" className="btn btn-secondary h-14 px-5" disabled={full} onClick={() => setCamera(true)}>
           <Icon name="camera" size={22} strokeWidth={1.8} />
           Take photo
         </button>

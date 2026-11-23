@@ -49,8 +49,8 @@ Screens (phone first):
   draft's condition and condition text; Claude never guesses them. Claude writes the listing automatically once the CD is graded
   and the price check is back ("Write it again" rewrites it). The title ends with the seller's
   grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos (shown right under the Item step, so they can be shot
-  while prices load and Claude writes) come from the camera or gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`); "Take photo" opens the phone's own camera
-  (`takeItemPhoto`, like the scan screen's Photo button; `CdCamera.tsx`, a live camera with a CD guide, is kept but unused), and they upload to eBay Picture Services through `/api/listing/photo`
+  while prices load and Claude writes) come from the camera or gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`); "Take photo" opens `CdCamera.tsx`, a live
+  camera on the main 1x back lens (`openMainBackCamera`) with a square CD guide (falls back to the phone camera), and they upload to eBay Picture Services through `/api/listing/photo`
   (`EbaySellClient.uploadImage`, Media API on apim.ebay.com).
   On load it calls `/api/price-suggestion` and shows two prices in `PriceSuggestionPanel.tsx`:
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
