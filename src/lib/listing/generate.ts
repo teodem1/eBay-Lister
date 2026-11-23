@@ -4,7 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
-import { conditionSummary } from "./condition";
+import { conditionSummary, conditionTitleSuffix } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
 export const MODEL = "claude-opus-5-5";
@@ -41,6 +41,8 @@ Title rules:
 - At most ${TITLE_MAX} characters. Use the space: brand, model, key specs (size, capacity, colour, edition), condition word if useful.
 - Put the words buyers search first. No ALL CAPS words except acronyms, no "L@@K", no emojis, no punctuation spam, no words like "wow" or "rare" unless true.
 - Never invent a model number, size or spec. If unsure, leave it out of the title.
+- For music, start with the artist and the album name as given in "Item" (never a seller's listing title), then format and useful specifics (year, country of pressing, label, edition).
+- When the seller gives their condition, do not put any condition words in the title: the app appends the seller's grades itself.
 
 Item specifics:
 - Fill every aspect the category lists, required ones first, using eBay's usual values (e.g. "Apple", "128 GB").
@@ -149,7 +151,9 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   const out = response.parsed_output;
   if (!out) throw new Error(`Claude returned no listing (stop reason: ${response.stop_reason}).`);
 
-  const title = trimTitle(out.title);
+  // The seller's grades end the title ("CD: NM / Inlay: VG+"); Claude's part is trimmed to fit.
+  const suffix = input.sellerCondition ? conditionTitleSuffix(input.sellerCondition) : "";
+  const title = suffix ? `${trimTitle(out.title, TITLE_MAX - suffix.length - 1)} ${suffix}` : trimTitle(out.title);
   // The seller's condition wins over Claude's; it is a fact, not a guess.
   const seller = input.sellerCondition;
   const guessedFields: string[] = seller
