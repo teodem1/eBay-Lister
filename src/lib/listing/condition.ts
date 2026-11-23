@@ -1,7 +1,7 @@
 // The seller's own condition for a CD, asked before Claude writes the listing.
 // It sets the eBay condition and the condition text; Claude never guesses them.
-import { z } from "zod";
 import type { Condition } from "../ebay/sell";
+import type { SellerCondition } from "./conditionSchema";
 
 /** The eBay conditions offered for a CD, in the seller's words. Music categories accept these. */
 export const CD_CONDITIONS = [
@@ -23,19 +23,7 @@ export const PARTS = [
 ] as const;
 export type PartKey = (typeof PARTS)[number]["key"];
 
-const PartGrade = z.union([z.enum(GRADES), z.literal("Missing")]);
-
-export const SellerConditionSchema = z.object({
-  condition: z.enum(CD_CONDITIONS.map((c) => c.value) as [Condition, ...Condition[]]),
-  disc: z.enum(GRADES).optional(),
-  case: PartGrade.optional(),
-  booklet: PartGrade.optional(),
-  /** The seller played it through. Only then may the listing say "tested". */
-  tested: z.boolean().optional(),
-  /** Defects or anything else in the seller's words. */
-  notes: z.string().max(600).optional(),
-});
-export type SellerCondition = z.infer<typeof SellerConditionSchema>;
+export type { SellerCondition } from "./conditionSchema";
 
 export function conditionLabel(c: Condition): string {
   return CD_CONDITIONS.find((x) => x.value === c)?.label ?? c;
