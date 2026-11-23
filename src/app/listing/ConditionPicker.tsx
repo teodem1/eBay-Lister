@@ -3,7 +3,6 @@
 import { Icon, StepHeading } from "@/components/ui";
 import {
   GRADES,
-  conditionLabel,
   ebayConditionFromGrades,
   type Grade,
   type SellerCondition,
@@ -18,7 +17,7 @@ export type ConditionDraft = Partial<SellerCondition>;
  */
 export default function ConditionPicker({
   n,
-  hint = "Claude uses only what you pick here, never other listings.",
+  hint,
   compact = false,
   value,
   onChange,
@@ -48,7 +47,7 @@ export default function ConditionPicker({
       ) : (
         <div className="px-1">
           <h3 className="t-headline">Your CD&apos;s condition</h3>
-          <p className="t-small text-muted">{hint}</p>
+          {hint && <p className="t-small text-muted">{hint}</p>}
         </div>
       )}
       <div className="card space-y-5">
@@ -77,7 +76,6 @@ export default function ConditionPicker({
             />
             <GradeRow
               label="Inlay condition"
-              hint="Front booklet and back inlay"
               value={value.booklet}
               withMissing
               onPick={(g) => setGrades({ booklet: g as Grade | "Missing" })}
@@ -131,15 +129,6 @@ export default function ConditionPicker({
           </label>
         )}
 
-        {value.condition && (sealed || (value.disc && value.booklet)) && (
-          <p className="t-small text-muted">
-            eBay condition:{" "}
-            <span className="font-semibold text-foreground">
-              {conditionLabel(value.condition)}
-            </span>
-            {!sealed && " (from the weaker of disc and inlay)"}
-          </p>
-        )}
       </div>
     </section>
   );
