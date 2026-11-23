@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppBar, Icon, Spinner, TabBar } from "@/components/ui";
 import ConditionPicker, { type ConditionDraft } from "@/app/listing/ConditionPicker";
 import { normalizeGtin } from "@/lib/identify/barcode";
-import { scanBarcode } from "@/lib/native/barcode";
-import { isNativeApp } from "@/lib/native/platform";
 import { stashScanned } from "@/lib/collection/store";
 import { conditionComplete, conditionParams } from "@/lib/listing/condition";
 import {
@@ -21,9 +18,9 @@ import {
 } from "@/lib/batch/queue";
 import { batchStore, useBatch } from "@/lib/batch/store";
 import CdCover from "@/components/CdCover";
+import StackScan from "@/components/StackScan";
 import { useBackgroundLookups } from "@/lib/batch/useBackgroundLookups";
 
-const BarcodeScanner = dynamic(() => import("@/components/BarcodeScanner"), { ssr: false });
 
 const noop = () => () => {};
 const MONTHLY_PRICE_CHECKS = 100;
@@ -37,9 +34,8 @@ export default function ToListScreen() {
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
   const router = useRouter();
   const params = useSearchParams();
-  const [scanning, setScanning] = useState(false);
-  const [lastScan, setLastScan] = useState<string | null>(null);
-  const [scannedNow, setScannedNow] = useState(0);
+  // ?scan=1 (from the Scan screen) opens the scanner straight away.
+  const [autoScan] = useState(() => !!params.get("scan"));
   const [manualCode, setManualCode] = useState("");
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   // undefined until the seller taps a row; after a publish (?next=1) the next CD starts open.
@@ -56,7 +52,6 @@ export default function ToListScreen() {
   useEffect(() => {
     if (!hydrated || handledParams.current) return;
     handledParams.current = true;
-    if (params.get("scan")) startScan();
     if (params.get("scan") || params.get("next")) router.replace("/to-list");
     // Runs once, after the list is read from the device.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,53 +59,23 @@ export default function ToListScreen() {
 
   useBackgroundLookups(batchStore, items, hydrated);
 
-  function addCode(raw: string): string | null {
+  /** A barcode typed by hand. */
+  function addCode(raw: string): boolean {
     const gtin = normalizeGtin(raw);
     if (!gtin) {
       setMessage({ tone: "bad", text: `That code (${raw}) isn't a product barcode.` });
-      return null;
+      return false;
     }
     const result = batchStore.add(gtin);
-    if ("duplicate" in result) {
-      const text = `Already on the list: ${batchItemName(result.duplicate)}`;
-      setLastScan(text);
-      return text;
-    }
-    setScannedNow((n) => n + 1);
-    setMessage(null);
-    const text = `Added ${gtin}`;
-    setLastScan(text);
-    return text;
-  }
-
-  /** Android app: ML Kit scanner again after each CD until cancelled. Browser: the live scanner, kept open. */
-  async function startScan() {
-    setScannedNow(0);
-    setLastScan(null);
-    if (!isNativeApp()) {
-      setScanning(true);
-      return;
-    }
-    try {
-      let added = 0;
-      for (;;) {
-        const code = await scanBarcode();
-        if (!code) break;
-        if (addCode(code)?.startsWith("Added")) added++;
-      }
-      if (added) setMessage({ tone: "ok", text: `Added ${added} ${added === 1 ? "CD" : "CDs"}.` });
-    } catch (err) {
-      setMessage({ tone: "bad", text: `Scanner error: ${err instanceof Error ? err.message : String(err)}` });
-    }
-  }
-
-  function closeScanner() {
-    setScanning(false);
-    if (scannedNow) setMessage({ tone: "ok", text: `Added ${scannedNow} ${scannedNow === 1 ? "CD" : "CDs"}.` });
+    setMessage(
+      "duplicate" in result
+        ? { tone: "ok", text: `Already on the list: ${batchItemName(result.duplicate)}` }
+        : { tone: "ok", text: `Added ${gtin}` },
+    );
+    return true;
   }
 
   const manualValid = normalizeGtin(manualCode) !== null;
-  const scannerStatus = `${scannedNow} added${lastScan ? ` · ${lastScan}` : ""}`;
 
   return (
     <>
@@ -122,10 +87,7 @@ export default function ToListScreen() {
         </header>
 
         <section className="flex flex-col gap-3" aria-label="Add CDs">
-          <button type="button" onClick={startScan} className="btn btn-primary btn-lg w-full">
-            <Icon name="stack" size={22} strokeWidth={1.8} />
-            Scan a stack
-          </button>
+          <StackScan store={batchStore} items={items} autoStart={autoScan} />
           <form
             className="relative"
             onSubmit={(e) => {
@@ -191,7 +153,6 @@ export default function ToListScreen() {
           </>
         )}
 
-        {scanning && <BarcodeScanner continuous status={scannerStatus} onDetected={addCode} onClose={closeScanner} />}
       </main>
       <TabBar active="tolist" />
     </>

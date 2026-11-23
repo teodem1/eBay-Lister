@@ -14,10 +14,13 @@ export default function CdCamera({
   onShot,
   onClose,
   onUnavailable,
+  prompt = "Fit the CD inside the square",
 }: {
   onShot: (file: File) => void;
   onClose: () => void;
   onUnavailable: () => void;
+  /** What to shoot, shown at the top (e.g. "Front cover"). */
+  prompt?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
@@ -116,7 +119,7 @@ export default function CdCamera({
       {flash && <div className="absolute inset-0 bg-white/60" />}
       <div className="absolute inset-x-0 top-0 pt-[calc(env(safe-area-inset-top)+1.5rem)] text-center">
         <p className="mx-auto inline-block rounded-full bg-black/50 px-4 py-2 text-sm font-medium text-white backdrop-blur">
-          {ready ? "Fit the CD inside the square" : "Opening the camera…"}
+          {ready ? prompt : "Opening the camera…"}
         </p>
       </div>
       <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">

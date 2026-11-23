@@ -19,6 +19,8 @@ const claudeOut: ClaudeListing = {
   descriptionHtml: '<p onclick="x()">Bonne console</p><script>alert(1)</script>',
   guessedFields: ["condition"],
   checks: ["Confirm the original box is included"],
+  price: 0,
+  priceReason: "",
 };
 
 function fakeAnthropic(parsed: ClaudeListing | null, stop_reason = "end_turn") {
@@ -135,5 +137,20 @@ describe("cdCategoryFirst", () => {
     const cd = { categoryId: "176984", categoryName: "CDs", path: "Music > CDs" };
     expect(cdCategoryFirst([rec, cd]).map((c) => c.categoryId)).toEqual(["176984", "176985"]);
     expect(cdCategoryFirst([rec])).toEqual([rec]);
+  });
+});
+
+describe("generateListing price pick", () => {
+  it("returns Claude's price only when price evidence was sent", async () => {
+    const out = { ...claudeOut, price: 17.499, priceReason: "Near mint copies sold for $16-19" };
+    const { client, parse } = fakeAnthropic(out);
+    const withEvidence = await generateListing(
+      { query: "Genesis Wind & Wuthering", priceEvidence: "Sold copies: ..." },
+      { anthropic: client, config },
+    );
+    expect(withEvidence.claudePrice).toEqual({ price: 17.5, reason: "Near mint copies sold for $16-19" });
+    expect(JSON.stringify(parse.mock.calls[0][0].messages)).toContain("Price evidence");
+    const without = await generateListing({ query: "Genesis Wind & Wuthering" }, { anthropic: fakeAnthropic(out).client, config });
+    expect(without.claudePrice).toBeUndefined();
   });
 });

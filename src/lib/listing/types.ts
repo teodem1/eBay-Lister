@@ -22,6 +22,8 @@ export const ItemInputSchema = z.object({
   suggestedPrice: z.number().positive().optional(),
   /** The seller's own condition. When given, it sets the eBay condition and condition text. */
   sellerCondition: SellerConditionSchema.optional(),
+  /** Sold and current prices as text (Auto tab): Claude then picks the price too. */
+  priceEvidence: z.string().max(8000).optional(),
 });
 export type ItemInput = z.infer<typeof ItemInputSchema>;
 
@@ -67,4 +69,6 @@ export interface GeneratedListing {
   /** Things to verify before publishing, written by Claude. */
   checks: string[];
   warnings: string[];
+  /** Claude's price pick, only when price evidence was sent. */
+  claudePrice?: { price: number; reason: string };
 }
