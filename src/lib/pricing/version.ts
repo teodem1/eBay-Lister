@@ -14,12 +14,35 @@ import type { Comparable } from "../ebay/types";
 const OTHER_VERSIONS: { label: string; re: RegExp }[] = [
   { label: "Japanese", re: /\bjapan(ese)?\b|\bobi\b|\bshm[- ]?cd\b|\bblu[- ]?spec\b/i },
   { label: "SACD", re: /\bsacd\b/i },
-  { label: "vinyl", re: /\bvinyl\b|\blp\b|\b(7|10|12)"/i },
-  { label: "cassette", re: /\bcassette\b|\btape\b/i },
+  { label: "vinyl", re: /\bvinyl\b|\blps?\b|\brecord\b|\b(7|10|12)"|\b33 ?rpm\b/i },
+  { label: "cassette", re: /\bcass?ette\b|\btapes?\b|\b8[- ]?track\b/i },
+  { label: "DVD", re: /\bdvd\b|\bblu[- ]?ray\b/i },
   { label: "box set", re: /\bbox(ed)? ?set\b/i },
   { label: "lot", re: /\blot\b|\bbundle\b/i },
   { label: "signed", re: /\bsigned\b|\bautograph(ed)?\b/i },
 ];
+
+/** True when the item text names a format other than CD (the seller then sells that). */
+export function namesOtherFormat(keywords: string): boolean {
+  return /\b(vinyl|lps?|records?|cass?ettes?|tapes?|8[- ]?track|dvd|blu[- ]?ray)\b/i.test(keywords);
+}
+
+/**
+ * Keywords for a CD search: adds "CD" and, for eBay's web search (used by
+ * sold-comps.com), excludes other formats with -word. Unchanged when the
+ * seller's text names another format.
+ */
+export function cdKeywords(keywords: string, opts: { exclude?: boolean } = {}): string {
+  const k = keywords.trim();
+  if (!k || namesOtherFormat(k)) return k;
+  const withCd = /\bcds?\b/i.test(k) ? k : `${k} CD`;
+  return opts.exclude ? `${withCd} -vinyl -lp -cassette -tape -record` : withCd;
+}
+
+/** Only CDs of the item: drops other formats, lots and signed copies (unless the seller's text names them). */
+export function onlyCds(items: Comparable[], keywords = ""): Comparable[] {
+  return items.filter((c) => !otherVersion(c.title, keywords));
+}
 
 /** Fewer matching copies than this and the filter is dropped (too little data). */
 export const MIN_MATCHES = 3;
