@@ -7,6 +7,8 @@ import { PriceStrip, shortDate } from "@/app/listing/PriceSuggestionPanel";
 import { formatMoney, type PriceCheck } from "@/app/listing/priceRequest";
 import { compareToComparables } from "@/lib/auto/auto";
 import type { Comparable } from "@/lib/ebay/types";
+import type { Grade } from "@/lib/listing/condition";
+import { discogsPriceFor, type DiscogsReference } from "@/lib/pricing/discogs";
 
 const SHOWN = 5;
 
@@ -16,13 +18,30 @@ const SHOWN = 5;
  * strip, the range and median, and the sales themselves (tap one for details).
  * Falls back to the current listings when nothing sold.
  */
-export default function SoldComparison({ price, check }: { price: number; check?: PriceCheck }) {
+export default function SoldComparison({
+  price,
+  check,
+  discogs,
+  grade,
+}: {
+  price: number;
+  check?: PriceCheck;
+  /** Discogs price guide, when it was checked (collectible CDs). */
+  discogs?: DiscogsReference | null;
+  grade?: Grade;
+}) {
   const [open, setOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [detail, setDetail] = useState<Comparable | null>(null);
   const cmp = compareToComparables(price, check);
+  const discogsBox = discogs ? <DiscogsLine refData={discogs} grade={grade} price={price} /> : null;
   if (!check || !cmp) {
-    return <p className="t-small rounded-xl bg-surface-2 p-3 text-muted">No sold or listed copies were found for this CD.</p>;
+    return (
+      <>
+        <p className="t-small rounded-xl bg-surface-2 p-3 text-muted">No sold or listed copies were found on eBay for this CD.</p>
+        {discogsBox}
+      </>
+    );
   }
 
   const sold = cmp.basis === "sold";
@@ -110,6 +129,45 @@ export default function SoldComparison({ price, check }: { price: number; check?
         </>
       )}
       {detail && <ComparableSheet item={detail} sold={sold} onClose={() => setDetail(null)} />}
+      {discogsBox && <div className="mt-3 border-t border-line pt-3">{discogsBox}</div>}
     </section>
+  );
+}
+
+/** The Discogs price guide for this pressing: the price for the CD's grade, the lowest copy for sale, demand. */
+function DiscogsLine({ refData, grade, price }: { refData: DiscogsReference; grade?: Grade; price: number }) {
+  const cur = refData.suggestionCurrency ?? "CAD";
+  const mine = discogsPriceFor(refData, grade);
+  const diff = mine !== undefined && cur === "CAD" ? price - mine : undefined;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="t-small font-semibold">Discogs price guide</h3>
+        <a href={refData.url} target="_blank" rel="noreferrer" className="link t-caption flex items-center gap-1 px-1 py-1">
+          Discogs <Icon name="external" size={12} />
+        </a>
+      </div>
+      {mine !== undefined ? (
+        <p className="t-small">
+          {grade} copy: <b className="tabular-nums">{formatMoney(mine, cur)}</b>
+          {diff !== undefined && (
+            <span className="text-muted">
+              {" "}
+              · your price is {Math.abs(diff) < 0.5 ? "about the same" : `${formatMoney(Math.abs(diff), "CAD")} ${diff > 0 ? "above" : "below"}`}
+            </span>
+          )}
+        </p>
+      ) : (
+        <p className="t-small text-muted">No suggested price for this grade (needs your Discogs seller settings).</p>
+      )}
+      <p className="t-caption text-muted">
+        {[
+          refData.lowest && `Lowest for sale ${formatMoney(refData.lowest.value, refData.lowest.currency)}${refData.numForSale !== undefined ? ` (${refData.numForSale} for sale)` : ""}`,
+          refData.want !== undefined && `${refData.want} want it, ${refData.have ?? "?"} have it`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+    </div>
   );
 }

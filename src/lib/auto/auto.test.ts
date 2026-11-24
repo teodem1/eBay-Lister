@@ -5,6 +5,9 @@ import type { PriceCheck } from "../../app/listing/priceRequest";
 import type { PriceSuggestion } from "../pricing/suggestPrice";
 import {
   CD_CATEGORY_ID,
+  discogsCad,
+  priceGrade,
+  wantsDiscogs,
   compareToComparables,
   autoDraft,
   autoSummary,
@@ -143,5 +146,27 @@ describe("compareToComparables", () => {
     expect(compareToComparables(17, { ...c, soldItems: [] })?.basis).toBe("current");
     expect(compareToComparables(17, check(null, null))).toBeNull();
     expect(compareToComparables(17, undefined)).toBeNull();
+  });
+});
+
+describe("collectible CDs and Discogs", () => {
+  const ref = { releaseId: 1, title: "", url: "", suggestions: { "Near Mint (NM or M-)": 40, "Very Good (VG)": 20 }, suggestionCurrency: "CAD" };
+  it("uses the worse of disc and inlay as the price grade", () => {
+    expect(priceGrade({ disc: "Near mint", booklet: "Very good" })).toBe("Very good");
+    expect(priceGrade({ disc: "Very good", booklet: "Missing" })).toBe("Good");
+    expect(priceGrade({ condition: "NEW" })).toBe("Mint");
+  });
+  it("asks Discogs for CDs worth more than a usual CD, or with no eBay copies", () => {
+    expect(wantsDiscogs(check(suggestion(5, 12), null))).toBe(false);
+    expect(wantsDiscogs(check(suggestion(5, 30), null))).toBe(true);
+    expect(wantsDiscogs(check(null, null))).toBe(true);
+  });
+  it("lets the Discogs price widen the range, or set it when eBay found nothing", () => {
+    const c = check(suggestion(4, 30), null);
+    expect(priceBounds(c, discogsCad(ref, "Near mint"))).toEqual({ min: 20.4, max: 46 });
+    expect(priceBounds(check(null, null), 40)).toEqual({ min: 28, max: 46 });
+    expect(finalAutoPrice(check(null, null), undefined, 40)).toMatchObject({ price: 40 });
+    expect(discogsCad({ ...ref, suggestionCurrency: "USD" }, "Near mint")).toBeUndefined();
+    expect(priceEvidence(c, 15, { ref, grade: "Near mint" })).toContain("Discogs price guide");
   });
 });
