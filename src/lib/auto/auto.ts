@@ -195,3 +195,32 @@ export function stageLabel(stage: AutoState["stage"]): string {
       return "Waiting";
   }
 }
+
+export interface PriceComparison {
+  /** "sold" when there were sales, else the current listings. */
+  basis: "sold" | "current";
+  count: number;
+  min: number;
+  max: number;
+  median: number;
+  /** How many of those copies were cheaper than the listing's price. */
+  cheaper: number;
+}
+
+/** Where a published listing's price sits among the copies its price check found (item prices, no shipping). */
+export function compareToComparables(price: number, check: PriceCheck | undefined): PriceComparison | null {
+  if (!check) return null;
+  const basis = check.soldItems.length ? "sold" : check.currentItems.length ? "current" : null;
+  if (!basis) return null;
+  const values = (basis === "sold" ? check.soldItems : check.currentItems).map((c) => c.price.value).sort((a, b) => a - b);
+  const mid = Math.floor(values.length / 2);
+  const median = values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+  return {
+    basis,
+    count: values.length,
+    min: values[0],
+    max: values[values.length - 1],
+    median: Math.round(median * 100) / 100,
+    cheaper: values.filter((v) => v < price).length,
+  };
+}
