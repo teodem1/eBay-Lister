@@ -15,7 +15,7 @@ const noop = () => () => {};
 /**
  * "Review": the listings the Auto tab published, newest first, to check what
  * Claude wrote and priced. "Edit" changes title, price or description and
- * pushes the change to the live eBay listing.
+ * pushes the change to the live eBay listing; "Done" takes it off this screen.
  */
 export default function ReviewScreen() {
   const items = useAuto();
@@ -32,10 +32,6 @@ export default function ReviewScreen() {
       <main className="page page-tabs">
         <header className="pt-1">
           <h1 className="t-display">Review</h1>
-          <p className="mt-1 text-muted">
-            Listings published from the Auto tab. Tap Edit to change one; the change goes straight to the live listing
-            on eBay.
-          </p>
         </header>
 
         {!hydrated ? (
@@ -63,10 +59,10 @@ export default function ReviewScreen() {
             </div>
             <ul className="flex flex-col gap-3">
               {published.map((item) => (
-                <ReviewCard key={item.id} item={item} onEdit={() => setEditing(item.id)} />
+                <ReviewCard key={item.id} item={item} onEdit={() => setEditing(item.id)} onDone={() => autoStore.remove(item.id)} />
               ))}
             </ul>
-            <p className="t-small px-1 text-muted">Clearing the list only removes it from this phone; the listings stay on eBay.</p>
+            <p className="t-small px-1 text-muted">Done and Clear list only remove listings from this screen; they stay on eBay.</p>
           </section>
         )}
         {editItem && <EditPublishedSheet item={editItem} onClose={() => setEditing(null)} />}
@@ -76,8 +72,8 @@ export default function ReviewScreen() {
   );
 }
 
-/** One published listing: its photos, title, price and why Claude picked it, with Edit and eBay. */
-function ReviewCard({ item, onEdit }: { item: BatchItem; onEdit: () => void }) {
+/** One published listing: its photos, title and price, with Edit, eBay and Done (removes it from Review). */
+function ReviewCard({ item, onEdit, onDone }: { item: BatchItem; onEdit: () => void; onDone: () => void }) {
   const a = autoState(item);
   const d = a.draft;
   return (
@@ -96,12 +92,6 @@ function ReviewCard({ item, onEdit }: { item: BatchItem; onEdit: () => void }) {
           <b className="tabular-nums">{d ? formatMoney(d.price, "CAD") : ""}</b>
           {a.revisedAt && <span className="chip ml-2 bg-brand-soft py-0 text-brand-ink">Edited</span>}
         </p>
-        {a.priceBasis && <p className="t-small mt-1 text-muted">{a.priceBasis}</p>}
-        <p className="t-caption mt-1 text-muted">
-          {[d?.categoryName?.split(">").pop()?.trim(), a.promotedPercent ? `Promoted ${a.promotedPercent}%` : null, item.listingId && `eBay ${item.listingId}`]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
       </div>
       {d && <SoldComparison price={d.price} check={a.priceCheck} discogs={a.discogs} grade={priceGrade(item.condition)} />}
       {a.promotionError && <p className="notice notice-warn t-small">{a.promotionError}</p>}
@@ -114,6 +104,9 @@ function ReviewCard({ item, onEdit }: { item: BatchItem; onEdit: () => void }) {
             eBay <Icon name="external" size={16} />
           </a>
         )}
+        <button type="button" className="btn btn-primary flex-1" onClick={onDone}>
+          <Icon name="check" size={18} /> Done
+        </button>
       </div>
     </li>
   );
