@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { AppBar, Icon, TabBar } from "@/components/ui";
+import { AppBar, Icon, Spinner, TabBar } from "@/components/ui";
 import {
   CURRENCY,
   allCategories,
@@ -16,6 +16,7 @@ import {
   type SortKey,
 } from "@/lib/collection/collection";
 import { collectionStore, useCollection } from "@/lib/collection/store";
+import { pushEditToEbay, type EbaySync } from "./pushEditToEbay";
 import { saveTextFile } from "@/lib/native/share";
 
 const SORTS: { key: SortKey; label: string }[] = [
@@ -241,6 +242,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
   const [cats, setCats] = useState(item.categories);
   const [newCat, setNewCat] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [sync, setSync] = useState<EbaySync | null>(null);
 
   const priceNum = price.trim() === "" ? undefined : Number(price);
   const priceValid = priceNum === undefined || (Number.isFinite(priceNum) && priceNum >= 0);
@@ -267,18 +269,29 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
     setNewCat("");
   }
 
-  function save() {
+  async function save() {
     const priceChanged = priceNum !== item.price;
     const pending = cleanCategory(newCat);
-    collectionStore.update(item.id, {
+    const after = {
       title: title.trim() || item.title,
       artist: artist.trim(),
       year: yearNum,
       price: priceNum === undefined ? undefined : Math.round(priceNum * 100) / 100,
+    };
+    collectionStore.update(item.id, {
+      ...after,
       priceSource: priceNum === undefined ? undefined : priceChanged ? "manual" : item.priceSource,
       categories: pending ? withCategory(cats, pending) : cats,
     });
-    close();
+    // Album, artist, year and price also change the live eBay listing.
+    const onEbay =
+      (item.sku || item.barcode) &&
+      (after.title !== item.title || after.artist !== item.artist || after.year !== item.year || (after.price !== undefined && after.price !== item.price));
+    if (!onEbay) return close();
+    setSync({ state: "working" });
+    const result = await pushEditToEbay(item, after);
+    setSync(result);
+    if (result.state === "done") setTimeout(close, 1200);
   }
 
   const listing = new URLSearchParams();
@@ -405,9 +418,30 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
             )}
           </fieldset>
 
-          <button type="submit" className="btn btn-primary btn-lg" disabled={!priceValid || !yearValid}>
-            Save
-          </button>
+          {sync && sync.state !== "working" && (
+            <p role="status" className={`notice t-small ${sync.state === "done" ? "notice-ok" : sync.state === "failed" ? "notice-bad" : "notice-warn"}`}>
+              {sync.message}
+            </p>
+          )}
+          {sync && sync.state !== "working" && sync.state !== "done" ? (
+            <button type="button" className="btn btn-primary btn-lg" onClick={close}>
+              Close
+            </button>
+          ) : (
+            <button type="submit" className="btn btn-primary btn-lg" disabled={!priceValid || !yearValid || sync?.state === "working"}>
+              {sync?.state === "working" ? (
+                <>
+                  <Spinner /> Updating eBay…
+                </>
+              ) : sync?.state === "done" ? (
+                <>
+                  <Icon name="check" size={18} /> Saved
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+          )}
           <Link href={`/listing?${listing}`} className="btn btn-secondary">
             Create eBay listing
             <Icon name="arrow" size={18} />

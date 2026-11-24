@@ -103,7 +103,11 @@ Screens (phone first):
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in
   sessionStorage by `stashScanned`). Each CD shows cover, album, artist, year, CAD price and user
-  categories, with search, category filter, sort, total inventory value and a JSON backup. Logic in `src/lib/collection/collection.ts`,
+  categories, with search, category filter, sort, total inventory value and a JSON backup. Saving an edit to album,
+  artist, year or price also updates the live eBay listing (`pushEditToEbay.ts` → `/api/listing/update-details` →
+  `applyCollectionEdit` in `src/lib/ebay/listingEdits.ts`: reads the inventory item and offer, changes only the title's
+  artist/album, those item specifics and the price (Best Offer decline kept at the same %), and puts them back). It uses
+  the CD's `sku` (saved on publish), else the only live SKU `BC-<barcode>-…`. Logic in `src/lib/collection/collection.ts`,
   storage in `src/lib/collection/store.ts` (localStorage on the device, no server DB). Album
   details come from MusicBrainz + Cover Art Archive (`src/lib/music/musicbrainz.ts`, no key),
   added to lookup responses as `album`. When MusicBrainz misses a barcode, Claude Haiku reads artist and album

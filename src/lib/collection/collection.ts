@@ -21,6 +21,8 @@ export interface CollectionItem {
   priceSource?: "estimate" | "manual";
   /** User-assignable categories, e.g. genre or shelf. */
   categories: string[];
+  /** The eBay listing's SKU, when the CD was listed from this app (edits are pushed to it). */
+  sku?: string;
   addedAt: string;
   updatedAt: string;
 }
@@ -199,6 +201,8 @@ function newId(): string {
 /** The reviewed listing fields the collection cares about. */
 export interface ListingSnapshot {
   title: string;
+  /** The listing's SKU, so later Collection edits can update it on eBay. */
+  sku?: string;
   price?: number;
   barcode?: string;
   aspects: { name: string; value: string }[];
@@ -240,6 +244,7 @@ export function itemFromListing(listing: ListingSnapshot, scanned: CollectionIte
     coverUrl: scanned?.coverUrl ?? photo,
     fallbackCoverUrl: scanned?.coverUrl ? (photo ?? scanned.fallbackCoverUrl) : undefined,
     barcode: listing.barcode || scanned?.barcode,
+    sku: listing.sku || scanned?.sku,
     price: price ?? scanned?.price,
     priceSource: price !== undefined ? "manual" : scanned?.priceSource,
     categories: genres.reduce(withCategory, scanned?.categories ?? []),
