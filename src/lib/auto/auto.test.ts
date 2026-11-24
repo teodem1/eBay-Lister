@@ -5,6 +5,7 @@ import type { PriceCheck } from "../../app/listing/priceRequest";
 import type { PriceSuggestion } from "../pricing/suggestPrice";
 import {
   CD_CATEGORY_ID,
+  compareToComparables,
   autoDraft,
   autoSummary,
   interruptedToWaiting,
@@ -131,5 +132,16 @@ describe("Claude's price pick", () => {
     expect(finalAutoPrice(c, { price: 22, reason: "Recent sales" })).toEqual({ price: 22, basis: "Claude: Recent sales" });
     expect(finalAutoPrice(c, { price: 99, reason: "x" })?.price).toBe(28.75);
     expect(finalAutoPrice(c, undefined)?.price).toBe(20);
+  });
+});
+
+describe("compareToComparables", () => {
+  const sold = (v: number) => ({ price: { value: v, currency: "CAD" } }) as never;
+  it("places the price among the sold copies, else the current listings", () => {
+    const c = { ...check(null, null), soldItems: [sold(12), sold(20), sold(15), sold(18)], currentItems: [sold(30)] };
+    expect(compareToComparables(17, c)).toEqual({ basis: "sold", count: 4, min: 12, max: 20, median: 16.5, cheaper: 2 });
+    expect(compareToComparables(17, { ...c, soldItems: [] })?.basis).toBe("current");
+    expect(compareToComparables(17, check(null, null))).toBeNull();
+    expect(compareToComparables(17, undefined)).toBeNull();
   });
 });

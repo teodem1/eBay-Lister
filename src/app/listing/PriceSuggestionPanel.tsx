@@ -139,7 +139,7 @@ function ComparableList({
 }
 
 /** "2026-11-04" -> "Nov 4". */
-function shortDate(iso: string): string {
+export function shortDate(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 }
@@ -148,7 +148,7 @@ function shortDate(iso: string): string {
  * Dot strip: each comparable's item price on one line, with the chosen price
  * marked, so the seller sees where their price sits among real sales.
  */
-function PriceStrip({ values, selected, currency }: { values: number[]; selected: number | undefined; currency: string }) {
+export function PriceStrip({ values, selected, currency }: { values: number[]; selected: number | undefined; currency: string }) {
   const all = selected !== undefined ? [...values, selected] : values;
   const min = Math.min(...all);
   const max = Math.max(...all);
