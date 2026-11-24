@@ -5,7 +5,8 @@
  * lives in src/app/auto/useAutoRun.ts.
  */
 import type { BatchItem, AutoState, ListingDraftLike } from "../batch/queue";
-import { conditionComplete } from "../listing/condition";
+import { conditionComplete, GRADES, type Grade, type SellerCondition } from "../listing/condition";
+import { discogsEvidence, discogsPriceFor, type DiscogsReference } from "../pricing/discogs";
 import type { GeneratedListing } from "../listing/types";
 import type { PriceCheck } from "../../app/listing/priceRequest";
 
@@ -14,6 +15,33 @@ export const CD_CATEGORY_ID = "176984";
 
 /** Photos asked for after each scan, in order: the front cover is the main photo. */
 export const AUTO_PHOTOS = ["Front cover", "Back cover"] as const;
+/**
+ * A CD whose eBay price is at least this (CAD) counts as collectible: its price
+ * is also checked against the Discogs price guide.
+ */
+export const COLLECTIBLE_MIN_CAD = 25;
+
+/** The grade that sets the price: the worse of disc and inlay (a missing inlay counts as Good); sealed = Mint. */
+export function priceGrade(sc: Partial<SellerCondition> | undefined): Grade | undefined {
+  if (!sc) return undefined;
+  if (sc.condition === "NEW") return "Mint";
+  const inlay: Grade | undefined = sc.booklet === "Missing" ? "Good" : sc.booklet;
+  const parts = [sc.disc, inlay].filter(Boolean) as Grade[];
+  return parts.sort((a, b) => GRADES.indexOf(b) - GRADES.indexOf(a))[0];
+}
+
+/** Whether to ask Discogs too: the eBay price says it's worth more than a usual CD, or eBay found no copies. */
+export function wantsDiscogs(check: PriceCheck): boolean {
+  const ebay = pickAutoPrice(check);
+  return !ebay || ebay.price >= COLLECTIBLE_MIN_CAD;
+}
+
+/** Discogs' price for the grade, when it is in CAD (other currencies aren't converted). */
+export function discogsCad(ref: DiscogsReference | null | undefined, grade: Grade | undefined): number | undefined {
+  if (!ref || (ref.suggestionCurrency && ref.suggestionCurrency !== "CAD")) return undefined;
+  return discogsPriceFor(ref, grade);
+}
+
 /** At most this many photos per CD on the Auto tab. */
 export const AUTO_MAX_PHOTOS = 4;
 
@@ -75,7 +103,11 @@ const money = (n: number) => n.toFixed(2);
  * The price check as text for Claude, who picks the price on the Auto tab:
  * the computed suggestions plus the copies behind them (sold first).
  */
-export function priceEvidence(check: PriceCheck, max = 15): string {
+export function priceEvidence(
+  check: PriceCheck,
+  max = 15,
+  discogs?: { ref: DiscogsReference; grade: Grade | undefined },
+): string {
   const lines: string[] = [];
   const block = (label: string, s: PriceCheck["sold"], items: PriceCheck["soldItems"]) => {
     if (!s || s.usedCount === 0) {
@@ -94,17 +126,23 @@ export function priceEvidence(check: PriceCheck, max = 15): string {
   };
   block("Sold copies", check.sold, check.soldItems);
   block("Listed now (asking prices)", check.current, check.currentItems);
-  const bounds = priceBounds(check);
+  if (discogs) lines.push(discogsEvidence(discogs.ref, discogs.grade));
+  const bounds = priceBounds(check, discogs ? discogsCad(discogs.ref, discogs.grade) : undefined);
   if (bounds) lines.push(`Allowed range: ${money(bounds.min)} to ${money(bounds.max)}.`);
   return lines.join("\n");
 }
 
-/** The range Claude's price must stay in: around what sold (or is listed), so a slip can't list at $1 or $500. */
-export function priceBounds(check: PriceCheck): { min: number; max: number } | null {
+/**
+ * The range Claude's price must stay in: around what sold (or is listed), so a
+ * slip can't list at $1 or $500. A Discogs price for the grade (CAD) widens it
+ * up to 115% of that price, or sets it (70-115%) when eBay found no copies.
+ */
+export function priceBounds(check: PriceCheck, discogs?: number): { min: number; max: number } | null {
   const s = check.sold && check.sold.usedCount > 0 ? check.sold : check.current && check.current.usedCount > 0 ? check.current : null;
-  if (!s) return null;
-  const min = Math.max(0.99, Math.round(s.itemPrice.quickSale * 0.85 * 100) / 100);
-  const max = Math.max(min, Math.round(s.itemPrice.high * 1.15 * 100) / 100);
+  const r = (n: number) => Math.round(n * 100) / 100;
+  if (!s) return discogs ? { min: Math.max(0.99, r(discogs * 0.7)), max: r(discogs * 1.15) } : null;
+  const min = Math.max(0.99, r(s.itemPrice.quickSale * 0.85));
+  const max = Math.max(min, r(s.itemPrice.high * 1.15), discogs ? r(discogs * 1.15) : 0);
   return { min, max };
 }
 
@@ -115,9 +153,10 @@ export function priceBounds(check: PriceCheck): { min: number; max: number } | n
 export function finalAutoPrice(
   check: PriceCheck,
   claude: { price: number; reason: string } | undefined,
+  discogs?: number,
 ): { price: number; basis: string } | null {
-  const fallback = pickAutoPrice(check);
-  const bounds = priceBounds(check);
+  const fallback = pickAutoPrice(check) ?? (discogs ? { price: discogs, basis: "No eBay copies: Discogs price guide for this grade" } : null);
+  const bounds = priceBounds(check, discogs);
   if (!claude || !bounds || !(claude.price > 0)) return fallback;
   const price = Math.min(bounds.max, Math.max(bounds.min, claude.price));
   const clamped = price !== claude.price ? ` (kept inside ${money(bounds.min)}-${money(bounds.max)})` : "";

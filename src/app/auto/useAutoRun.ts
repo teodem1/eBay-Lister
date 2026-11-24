@@ -1,7 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { autoDraft, autoState, finalAutoPrice, interruptedToWaiting, pickAutoPrice, priceEvidence, readyForAuto } from "@/lib/auto/auto";
+import {
+  autoDraft,
+  autoState,
+  discogsCad,
+  finalAutoPrice,
+  interruptedToWaiting,
+  pickAutoPrice,
+  priceEvidence,
+  priceGrade,
+  readyForAuto,
+  wantsDiscogs,
+} from "@/lib/auto/auto";
+import type { DiscogsReference } from "@/lib/pricing/discogs";
 import type { AutoState, BatchItem } from "@/lib/batch/queue";
 import { autoStore } from "@/lib/batch/store";
 import { itemFromListing } from "@/lib/collection/collection";
@@ -47,8 +59,26 @@ async function listOne(id: string): Promise<void> {
       check = result;
       patchAuto(id, { priceCheck: check });
     }
-    // Nothing sold or listed: no basis for a price, so this CD is not listed automatically.
-    if (!pickAutoPrice(check)) throw new Error("No sold or listed copies found, so there's no price to go on. List it by hand.");
+    // Worth more than a usual CD, or no eBay copies at all: ask the Discogs price guide too (asked once per CD).
+    let discogs = autoState(autoStore.get(id)!).discogs;
+    if (discogs === undefined && wantsDiscogs(check) && start.barcode) {
+      const ref = await fetch("/api/price-reference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode: start.barcode }),
+      })
+        .then((r) => r.json())
+        .catch(() => ({ discogs: null, unavailable: "Discogs lookup failed." }));
+      discogs = (ref?.discogs as DiscogsReference | null) ?? null;
+      patchAuto(id, { discogs, discogsNote: ref?.unavailable });
+    }
+    const grade = priceGrade(condition);
+    const discogsPrice = discogsCad(discogs, grade);
+    const ebayPrice = pickAutoPrice(check);
+    // Nothing sold or listed anywhere: no basis for a price, so this CD is not listed automatically.
+    if (!ebayPrice && discogsPrice === undefined) {
+      throw new Error("No sold or listed copies found on eBay or Discogs, so there's no price to go on. List it by hand.");
+    }
 
     // 2. Claude writes the listing and picks the price from the sold and listed copies
     //    (kept if a later step failed, so the same SKU is re-sent).
@@ -59,11 +89,11 @@ async function listOne(id: string): Promise<void> {
       const generated = await postJson<GeneratedListing>("/api/listing/generate", {
         query,
         barcode: start.barcode || undefined,
-        suggestedPrice: pickAutoPrice(check)!.price,
+        suggestedPrice: ebayPrice?.price ?? discogsPrice,
         sellerCondition: condition,
-        priceEvidence: priceEvidence(check),
+        priceEvidence: priceEvidence(check, 15, discogs ? { ref: discogs, grade } : undefined),
       });
-      const picked = finalAutoPrice(check, generated.claudePrice)!;
+      const picked = finalAutoPrice(check, generated.claudePrice, discogsPrice)!;
       draft = autoDraft(generated, picked.price, photos);
       patchAuto(id, { draft, price: picked.price, priceBasis: picked.basis });
     } else {

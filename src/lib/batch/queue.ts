@@ -14,6 +14,7 @@ import { listingQuery, type LookupResponse } from "../lookup";
 import type { GeneratedListing } from "../listing/types";
 import type { SellerCondition } from "../listing/conditionSchema";
 import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { DiscogsReference } from "../pricing/discogs";
 
 export type BatchStatus = "pending" | "listed" | "skipped";
 export type LookupState = "queued" | "loading" | "done" | "error";
@@ -82,6 +83,10 @@ export interface AutoState {
   promotedPercent?: number;
   promotionError?: string;
   revisedAt?: string;
+  /** Discogs price guide, checked for CDs worth more than a usual CD (or with no eBay copies). */
+  discogs?: DiscogsReference | null;
+  /** Why there's no Discogs reference, when one was asked for. */
+  discogsNote?: string;
 }
 
 /** The published draft (same shape as ListingDraft, kept loose to avoid importing zod here). */

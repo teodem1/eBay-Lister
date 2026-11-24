@@ -6,7 +6,7 @@ import { AppBar, Icon, TabBar } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
 import EditPublishedSheet from "@/app/auto/EditPublishedSheet";
 import SoldComparison from "./SoldComparison";
-import { autoState } from "@/lib/auto/auto";
+import { autoState, priceGrade } from "@/lib/auto/auto";
 import { batchItemName, type BatchItem } from "@/lib/batch/queue";
 import { autoStore, useAuto } from "@/lib/batch/store";
 
@@ -103,7 +103,7 @@ function ReviewCard({ item, onEdit }: { item: BatchItem; onEdit: () => void }) {
             .join(" · ")}
         </p>
       </div>
-      {d && <SoldComparison price={d.price} check={a.priceCheck} />}
+      {d && <SoldComparison price={d.price} check={a.priceCheck} discogs={a.discogs} grade={priceGrade(item.condition)} />}
       {a.promotionError && <p className="notice notice-warn t-small">{a.promotionError}</p>}
       <div className="flex gap-2">
         <button type="button" className="btn btn-secondary flex-1" onClick={onEdit}>

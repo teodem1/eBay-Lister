@@ -83,13 +83,17 @@ Screens (phone first):
   then the disc/inlay grade. "Auto list N CDs" runs `useAutoRun.ts`, two CDs at a time: one price check (saved on the CD
   so a retry never spends a second sold-comps call; no sold or listed copies = not listed) → `/api/listing/generate`
   with `priceEvidence` (the comps as text), so Claude writes the listing AND picks the price (`claudePrice`), kept inside
-  `priceBounds` (85% of quick sale to 115% of high) by `finalAutoPrice` → `/api/listing/publish` (server defaults for
+  `priceBounds` (85% of quick sale to 115% of high) by `finalAutoPrice`. CDs priced at `COLLECTIBLE_MIN_CAD` ($25) or
+  more, or with no eBay copies, also get the Discogs price guide (`/api/price-reference`, `src/lib/pricing/discogs.ts`,
+  `DISCOGS_TOKEN`): its price for the CD's grade (`priceGrade`, worse of disc/inlay) goes into Claude's evidence and
+  widens the range (or sets it when eBay found nothing) → `/api/listing/publish` (server defaults for
   shipping, Best Offer, promotion) → Collection. Its list is a second batch store (`autoStore`, key
   `ebay-lister:auto:v1`, `createBatchStore` in `src/lib/batch/store.ts`); logic in `src/lib/auto/auto.ts`. A failed CD
   shows "Try again" or "List by hand" (moves it to To list with grades, photos and price check).
 - `/review` — `src/app/review/ReviewScreen.tsx` ("Review" tab): the Auto tab's published listings with photos, price and
   Claude's reason, and `SoldComparison.tsx`: the price on a strip among the last sold copies from the saved price check
-  (no new sold-comps call; current listings when nothing sold), range, median, and the sales (tap for `ComparableSheet`).
+  (no new sold-comps call; current listings when nothing sold), range, median, and the sales (tap for `ComparableSheet`),
+  plus the Discogs price guide when it was checked.
   "Edit" (`src/app/auto/EditPublishedSheet.tsx`: title, price, description) sends the draft to
   `/api/listing/revise` (`reviseListing` in `publish.ts`: replaces the inventory item and offer of the same SKU, no republish).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
