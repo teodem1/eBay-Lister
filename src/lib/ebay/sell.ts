@@ -288,6 +288,63 @@ export class EbaySellClient {
     return offerId;
   }
 
+  // ---------- Small edits to a live listing (Collection) ----------
+
+  /** The inventory item for a SKU as eBay stores it, or undefined when there is none. */
+  async getInventoryItemRaw(sku: string): Promise<Record<string, unknown> | undefined> {
+    const res = await this.sellRequest("get inventory item", "GET", `/inventory_item/${encodeURIComponent(sku)}`);
+    if (res.status === 404) return undefined;
+    const data = await readBody(res);
+    if (!res.ok) throw new EbayApiError("get inventory item", res.status, data);
+    return data as Record<string, unknown>;
+  }
+
+  /** Replaces the inventory item with a body read by getInventoryItemRaw (and edited). Revises a live listing. */
+  async putInventoryItemRaw(sku: string, item: Record<string, unknown>): Promise<void> {
+    // Read-only fields eBay returns but does not take back.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { sku: _sku, groupIds: _g, inventoryItemGroupKeys: _k, ...body } = item;
+    const res = await this.sellRequest("update inventory item", "PUT", `/inventory_item/${encodeURIComponent(sku)}`, body);
+    if (res.status !== 201 && res.status !== 204 && !res.ok) {
+      throw new EbayApiError("update inventory item", res.status, await readBody(res));
+    }
+  }
+
+  /** The SKU's offers on this marketplace (empty when it has none). */
+  async getOffersRaw(sku: string): Promise<Record<string, unknown>[]> {
+    const qs = new URLSearchParams({ sku, marketplace_id: this.config.marketplaceId });
+    const res = await this.sellRequest("get offers", "GET", `/offer?${qs}`);
+    if (res.status === 404) return [];
+    const data = await readBody(res);
+    if (!res.ok) {
+      if (res.status === 400 && JSON.stringify(data).includes("25713")) return [];
+      throw new EbayApiError("get offers", res.status, data);
+    }
+    return ((data as { offers?: Record<string, unknown>[] }).offers ?? []);
+  }
+
+  /** Replaces an offer with a body read by getOffersRaw (and edited). Revises a live listing. */
+  async putOfferRaw(offer: Record<string, unknown>): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { offerId, status: _s, listing: _l, ...body } = offer;
+    const res = await this.sellRequest("update offer", "PUT", `/offer/${encodeURIComponent(String(offerId))}`, body);
+    if (!res.ok) throw new EbayApiError("update offer", res.status, await readBody(res));
+  }
+
+  /** SKUs that start with a prefix (e.g. "BC-0602547…-"), newest pages first scanned up to `max` items. */
+  async findSkus(prefix: string, max = 1000): Promise<string[]> {
+    const found: string[] = [];
+    for (let offset = 0; offset < max; offset += 200) {
+      const res = await this.sellRequest("list inventory items", "GET", `/inventory_item?limit=200&offset=${offset}`);
+      const data = await readBody(res);
+      if (!res.ok) throw new EbayApiError("list inventory items", res.status, data);
+      const items = (data as { inventoryItems?: { sku: string }[] }).inventoryItems ?? [];
+      for (const i of items) if (i.sku?.toUpperCase().startsWith(prefix.toUpperCase())) found.push(i.sku);
+      if (items.length < 200) break;
+    }
+    return found;
+  }
+
   /** Publishes the offer and returns the eBay listing ID. */
   async publishOffer(offerId: string): Promise<string> {
     const res = await this.sellRequest("publish offer", "POST", `/offer/${offerId}/publish`);
