@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import ToListCount from "./ToListCount";
+import SoldLimitBanner from "./SoldLimitBanner";
 
 /** The app's price-tag mark, same shape as the launcher icon. */
 export function Logo({ size = 32 }: { size?: number }) {
@@ -41,6 +42,7 @@ export function AppBar({ title, back, action }: { title: string; back?: { href: 
         <span className="t-headline flex-1 truncate">{title}</span>
         {action}
       </div>
+      <SoldLimitBanner />
     </header>
   );
 }

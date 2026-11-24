@@ -131,7 +131,11 @@ Server code:
   Ported from `ebay_handler.py` in teodem1/ebay-item-listings-anthropic-claude.
 - `src/lib/ebay/oauth.ts` + `src/app/api/ebay/{connect,callback}` — one-time eBay sign-in that shows the refresh token for `EBAY_REFRESH_TOKEN` (needs `EBAY_RUNAME`).
 - Promoted Listings: after publish, `/api/listing/publish` adds the listing to a cost-per-sale campaign at `EBAY_PROMOTED_PERCENT` (or the draft's `promotedPercent`) via `EbaySellClient.promoteListing` (needs the `sell.marketing` scope).
-- `src/lib/ebay/config.ts` — env settings for both clients.
+- `src/lib/ebay/config.ts` — env settings for both clients. Best Offer auto-declines offers under
+  `EBAY_BEST_OFFER_MIN_PERCENT` (the seller uses 70) of the price.
+- sold-comps.com allowance: a 429/402 (or a 403 that says limit/quota) is `isSoldCompsLimit`; the price check then
+  returns `soldLimitReached` (and `soldRemaining` when a rate-limit header says so). The phone remembers it
+  (`src/lib/pricing/soldLimit.ts`) and `SoldLimitBanner` under every `AppBar` warns when it is used up or 10 or fewer are left.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
   Package defaults to 65 g (`DEFAULT_PACKAGE_WEIGHT_KG`, edited in grams) and 12 × 15 × 1 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).

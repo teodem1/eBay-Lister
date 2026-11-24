@@ -450,7 +450,7 @@ export class EbaySellClient {
 /**
  * Best Offer with no auto-accept: every offer waits for the seller, except offers
  * under `minPercent`% of the price, which eBay declines automatically
- * (e.g. 75 on $10.00 declines anything under $7.50).
+ * (e.g. 70 on $10.00 declines anything under $7.00).
  */
 export function bestOfferTerms(price: number, minPercent: number | undefined, currency: string) {
   if (!minPercent || minPercent <= 0 || minPercent >= 100) return undefined;

@@ -35,6 +35,8 @@ export interface SoldCompsOptions {
   now?: Date;
   /** How far back to ask for sales. eBay's own sold search keeps about 90 days, so older sales may not exist. */
   lookbackDays?: number;
+  /** Called with the lookups left this period when the answer carries a rate-limit header. */
+  onRemaining?: (left: number) => void;
 }
 
 export const DEFAULT_SOLD_LOOKBACK_DAYS = 365;
@@ -78,6 +80,30 @@ const COUNTRY_CODES: Record<string, string> = {
   taiwan: "TW",
   "south korea": "KR",
 };
+
+/** Shown when the sold-comps.com monthly allowance is used up. */
+export const SOLD_LIMIT_NOTE =
+  "Your sold-price lookups for this month (sold-comps.com) are used up. Prices come from current listings only " +
+  "until the allowance resets, or upgrade the sold-comps.com plan.";
+
+/** True when sold-comps.com refused because the plan's allowance is used up (429/402, or a 403 that says so). */
+export function isSoldCompsLimit(err: unknown): boolean {
+  if (!(err instanceof SoldCompsError)) return false;
+  if (err.status === 429 || err.status === 402) return true;
+  return err.status === 403 && /limit|quota|credit|exceed|usage|upgrade/i.test(err.message);
+}
+
+/** Lookups left from the usual rate-limit headers, when the provider sends one. */
+export function remainingFromHeaders(headers: Headers | undefined): number | undefined {
+  if (!headers) return undefined;
+  for (const name of ["x-ratelimit-remaining", "ratelimit-remaining", "x-quota-remaining", "x-requests-remaining", "x-credits-remaining"]) {
+    const v = headers.get(name);
+    if (v === null) continue;
+    const n = Number(v.split(/[;,]/)[0].trim());
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return undefined;
+}
 
 export class SoldCompsError extends Error {
   constructor(
@@ -220,6 +246,8 @@ export async function searchSoldComps(
   const res = await doFetch(buildSoldCompsUrl(q, opts), {
     headers: { Authorization: `Bearer ${opts.apiKey}`, Accept: "application/json" },
   });
+  const left = remainingFromHeaders(res.headers);
+  if (left !== undefined) opts.onRemaining?.(left);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new SoldCompsError(res.status, `sold-comps.com answered ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`);

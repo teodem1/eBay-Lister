@@ -23,7 +23,7 @@ import type {
   ComparableResult,
   Money,
 } from "./types";
-import { searchSoldComps, type SoldCompsOptions } from "./soldComps";
+import { isSoldCompsLimit, searchSoldComps, SOLD_LIMIT_NOTE, type SoldCompsOptions } from "./soldComps";
 import { cdKeywords } from "../pricing/version";
 
 // ---- Raw eBay response shapes (only the fields we use) ----
@@ -244,6 +244,10 @@ export interface BothComparables {
   sold: ComparableResult | null;
   /** Why `current` or `sold` is missing, for the user. */
   unavailable: { current?: string; sold?: string };
+  /** The sold-comps.com monthly allowance is used up. */
+  soldLimitReached?: boolean;
+  /** sold-comps.com lookups left, when it says. */
+  soldRemaining?: number;
 }
 
 export const SOLD_ACCESS_NOTE =
@@ -256,6 +260,8 @@ export interface BothOptions {
   soldCompsFetch?: SoldCompsOptions["fetch"];
   /** How many days of sales to ask sold-comps.com for (SOLD_LOOKBACK_DAYS). */
   soldLookbackDays?: number;
+  /** Lookups left on sold-comps.com, when its answer says. */
+  onSoldRemaining?: (left: number) => void;
 }
 
 /** Sold comparables: Marketplace Insights, else sold-comps.com whenever Insights fails and a key is set. */
@@ -278,6 +284,7 @@ async function searchSoldAny(
     marketplaceId,
     fetch: opts.soldCompsFetch,
     lookbackDays: opts.soldLookbackDays,
+    onRemaining: opts.onSoldRemaining,
   };
   const notes = ["Sold prices from sold-comps.com, a third-party service, not from eBay directly."];
   let items: Comparable[] = [];
@@ -316,8 +323,19 @@ export async function findBothComparables(
   opts: BothOptions = {},
 ): Promise<BothComparables> {
   const marketplaceId = client.config.marketplaceId;
-  const [active, sold] = await Promise.allSettled([searchActiveAny(client, q), searchSoldAny(client, q, opts)]);
+  let soldRemaining: number | undefined;
+  const [active, sold] = await Promise.allSettled([
+    searchActiveAny(client, q),
+    searchSoldAny(client, q, {
+      ...opts,
+      onSoldRemaining: (n) => {
+        soldRemaining = soldRemaining === undefined ? n : Math.min(soldRemaining, n);
+        opts.onSoldRemaining?.(n);
+      },
+    }),
+  ]);
   const unavailable: BothComparables["unavailable"] = {};
+  let soldLimitReached = false;
   const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   let current: ComparableResult | null = null;
@@ -331,13 +349,22 @@ export async function findBothComparables(
   if (sold.status === "fulfilled") {
     soldResult = sold.value;
   } else {
-    unavailable.sold = isAccessDenied(sold.reason)
-      ? SOLD_ACCESS_NOTE
-      : `Sold search failed: ${message(sold.reason)}`;
+    soldLimitReached = isSoldCompsLimit(sold.reason);
+    unavailable.sold = soldLimitReached
+      ? SOLD_LIMIT_NOTE
+      : isAccessDenied(sold.reason)
+        ? SOLD_ACCESS_NOTE
+        : `Sold search failed: ${message(sold.reason)}`;
   }
 
   if (!current && !soldResult) {
     throw active.status === "rejected" ? active.reason : new Error(unavailable.sold);
   }
-  return { current, sold: soldResult, unavailable };
+  return {
+    current,
+    sold: soldResult,
+    unavailable,
+    ...(soldLimitReached && { soldLimitReached }),
+    ...(soldRemaining !== undefined && { soldRemaining }),
+  };
 }
