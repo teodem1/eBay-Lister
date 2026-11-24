@@ -25,31 +25,37 @@ export default function AutoScreen() {
   const items = useAuto();
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const run = useAutoRun(hydrated);
+  const [scanCardId, setScanCardId] = useState<string | null>(null);
+  // CDs the seller is still working on (on the scan card, or opened in the list) wait until they move on.
+  const held = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    held.current = new Set([scanCardId, openId].filter((x): x is string => !!x));
+  }, [scanCardId, openId]);
+  const run = useAutoRun(hydrated, held);
 
   useBackgroundLookups(autoStore, items, hydrated);
 
   const pending = items.filter((x) => x.status === "pending");
   const summary = autoSummary(items);
+  const readyNow = summary.ready - [scanCardId, openId].filter((id) => id && pending.some((x) => x.id === id && !missingForAuto(x) && autoState(x).stage === "waiting")).length;
+  const left = summary.running + Math.max(0, readyNow);
 
-  // Once the open CD has its photos and grades, fold it away.
-  const open = pending.find((x) => x.id === openId);
-  const openDone = open ? !missingForAuto(open) : false;
+  // Listing runs in the background: a CD starts as soon as it's complete and the seller has moved on to the next one.
+  const { running, paused, start } = run;
   useEffect(() => {
-    if (!openDone) return;
-    const t = setTimeout(() => setOpenId(null), 700);
-    return () => clearTimeout(t);
-  }, [openDone]);
+    if (hydrated && !running && !paused && readyNow > 0) start();
+  }, [hydrated, running, paused, readyNow, start]);
 
   return (
     <>
       <AppBar title="Auto" />
-      <main className={`page page-tabs ${summary.ready || run.running ? "pb-44" : ""}`}>
+      <main className={`page page-tabs ${running || paused ? "pb-40" : ""}`}>
         <header className="pt-1">
           <h1 className="t-display">Auto list</h1>
           <p className="mt-1 text-muted">
-            Scan each CD, take the front and back cover photos and grade it. Claude then writes the listing, picks the
-            price from sold copies and publishes it. Check and edit the results in Review.
+            Scan each CD, take the front and back cover (and any extra) photos and grade it. While you scan the next
+            one, Claude writes the listing, picks the price from sold copies and publishes it. Check and edit the
+            results in Review.
           </p>
         </header>
 
@@ -57,6 +63,8 @@ export default function AutoScreen() {
           store={autoStore}
           items={items}
           renderItem={(item) => <AutoCdSteps key={item.id} item={item} startCamera />}
+          onCurrent={setScanCardId}
+          hint="It's listed in the background as soon as you tap Next CD or Done scanning."
         />
 
         {!hydrated ? (
@@ -117,21 +125,27 @@ export default function AutoScreen() {
         )}
       </main>
 
-      {hydrated && (summary.ready > 0 || run.running) && (
+      {hydrated && (running || (paused && readyNow > 0)) && (
         <div className="fixed inset-x-0 bottom-20 z-20 border-t border-line/70 bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-          <div className="mx-auto flex max-w-lg flex-col gap-1 px-4 py-3">
-            {run.running ? (
+          <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-3">
+            {running ? (
               <>
-                <button type="button" className="btn btn-secondary btn-lg w-full" onClick={run.pause}>
-                  <Spinner /> Listing… tap to stop after these
+                <Spinner className="text-brand-ink" />
+                <div className="min-w-0 flex-1">
+                  <p className="t-small font-semibold">Listing in the background · {left} to go</p>
+                  <p className="t-caption text-muted">Keep the app open. {summary.published} published so far.</p>
+                </div>
+                <button type="button" className="btn btn-secondary min-h-10 px-3 text-sm" onClick={run.pause}>
+                  Pause
                 </button>
-                <p className="t-caption text-center text-muted">Keep this screen open until it finishes.</p>
               </>
             ) : (
-              <button type="button" className="btn btn-primary btn-lg w-full" onClick={() => run.start()}>
-                <Icon name="bolt" size={22} strokeWidth={1.9} />
-                Auto list {summary.ready} {summary.ready === 1 ? "CD" : "CDs"}
-              </button>
+              <>
+                <p className="t-small min-w-0 flex-1 font-medium">Paused · {readyNow} ready to list</p>
+                <button type="button" className="btn btn-primary min-h-10 px-4 text-sm" onClick={() => start()}>
+                  <Icon name="bolt" size={18} /> Resume
+                </button>
+              </>
             )}
           </div>
         </div>

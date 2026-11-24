@@ -80,7 +80,9 @@ Screens (phone first):
   "Next CD", "Try again" (drops that scan and rescans) and "Done scanning".
 - `/auto` — `src/app/auto/AutoScreen.tsx` ("Auto" tab, listing with no review screen; the other tabs are unchanged):
   after each barcode the camera asks for the front cover, then the back cover (`AutoCdSteps.tsx`, `CdCamera prompt`),
-  then the disc/inlay grade. "Auto list N CDs" runs `useAutoRun.ts`, two CDs at a time: one price check (saved on the CD
+  then extra photos (disc, spine, defects; up to `AUTO_MAX_PHOTOS` = 12), then the disc/inlay grade. Listing runs in the
+  background: `useAutoRun.ts` starts each complete CD as soon as the seller moves on (CDs on the scan card or opened in the
+  list are `held`), two CDs at a time, with a Pause / Resume bar: one price check (saved on the CD
   so a retry never spends a second sold-comps call; no sold or listed copies = not listed) → `/api/listing/generate`
   with `priceEvidence` (the comps as text), so Claude writes the listing AND picks the price (`claudePrice`), kept inside
   `priceBounds` (85% of quick sale to 115% of high) by `finalAutoPrice`. CDs priced at `COLLECTIBLE_MIN_CAD` ($25) or

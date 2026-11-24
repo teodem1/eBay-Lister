@@ -22,7 +22,7 @@ export default function AutoCdSteps({ item, startCamera = false }: { item: Batch
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const taken = a.photos.length + uploading;
-  const nextLabel = AUTO_PHOTOS[taken] ?? "Another photo";
+  const nextLabel = AUTO_PHOTOS[taken] ?? "Extra photo";
 
   async function addPhoto(file: File) {
     setError(null);
@@ -61,7 +61,9 @@ export default function AutoCdSteps({ item, startCamera = false }: { item: Batch
       <div className="card space-y-3">
         <div className="flex items-baseline justify-between">
           <span className="t-headline">Photos</span>
-          <span className="t-small text-muted">Front cover, then back cover</span>
+          <span className="t-small text-muted tabular-nums">
+            {a.photos.length}/{AUTO_MAX_PHOTOS}
+          </span>
         </div>
         <ul className="grid grid-cols-4 gap-2">
           {a.photos.map((u, i) => (
@@ -92,7 +94,7 @@ export default function AutoCdSteps({ item, startCamera = false }: { item: Batch
           onClick={() => setCamera(true)}
         >
           <Icon name="camera" size={22} strokeWidth={1.8} />
-          {taken < AUTO_PHOTOS.length ? `Take the ${nextLabel.toLowerCase()} photo` : "Add another photo"}
+          {taken < AUTO_PHOTOS.length ? `Take the ${nextLabel.toLowerCase()} photo` : "Add more photos"}
         </button>
         {error && (
           <p role="alert" className="notice notice-bad">
@@ -105,11 +107,18 @@ export default function AutoCdSteps({ item, startCamera = false }: { item: Batch
 
       {camera && (
         <CdCamera
-          prompt={`${nextLabel}: fit it inside the square`}
+          prompt={
+            taken < AUTO_PHOTOS.length
+              ? `${nextLabel}: fit it inside the square`
+              : taken >= AUTO_MAX_PHOTOS
+                ? "That's the most photos. Tap Done."
+                : "Extra photos (disc, spine, defects), or tap Done"
+          }
           onShot={(file) => {
+            // Front cover, back cover, then as many extra shots as wanted; Done closes the camera.
+            if (taken >= AUTO_MAX_PHOTOS) return;
             addPhoto(file);
-            // Front cover taken: the camera stays open for the back cover, then closes.
-            if (taken + 1 >= AUTO_PHOTOS.length) setCamera(false);
+            if (taken + 1 >= AUTO_MAX_PHOTOS) setCamera(false);
           }}
           onClose={() => setCamera(false)}
           onUnavailable={() => {

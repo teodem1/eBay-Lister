@@ -25,6 +25,7 @@ export default function StackScan({
   autoStart = false,
   hint,
   renderItem,
+  onCurrent,
 }: {
   store: BatchStore;
   items: BatchItem[];
@@ -34,6 +35,8 @@ export default function StackScan({
   hint?: string;
   /** Extra steps for the CD just scanned, shown on the card (e.g. photos and grades on the Auto tab). */
   renderItem?: (item: BatchItem) => ReactNode;
+  /** The CD shown on the card (null when none), e.g. so the Auto tab holds it back while the seller works on it. */
+  onCurrent?: (id: string | null) => void;
 }) {
   const [scanning, setScanning] = useState(false);
   const [last, setLast] = useState<Last | null>(null);
@@ -90,6 +93,11 @@ export default function StackScan({
     // Only on the first render with autoStart.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
+
+  const currentId = last && "id" in last ? last.id : null;
+  useEffect(() => {
+    onCurrent?.(currentId);
+  }, [currentId, onCurrent]);
 
   useEffect(() => {
     if (last) cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
