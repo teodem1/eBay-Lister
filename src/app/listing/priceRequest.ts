@@ -1,6 +1,7 @@
 import type { Comparable, ComparableQuery } from "@/lib/ebay/types";
 import type { Condition } from "@/lib/ebay/sell";
 import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
+import { noteSoldQuota } from "../../lib/pricing/soldLimit";
 
 /** A product barcode (UPC/EAN/GTIN) is 8 to 14 digits. */
 export function isGtin(code: string): boolean {
@@ -47,6 +48,10 @@ export interface PriceCheck {
   unavailable: { current?: string; sold?: string };
   /** The item text the check searched for (decides which titles are other versions). */
   keywords: string;
+  /** The sold-comps.com monthly allowance was used up, so there are no sold prices. */
+  soldLimitReached?: boolean;
+  /** sold-comps.com lookups left this period, when it says. */
+  soldRemaining?: number;
 }
 
 /** The price to prefill: last-sold recommended when there is one, else current. */
@@ -67,8 +72,11 @@ export async function fetchPriceSuggestion(
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
+    noteSoldQuota(data);
     if (!res.ok || !("current" in data || "sold" in data)) return { error: data?.error ?? "Price check failed" };
     return {
+      soldLimitReached: data.soldLimitReached || undefined,
+      soldRemaining: data.soldRemaining,
       current: data.current?.suggestion ?? null,
       sold: data.sold?.suggestion ?? null,
       keywords: body.keywords ?? "",

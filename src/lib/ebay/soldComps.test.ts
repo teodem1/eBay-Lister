@@ -153,3 +153,20 @@ describe("findImageUrl", () => {
     expect(findImageUrl({ url: "https://www.ebay.ca/itm/1", title: "CD" })).toBeNull();
   });
 });
+
+import { isSoldCompsLimit, remainingFromHeaders, SoldCompsError as LimitError } from "./soldComps";
+
+describe("sold-comps allowance", () => {
+  it("spots a used-up allowance", () => {
+    expect(isSoldCompsLimit(new LimitError(429, "sold-comps.com answered 429"))).toBe(true);
+    expect(isSoldCompsLimit(new LimitError(402, "sold-comps.com answered 402"))).toBe(true);
+    expect(isSoldCompsLimit(new LimitError(403, "sold-comps.com answered 403: Monthly quota exceeded"))).toBe(true);
+    expect(isSoldCompsLimit(new LimitError(403, "sold-comps.com answered 403: bad key"))).toBe(false);
+    expect(isSoldCompsLimit(new Error("429"))).toBe(false);
+  });
+
+  it("reads lookups left from rate-limit headers", () => {
+    expect(remainingFromHeaders(new Headers({ "X-RateLimit-Remaining": "8" }))).toBe(8);
+    expect(remainingFromHeaders(new Headers({}))).toBeUndefined();
+  });
+});

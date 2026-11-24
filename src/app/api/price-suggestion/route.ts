@@ -13,7 +13,7 @@
  */
 import { getEbayClient } from "@/lib/ebay";
 import { findBothComparables } from "@/lib/ebay/comparables";
-import { soldLookbackDays } from "@/lib/ebay/soldComps";
+import { SOLD_LIMIT_NOTE, soldLookbackDays } from "@/lib/ebay/soldComps";
 import type { ComparableQuery, ComparableResult } from "@/lib/ebay/types";
 import { suggestPrice } from "@/lib/pricing/suggestPrice";
 import { onlyCds, sameCondition } from "@/lib/pricing/version";
@@ -67,11 +67,16 @@ export async function POST(request: Request) {
       current: suggest(both.current, "listings"),
       sold: suggest(both.sold, "sales"),
       unavailable: both.unavailable,
+      soldLimitReached: both.soldLimitReached,
+      soldRemaining: both.soldRemaining,
     });
   } catch (err) {
     console.error("price-suggestion failed", err);
     return Response.json(
-      { error: err instanceof Error ? err.message : "Unknown error" },
+      {
+        error: err instanceof Error ? err.message : "Unknown error",
+        ...(err instanceof Error && err.message === SOLD_LIMIT_NOTE && { soldLimitReached: true }),
+      },
       { status: 502 },
     );
   }
