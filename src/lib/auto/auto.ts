@@ -42,8 +42,8 @@ export function discogsCad(ref: DiscogsReference | null | undefined, grade: Grad
   return discogsPriceFor(ref, grade);
 }
 
-/** At most this many photos per CD on the Auto tab. */
-export const AUTO_MAX_PHOTOS = 4;
+/** At most this many photos per CD on the Auto tab (eBay allows 24). */
+export const AUTO_MAX_PHOTOS = 12;
 
 export function autoState(item: BatchItem): AutoState {
   return item.auto ?? { stage: "waiting", photos: [] };

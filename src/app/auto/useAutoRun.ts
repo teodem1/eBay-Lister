@@ -163,8 +163,9 @@ function useWakeLock(on: boolean) {
  * Runs every ready CD through price, write and publish, two at a time, until
  * none is left. CDs left mid-run by a closed app go back to waiting on load.
  */
-export function useAutoRun(hydrated: boolean) {
+export function useAutoRun(hydrated: boolean, held: { current: ReadonlySet<string> }) {
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const active = useRef(new Set<string>());
   const stop = useRef(false);
   useWakeLock(running);
@@ -178,9 +179,13 @@ export function useAutoRun(hydrated: boolean) {
   const start = useCallback(async (onlyId?: string) => {
     if (active.current.size && !onlyId) return;
     stop.current = false;
+    setPaused(false);
     setRunning(true);
+    // A CD the seller is still photographing or grading waits until they move on.
     const next = () =>
-      readyForAuto(autoStore.all()).find((x) => !active.current.has(x.id) && (!onlyId || x.id === onlyId));
+      readyForAuto(autoStore.all()).find(
+        (x) => !active.current.has(x.id) && (onlyId ? x.id === onlyId : !held.current.has(x.id)),
+      );
     const worker = async () => {
       for (let item = next(); item && !stop.current; item = next()) {
         active.current.add(item.id);
@@ -194,12 +199,13 @@ export function useAutoRun(hydrated: boolean) {
     };
     await Promise.all(Array.from({ length: onlyId ? 1 : PARALLEL }, worker));
     if (!active.current.size) setRunning(false);
-  }, []);
+  }, [held]);
 
-  /** Lets the CDs already started finish, and starts no more. */
+  /** Lets the CDs already started finish, and starts no more until resumed. */
   const pause = useCallback(() => {
     stop.current = true;
+    setPaused(true);
   }, []);
 
-  return { running, start, pause };
+  return { running, paused, start, pause };
 }
