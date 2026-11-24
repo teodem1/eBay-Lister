@@ -80,8 +80,8 @@ describe("generateListing", () => {
     expect(out.guessedFields).toContain("condition");
     expect(out.warnings.join(" ")).toMatch(/USED_GOOD/);
     expect(out.conditionsByCategory["117042"]).toHaveLength(3);
-    expect(out.draft.packageWeightKg).toBe(0.065);
-    expect(out.draft.packageDimensionsCm).toEqual({ length: 12, width: 15, height: 1 });
+    expect(out.draft.packageWeightKg).toBe(0.165);
+    expect(out.draft.packageDimensionsCm).toEqual({ length: 12, width: 15, height: 2.5 });
     expect(parse.mock.calls[0][0].messages[0].content).toContain("Allowed conditions for this category: NEW, USED_EXCELLENT");
   });
 

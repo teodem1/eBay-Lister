@@ -630,7 +630,7 @@ export default function ListingEditor({
                           type="number"
                           inputMode="decimal"
                           min="0"
-                          step="1"
+                          step="0.1"
                           value={draft.packageDimensionsCm?.[dim] ?? ""}
                           onChange={(e) => {
                             const d = { length: 0, width: 0, height: 0, ...draft.packageDimensionsCm };

@@ -32,11 +32,11 @@ const ClaudeListingSchema = z.object({
   price: z.number().describe("Only when price evidence is given: the item price to list at; otherwise 0"),
   priceReason: z.string().describe("Only when price evidence is given: one short sentence on why; otherwise empty"),
 });
-/** Default packed weight of one CD: 65 g. */
-export const DEFAULT_PACKAGE_WEIGHT_KG = 0.065;
+/** Default packed weight of one CD in its mailer: 165 g. */
+export const DEFAULT_PACKAGE_WEIGHT_KG = 0.165;
 
-/** Default package size in cm (a CD mailer): 12 long, 15 wide, 1 thick. */
-export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 1 } as const;
+/** Default package size in cm (a CD mailer): 12 long, 15 wide, 2.5 thick. */
+export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 2.5 } as const;
 
 export type ClaudeListing = z.infer<typeof ClaudeListingSchema>;
 
