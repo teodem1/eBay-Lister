@@ -94,8 +94,9 @@ Screens (phone first):
   shows "Try again" or "List by hand" (moves it to To list with grades, photos and price check).
 - `/review` — `src/app/review/ReviewScreen.tsx` ("Review" tab): the Auto tab's published listings with photos, price and
   Claude's reason, and `SoldComparison.tsx`: the price on a strip among the last sold copies from the saved price check
-  (no new sold-comps call; current listings when nothing sold), range, median, and the sales (tap for `ComparableSheet`),
+  (no new sold-comps call; current listings when nothing sold) and the sales (tap for `ComparableSheet`),
   plus the Discogs price guide when it was checked.
+  "Done" removes a listing from Review (only on the phone; it stays on eBay).
   "Edit" (`src/app/auto/EditPublishedSheet.tsx`: title, price, description) sends the draft to
   `/api/listing/revise` (`reviseListing` in `publish.ts`: replaces the inventory item and offer of the same SKU, no republish).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing

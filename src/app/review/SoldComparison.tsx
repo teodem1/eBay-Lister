@@ -15,7 +15,7 @@ const SHOWN = 5;
 /**
  * A published listing next to the last sold copies its price check found
  * (saved on the phone, so no new sold-price check): where the price sits on a
- * strip, the range and median, and the sales themselves (tap one for details).
+ * strip and the sales themselves (tap one for details).
  * Falls back to the current listings when nothing sold.
  */
 export default function SoldComparison({
@@ -49,11 +49,7 @@ export default function SoldComparison({
     sold ? (b.soldDate ?? "").localeCompare(a.soldDate ?? "") : a.price.value - b.price.value,
   );
   const currency = items[0]?.price.currency ?? "CAD";
-  const money = (n: number) => formatMoney(n, currency);
   const shown = showAll ? items : items.slice(0, SHOWN);
-  const diff = price - cmp.median;
-  const vsMedian =
-    Math.abs(diff) < 0.5 ? "about the same as the median" : `${money(Math.abs(diff))} ${diff > 0 ? "above" : "below"} the median`;
 
   return (
     <section className="rounded-xl border border-line p-3" aria-label={sold ? "Compared with last sold" : "Compared with current listings"}>
@@ -64,15 +60,6 @@ export default function SoldComparison({
         </span>
       </div>
       <PriceStrip values={items.map((c) => c.price.value)} selected={price} currency={currency} />
-      <p className="t-small mt-2">
-        {sold ? "Sold" : "Listed"} for {money(cmp.min)} to {money(cmp.max)}, median {money(cmp.median)}. Your price is {vsMedian}
-        {cmp.count > 1 && (
-          <>
-            , higher than {cmp.cheaper} of {cmp.count}
-          </>
-        )}
-        .
-      </p>
 
       <button
         type="button"
