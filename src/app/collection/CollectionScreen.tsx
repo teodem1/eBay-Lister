@@ -8,12 +8,18 @@ import {
   allCategories,
   cleanCategory,
   filterItems,
+  isSold,
+  markSold,
   mergeBackup,
+  NOT_SOLD,
   parseBackup,
+  soldTotal,
+  today,
   totalValue,
   withCategory,
   type CollectionItem,
   type SortKey,
+  type StatusFilter,
 } from "@/lib/collection/collection";
 import { collectionStore, useCollection } from "@/lib/collection/store";
 import { pushEditToEbay, type EbaySync } from "./pushEditToEbay";
@@ -21,6 +27,7 @@ import { saveTextFile } from "@/lib/native/share";
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "recent", label: "Recently added" },
+  { key: "sold", label: "Recently sold" },
   { key: "artist", label: "Artist A–Z" },
   { key: "title", label: "Album A–Z" },
   { key: "year", label: "Release year" },
@@ -36,11 +43,22 @@ export default function CollectionScreen() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | undefined>();
   const [sort, setSort] = useState<SortKey>("recent");
+  const [status, setStatus] = useState<StatusFilter>("unsold");
   const [editing, setEditing] = useState<string | null>(null);
 
+  const soldCount = useMemo(() => items.filter(isSold).length, [items]);
+  const inStock = useMemo(() => items.filter((i) => !isSold(i)), [items]);
   const categories = useMemo(() => allCategories(items), [items]);
-  const shown = useMemo(() => filterItems(items, { query, category, sort }), [items, query, category, sort]);
+  const shown = useMemo(() => filterItems(items, { query, category, sort, status }), [items, query, category, sort, status]);
+  const inView = status === "all" ? items.length : status === "sold" ? soldCount : inStock.length;
   const filtered = query.trim() !== "" || !!category;
+
+  function pickStatus(next: StatusFilter) {
+    setStatus(next);
+    // Sold CDs read best newest sale first; the other views by when they were added.
+    if (next === "sold" && sort === "recent") setSort("sold");
+    if (next !== "sold" && sort === "sold") setSort("recent");
+  }
   const editItem = items.find((i) => i.id === editing);
 
   return (
@@ -53,9 +71,23 @@ export default function CollectionScreen() {
           <EmptyState />
         ) : (
           <>
-            <ValueSummary all={items} shown={filtered ? shown : undefined} />
+            <ValueSummary all={inStock} sold={items.filter(isSold)} shown={filtered && status === "unsold" ? shown : undefined} />
 
             <div className="flex flex-col gap-3">
+              {soldCount > 0 && (
+                <div className="flex gap-2" role="group" aria-label="Show in stock or sold CDs">
+                  <FilterChip on={status === "unsold"} onClick={() => pickStatus("unsold")}>
+                    In stock · {inStock.length}
+                  </FilterChip>
+                  <FilterChip on={status === "sold"} onClick={() => pickStatus("sold")}>
+                    Sold · {soldCount}
+                  </FilterChip>
+                  <FilterChip on={status === "all"} onClick={() => pickStatus("all")}>
+                    All · {items.length}
+                  </FilterChip>
+                </div>
+              )}
+
               <div className="relative">
                 <label htmlFor="collection-search" className="sr-only">
                   Search the collection
@@ -74,7 +106,7 @@ export default function CollectionScreen() {
               {categories.length > 0 && (
                 <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" role="group" aria-label="Filter by category">
                   <FilterChip on={!category} onClick={() => setCategory(undefined)}>
-                    All · {items.length}
+                    Any category
                   </FilterChip>
                   {categories.map((c) => (
                     <FilterChip
@@ -91,7 +123,8 @@ export default function CollectionScreen() {
               <div className="flex items-center justify-between gap-3 px-1">
                 <span className="t-small text-muted">
                   {shown.length} {shown.length === 1 ? "CD" : "CDs"}
-                  {filtered && ` of ${items.length}`}
+                  {filtered && ` of ${inView}`}
+                  {status === "sold" ? " sold" : status === "unsold" && soldCount > 0 ? " in stock" : ""}
                 </span>
                 <label className="flex items-center gap-2 text-sm text-muted">
                   <span className="sr-only">Sort by</span>
@@ -111,7 +144,13 @@ export default function CollectionScreen() {
             </div>
 
             {shown.length === 0 ? (
-              <p className="card t-small text-center text-muted">No CDs match. Try another search or category.</p>
+              <p className="card t-small text-center text-muted">
+                {inView === 0
+                  ? status === "unsold"
+                    ? "Every CD here is sold. Tap Sold to see them."
+                    : "No CDs here yet."
+                  : "No CDs match. Try another search or category."}
+              </p>
             ) : (
               <ul className="card divide-y divide-line overflow-hidden p-0">
                 {shown.map((item) => (
@@ -139,7 +178,7 @@ export default function CollectionScreen() {
   );
 }
 
-function ValueSummary({ all, shown }: { all: CollectionItem[]; shown?: CollectionItem[] }) {
+function ValueSummary({ all, sold, shown }: { all: CollectionItem[]; sold: CollectionItem[]; shown?: CollectionItem[] }) {
   const priced = all.filter((i) => i.price !== undefined);
   const unpriced = all.length - priced.length;
   const average = priced.length ? totalValue(priced) / priced.length : undefined;
@@ -160,6 +199,12 @@ function ValueSummary({ all, shown }: { all: CollectionItem[]; shown?: Collectio
           </div>
         ))}
       </dl>
+      {sold.length > 0 && (
+        <p className="t-small mt-3 text-muted">
+          Sold: {sold.length} {sold.length === 1 ? "CD" : "CDs"} for{" "}
+          <span className="font-semibold text-foreground tabular-nums">{money(soldTotal(sold))}</span>
+        </p>
+      )}
       {shown && (
         <p className="chip mt-3 bg-brand-soft px-3 py-1 text-sm text-brand-ink">
           Showing {money(totalValue(shown))} in {shown.length} {shown.length === 1 ? "CD" : "CDs"}
@@ -170,13 +215,17 @@ function ValueSummary({ all, shown }: { all: CollectionItem[]; shown?: Collectio
 }
 
 function CdCard({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) {
+  const sold = isSold(item);
+  const price = sold ? (item.soldPrice ?? item.price) : item.price;
   return (
     <button
       type="button"
       onClick={onOpen}
       className="flex w-full items-center gap-3 p-3 text-left transition-colors active:bg-surface-2"
     >
-      <Cover item={item} size="h-16 w-16" />
+      <div className={sold ? "opacity-60 grayscale" : undefined}>
+        <Cover item={item} size="h-16 w-16" />
+      </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <p className="truncate font-semibold">{item.title}</p>
         <p className="t-small truncate text-muted">
@@ -194,8 +243,16 @@ function CdCard({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) 
         )}
       </div>
       <div className="flex shrink-0 flex-col items-end">
-        <span className="text-base font-bold tabular-nums tracking-tight">{item.price !== undefined ? money(item.price) : "—"}</span>
-        {item.priceSource === "estimate" && <span className="t-caption text-muted">Estimate</span>}
+        <span className={`text-base font-bold tabular-nums tracking-tight ${sold ? "text-muted" : ""}`}>
+          {price !== undefined ? money(price) : "—"}
+        </span>
+        {sold ? (
+          <span className="chip mt-0.5 bg-ok-soft text-ok-ink">
+            <Icon name="check" size={14} strokeWidth={2.4} /> Sold {shortDate(item.soldAt!)}
+          </span>
+        ) : (
+          item.priceSource === "estimate" && <span className="t-caption text-muted">Estimate</span>
+        )}
       </div>
     </button>
   );
@@ -418,6 +475,8 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
             )}
           </fieldset>
 
+          <SoldSection item={item} listedPrice={priceNum} />
+
           {sync && sync.state !== "working" && (
             <p role="status" className={`notice t-small ${sync.state === "done" ? "notice-ok" : sync.state === "failed" ? "notice-bad" : "notice-warn"}`}>
               {sync.message}
@@ -460,6 +519,82 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
         </form>
       </div>
     </div>
+  );
+}
+
+/** Mark the CD sold (date + optional price) or back to in stock. Saves at once, on this phone only. */
+function SoldSection({ item, listedPrice }: { item: CollectionItem; listedPrice?: number }) {
+  const sold = isSold(item);
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(item.soldAt ?? today());
+  const start = item.soldPrice ?? listedPrice ?? item.price;
+  const [price, setPrice] = useState(start !== undefined ? start.toFixed(2) : "");
+  const priceNum = price.trim() === "" ? undefined : Number(price);
+  const priceValid = priceNum === undefined || (Number.isFinite(priceNum) && priceNum >= 0);
+  const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+
+  function save() {
+    collectionStore.update(item.id, markSold(date, priceNum));
+    setOpen(false);
+  }
+
+  if (sold && !open) {
+    const amount = item.soldPrice ?? item.price;
+    return (
+      <section className="notice notice-ok flex flex-col gap-2" aria-label="Sold">
+        <p className="t-small font-semibold">
+          Sold {longDate(item.soldAt!)}
+          {amount !== undefined && ` for ${money(amount)}`}
+        </p>
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-secondary flex-1" onClick={() => setOpen(true)}>
+            Edit sale
+          </button>
+          <button type="button" className="btn btn-secondary flex-1" onClick={() => collectionStore.update(item.id, NOT_SOLD)}>
+            Back in stock
+          </button>
+        </div>
+      </section>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-secondary" onClick={() => setOpen(true)}>
+        <Icon name="check" size={18} /> Mark as sold
+      </button>
+    );
+  }
+  return (
+    <fieldset className="card flex flex-col gap-3 p-3">
+      <legend className="sr-only">Mark as sold</legend>
+      <p className="t-headline">{sold ? "Edit sale" : "Mark as sold"}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="label">Sold on</span>
+          <input className="field" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} aria-invalid={!dateValid} />
+        </label>
+        <label className="block">
+          <span className="label">Sold for ({CURRENCY})</span>
+          <input
+            className="field"
+            inputMode="decimal"
+            value={price}
+            placeholder="Optional"
+            onChange={(e) => setPrice(e.target.value.replace(",", "."))}
+            aria-invalid={!priceValid}
+          />
+        </label>
+      </div>
+      <p className="hint -mt-1">Only changes your collection. eBay ends the listing itself when it sells.</p>
+      <div className="flex gap-2">
+        <button type="button" className="btn btn-secondary flex-1" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-primary flex-1" disabled={!priceValid || !dateValid} onClick={save}>
+          {sold ? "Save sale" : "Mark sold"}
+        </button>
+      </div>
+    </fieldset>
   );
 }
 
@@ -592,6 +727,16 @@ function Backup({ items }: { items: CollectionItem[] }) {
       )}
     </section>
   );
+}
+
+function shortDate(iso: string) {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
+
+function longDate(iso: string) {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
 }
 
 function money(n: number) {
