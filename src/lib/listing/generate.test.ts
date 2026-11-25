@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { getEbayConfig } from "../ebay/config";
 import type { EbaySellClient } from "../ebay/sell";
-import { cdCategoryFirst, discCount, packageWeightKg, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
+import { cdCategoryFirst, discCount, hasDoubleJewelCase, packageWeightKg, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
 
 const config = getEbayConfig({});
 
@@ -22,6 +22,7 @@ const claudeOut: ClaudeListing = {
   price: 0,
   priceReason: "",
   discCount: 1,
+  doubleJewelCase: false,
 };
 
 function fakeAnthropic(parsed: ClaudeListing | null, stop_reason = "end_turn") {
@@ -166,8 +167,12 @@ describe("weight per disc", () => {
     expect(discCount(1, "Pink Floyd Meddle CD")).toBe(1);
     expect(discCount(1, "Greatest Hits of 1999 CD")).toBe(1);
   });
-  it("is 115 g per disc", () => {
+  it("adds a bare disc per extra CD, or a disc and a case in a double jewel case", () => {
     expect(packageWeightKg(1)).toBe(0.115);
-    expect(packageWeightKg(2)).toBe(0.23);
+    expect(packageWeightKg(2)).toBe(0.131);
+    expect(packageWeightKg(2, true)).toBe(0.23);
+    expect(hasDoubleJewelCase(false, "2CD set in fatbox")).toBe(true);
+    expect(hasDoubleJewelCase(false, "Live double jewel case")).toBe(true);
+    expect(hasDoubleJewelCase(false, "Live double CD")).toBe(false);
   });
 });

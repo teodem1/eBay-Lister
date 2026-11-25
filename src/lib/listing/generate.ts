@@ -32,11 +32,16 @@ const ClaudeListingSchema = z.object({
   price: z.number().describe("Only when price evidence is given: the item price to list at; otherwise 0"),
   priceReason: z.string().describe("Only when price evidence is given: one short sentence on why; otherwise empty"),
   discCount: z.number().describe("For a CD: how many discs (2 for a double album or 2CD set); 1 if unsure or not a CD"),
+  doubleJewelCase: z
+    .boolean()
+    .describe("For a multi-disc CD: true if it comes in a double (fat) jewel case or one jewel case per disc; false if the discs share a standard-size case, or unsure"),
 });
-/** Default packed weight per disc: 115 g (a 2-CD set ships at 230 g). */
-export const WEIGHT_PER_DISC_KG = 0.115;
-/** Default packed weight of a single CD. */
-export const DEFAULT_PACKAGE_WEIGHT_KG = WEIGHT_PER_DISC_KG;
+/** Default packed weight of a single CD in its jewel case and mailer: 115 g. */
+export const DEFAULT_PACKAGE_WEIGHT_KG = 0.115;
+/** Each extra disc in the same case adds a bare CD. */
+export const EXTRA_DISC_KG = 0.016;
+/** Each extra disc in a double (fat) jewel case adds a whole CD with its case (a double jewel box ships at 230 g). */
+export const EXTRA_DISC_WITH_CASE_KG = 0.115;
 
 /** How many discs: Claude's count, else what the item text says ("2CD", "2 x CD", "double CD", "3 discs"), else 1. */
 export function discCount(claude: number | undefined, text: string): number {
@@ -51,9 +56,18 @@ export function discCount(claude: number | undefined, text: string): number {
   return 1;
 }
 
-/** Default packed weight for a CD release with this many discs. */
-export function packageWeightKg(discs: number): number {
-  return Math.round(WEIGHT_PER_DISC_KG * Math.max(1, discs) * 1000) / 1000;
+/** A double (fat) jewel case, from Claude or the item text. */
+export function hasDoubleJewelCase(claude: boolean | undefined, text: string): boolean {
+  return !!claude || /\b(double|fat)[- ]?(jewel)?[- ]?(case|box)\b|\bfatbox\b/i.test(text);
+}
+
+/**
+ * Default packed weight: 115 g for a CD, plus a bare disc (16 g) for each extra
+ * disc in the same case, or a whole CD with its case (115 g) each in a double jewel case.
+ */
+export function packageWeightKg(discs: number, doubleCase = false): number {
+  const extra = Math.max(0, discs - 1) * (doubleCase ? EXTRA_DISC_WITH_CASE_KG : EXTRA_DISC_KG);
+  return Math.round((DEFAULT_PACKAGE_WEIGHT_KG + extra) * 1000) / 1000;
 }
 
 /** Default package size in cm (a CD mailer): 12 long, 15 wide, 2.5 thick. */
@@ -223,8 +237,10 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       mpn: out.mpn || undefined,
       promotedPercent: deps.config.promotedPercent || undefined,
       bestOfferMinPercent: deps.config.bestOfferMinPercent || undefined,
-      // 115 g per disc, so a 2-CD set ships at 230 g.
-      packageWeightKg: packageWeightKg(discCount(out.discCount, [input.query, title].filter(Boolean).join(" "))),
+      packageWeightKg: packageWeightKg(
+        discCount(out.discCount, [input.query, title].filter(Boolean).join(" ")),
+        hasDoubleJewelCase(out.doubleJewelCase, [input.query, title].filter(Boolean).join(" ")),
+      ),
       // The seller's standard CD mailer size; editable on the review step.
       packageDimensionsCm: { ...DEFAULT_PACKAGE_CM },
     },
