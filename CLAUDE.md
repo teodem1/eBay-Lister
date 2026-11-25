@@ -144,7 +144,7 @@ Server code:
   (`src/lib/pricing/soldLimit.ts`) and `SoldLimitBanner` under every `AppBar` warns when it is used up or 10 or fewer are left.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
-  Package defaults to 165 g (`DEFAULT_PACKAGE_WEIGHT_KG`, edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
+  Package weight defaults to 115 g per disc (`WEIGHT_PER_DISC_KG` × `discCount`: Claude's `discCount`, else "2CD"/"double" in the item text; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is the first card (right after the price step's listings) and is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.
   Publish leaves Brand and MPN empty for CDs/music (`isMusicDraft`, `withoutBrandAndMpn`); other items get them filled

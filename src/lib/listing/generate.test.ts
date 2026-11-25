@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { getEbayConfig } from "../ebay/config";
 import type { EbaySellClient } from "../ebay/sell";
-import { cdCategoryFirst, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
+import { cdCategoryFirst, discCount, packageWeightKg, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
 
 const config = getEbayConfig({});
 
@@ -21,6 +21,7 @@ const claudeOut: ClaudeListing = {
   checks: ["Confirm the original box is included"],
   price: 0,
   priceReason: "",
+  discCount: 1,
 };
 
 function fakeAnthropic(parsed: ClaudeListing | null, stop_reason = "end_turn") {
@@ -80,7 +81,7 @@ describe("generateListing", () => {
     expect(out.guessedFields).toContain("condition");
     expect(out.warnings.join(" ")).toMatch(/USED_GOOD/);
     expect(out.conditionsByCategory["117042"]).toHaveLength(3);
-    expect(out.draft.packageWeightKg).toBe(0.165);
+    expect(out.draft.packageWeightKg).toBe(0.115);
     expect(out.draft.packageDimensionsCm).toEqual({ length: 12, width: 15, height: 2.5 });
     expect(parse.mock.calls[0][0].messages[0].content).toContain("Allowed conditions for this category: NEW, USED_EXCELLENT");
   });
@@ -152,5 +153,21 @@ describe("generateListing price pick", () => {
     expect(JSON.stringify(parse.mock.calls[0][0].messages)).toContain("Price evidence");
     const without = await generateListing({ query: "Genesis Wind & Wuthering" }, { anthropic: fakeAnthropic(out).client, config });
     expect(without.claudePrice).toBeUndefined();
+  });
+});
+
+describe("weight per disc", () => {
+  it("counts discs from Claude or the item text", () => {
+    expect(discCount(2, "Pink Floyd The Wall")).toBe(2);
+    expect(discCount(1, "Pink Floyd The Wall 2CD")).toBe(2);
+    expect(discCount(undefined, "Beatles White Album 2 x CD")).toBe(2);
+    expect(discCount(1, "Genesis Live double CD")).toBe(2);
+    expect(discCount(1, "Box set 3 discs")).toBe(3);
+    expect(discCount(1, "Pink Floyd Meddle CD")).toBe(1);
+    expect(discCount(1, "Greatest Hits of 1999 CD")).toBe(1);
+  });
+  it("is 115 g per disc", () => {
+    expect(packageWeightKg(1)).toBe(0.115);
+    expect(packageWeightKg(2)).toBe(0.23);
   });
 });

@@ -31,9 +31,30 @@ const ClaudeListingSchema = z.object({
   checks: z.array(z.string()).describe("Short things the seller must verify before publishing"),
   price: z.number().describe("Only when price evidence is given: the item price to list at; otherwise 0"),
   priceReason: z.string().describe("Only when price evidence is given: one short sentence on why; otherwise empty"),
+  discCount: z.number().describe("For a CD: how many discs (2 for a double album or 2CD set); 1 if unsure or not a CD"),
 });
-/** Default packed weight of one CD in its mailer: 165 g. */
-export const DEFAULT_PACKAGE_WEIGHT_KG = 0.165;
+/** Default packed weight per disc: 115 g (a 2-CD set ships at 230 g). */
+export const WEIGHT_PER_DISC_KG = 0.115;
+/** Default packed weight of a single CD. */
+export const DEFAULT_PACKAGE_WEIGHT_KG = WEIGHT_PER_DISC_KG;
+
+/** How many discs: Claude's count, else what the item text says ("2CD", "2 x CD", "double CD", "3 discs"), else 1. */
+export function discCount(claude: number | undefined, text: string): number {
+  if (claude !== undefined && Number.isInteger(claude) && claude >= 1 && claude <= 20) {
+    if (claude > 1) return claude;
+  }
+  const t = text.toLowerCase();
+  const m = /\b(\d{1,2})\s*(?:x\s*)?[- ]?(?:cds?|discs?|disques?)\b/.exec(t) ?? /\b(\d{1,2})cd\b/.exec(t);
+  const n = m ? Number(m[1]) : NaN;
+  if (n >= 2 && n <= 20) return n;
+  if (/\b(double|2-disc|deux disques)\b/.test(t)) return 2;
+  return 1;
+}
+
+/** Default packed weight for a CD release with this many discs. */
+export function packageWeightKg(discs: number): number {
+  return Math.round(WEIGHT_PER_DISC_KG * Math.max(1, discs) * 1000) / 1000;
+}
 
 /** Default package size in cm (a CD mailer): 12 long, 15 wide, 2.5 thick. */
 export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 2.5 } as const;
@@ -202,7 +223,8 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       mpn: out.mpn || undefined,
       promotedPercent: deps.config.promotedPercent || undefined,
       bestOfferMinPercent: deps.config.bestOfferMinPercent || undefined,
-      packageWeightKg: DEFAULT_PACKAGE_WEIGHT_KG,
+      // 115 g per disc, so a 2-CD set ships at 230 g.
+      packageWeightKg: packageWeightKg(discCount(out.discCount, [input.query, title].filter(Boolean).join(" "))),
       // The seller's standard CD mailer size; editable on the review step.
       packageDimensionsCm: { ...DEFAULT_PACKAGE_CM },
     },
