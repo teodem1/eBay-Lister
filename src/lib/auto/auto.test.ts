@@ -23,6 +23,8 @@ import {
   needsCoverName,
   noCopiesMessage,
   stageLabel,
+  rescanned,
+  retryByRescan,
 } from "./auto";
 import type { LookupResponse } from "../lookup";
 
@@ -240,5 +242,36 @@ describe("naming a CD from its front cover", () => {
 
   it("a CD left while reading the cover goes back to waiting", () => {
     expect(interruptedToWaiting(cd({ auto: { stage: "identifying", photos: [] } })).auto?.stage).toBe("waiting");
+  });
+});
+
+describe("Try again rescans the barcode", () => {
+  const failed = cd({
+    title: undefined,
+    query: "075778485496",
+    barcode: "075778485496",
+    auto: { stage: "failed", error: "Nothing found", photos: ["https://i.ebayimg.com/1.jpg"], priceCheck: check(null, null), coverChecked: true },
+  });
+
+  it("only for a CD that failed before Claude wrote it", () => {
+    expect(retryByRescan(failed)).toBe(true);
+    expect(retryByRescan(cd({ auto: { ...failed.auto!, draft: {} as never } }))).toBe(false);
+    expect(retryByRescan(cd())).toBe(false);
+  });
+
+  it("a new barcode is looked up again from scratch, keeping photos and grades", () => {
+    const after = rescanned(failed, "075678163221");
+    expect(after.barcode).toBe("075678163221");
+    expect(after.lookup).toBe("queued");
+    expect(after.query).toBeUndefined();
+    expect(after.auto?.stage).toBe("waiting");
+    expect(after.auto?.priceCheck).toBeUndefined();
+    expect(after.auto?.coverChecked).toBeUndefined();
+    expect(after.auto?.photos).toEqual(failed.auto!.photos);
+    expect(after.condition).toEqual(failed.condition);
+  });
+
+  it("the same barcode keeps its price check (no second sold-price check)", () => {
+    expect(rescanned(failed, "075778485496").auto?.priceCheck).toBeDefined();
   });
 });

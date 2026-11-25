@@ -299,8 +299,45 @@ export function applyCoverName(item: BatchItem, data: LookupResponse | null): Ba
 /** Why a CD can't be priced: says whether the album was ever named, so the seller knows what was searched. */
 export function noCopiesMessage(item: BatchItem): string {
   if (!item.title) {
-    return `Nothing found for barcode ${item.barcode}: eBay, MusicBrainz and Discogs don't know it, and the album couldn't be read off the front cover. List it by hand.`;
+    return `Nothing found for barcode ${item.barcode}: eBay, MusicBrainz and Discogs don't know it, and the album couldn't be read off the front cover. Tap Try again to scan the barcode again, or list it by hand.`;
   }
   const name = [item.artist, item.title].filter(Boolean).join(" – ");
-  return `No sold or listed copies of ${name} found on eBay or Discogs, so there's no price to go on. List it by hand.`;
+  return `No sold or listed copies of ${name} found on eBay or Discogs, so there's no price to go on. Tap Try again to scan the barcode again, or list it by hand.`;
+}
+
+/**
+ * "Try again" on a CD that found nothing: the seller rescans its barcode
+ * (often misread the first time). Photos and grades stay; the album is looked
+ * up again. The saved price check is kept only when the same barcode comes
+ * back, so a rescan of the same number spends no second sold-price check.
+ */
+export function rescanned(item: BatchItem, gtin: string): BatchItem {
+  const a = autoState(item);
+  const same = gtin === item.barcode;
+  return {
+    ...item,
+    barcode: gtin,
+    lookup: "queued",
+    error: undefined,
+    title: undefined,
+    artist: undefined,
+    year: undefined,
+    coverUrl: undefined,
+    query: undefined,
+    scanned: undefined,
+    auto: {
+      ...a,
+      stage: "waiting",
+      coverChecked: undefined,
+      priceCheck: same ? a.priceCheck : undefined,
+      discogs: same ? a.discogs : undefined,
+      discogsNote: same ? a.discogsNote : undefined,
+    },
+  };
+}
+
+/** Whether "Try again" rescans the barcode: the CD failed before Claude wrote it (nothing found to price). */
+export function retryByRescan(item: BatchItem): boolean {
+  const a = autoState(item);
+  return a.stage === "failed" && !a.draft;
 }
