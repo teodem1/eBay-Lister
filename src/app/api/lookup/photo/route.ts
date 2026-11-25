@@ -3,7 +3,8 @@ import { errorResponse } from "@/lib/api-errors";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import { identifyFromPhoto, type ImageMediaType } from "@/lib/identify/vision";
 import type { LookupResponse } from "@/lib/lookup";
-import { albumByBarcode, albumByName, safely, type AlbumInfo } from "@/lib/music/musicbrainz";
+import { safely } from "@/lib/music/musicbrainz";
+import { photoAlbum } from "@/lib/identify/photoAlbum";
 
 const MEDIA_TYPES: ImageMediaType[] = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 // Claude accepts up to 5 MB per image; the page shrinks photos well below this.
@@ -68,24 +69,4 @@ export async function POST(request: Request) {
   } catch (err) {
     return errorResponse(err);
   }
-}
-
-/** Album details for a photographed CD: by barcode if Claude read one, else by name. */
-async function photoAlbum(
-  id: Awaited<ReturnType<typeof identifyFromPhoto>>,
-  gtin: string | undefined,
-): Promise<AlbumInfo | null> {
-  const music = id.music;
-  if (!music?.album.trim()) return gtin ? albumByBarcode(gtin) : null;
-  const found = (gtin ? await albumByBarcode(gtin) : null) ?? (await albumByName(music.album, music.artist));
-  if (found) return found;
-  // MusicBrainz doesn't know it: keep what Claude read off the cover.
-  const year = Number(music.year);
-  return {
-    title: music.album.trim(),
-    artist: music.artist.trim(),
-    year: Number.isInteger(year) && year > 1800 ? year : undefined,
-    genres: [],
-    mbid: "",
-  };
 }

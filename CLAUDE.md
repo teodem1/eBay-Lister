@@ -92,6 +92,13 @@ Screens (phone first):
   shipping, Best Offer, promotion) → Collection. Its list is a second batch store (`autoStore`, key
   `ebay-lister:auto:v1`, `createBatchStore` in `src/lib/batch/store.ts`); logic in `src/lib/auto/auto.ts`. A failed CD
   shows "Try again" or "List by hand" (moves it to To list with grades, photos and price check).
+  "Try again" on a CD that failed before Claude wrote it (nothing found to price) reopens the barcode scanner
+  (`retryByRescan`, `rescanned`: photos and grades kept, album looked up again, the saved price check kept only for the
+  same barcode); otherwise it reruns the CD. A retry always shows its spinner, and a repeat of the same failure says so
+  (`tries`, `sameAgain`). When the barcode
+  named no album (eBay and MusicBrainz miss), the run first has Claude read the front cover photo (`/api/lookup/cover`,
+  `identifyFromImageUrl`; `needsCoverName`/`applyCoverName`, once per CD) and drops a price check made from the bare
+  barcode so it searches by name. The scan card (`StackScan`) warns when a barcode found nothing, so it can be rescanned.
 - `/review` — `src/app/review/ReviewScreen.tsx` ("Review" tab): the Auto tab's published listings with photos, price and
   Claude's reason, and `SoldComparison.tsx`: the price on a strip among the last sold copies from the saved price check
   (no new sold-comps call; current listings when nothing sold) and the sales (tap for `ComparableSheet`),

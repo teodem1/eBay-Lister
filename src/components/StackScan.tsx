@@ -24,6 +24,7 @@ export default function StackScan({
   items,
   autoStart = false,
   hint,
+  notFoundHint,
   renderItem,
   onCurrent,
 }: {
@@ -35,6 +36,8 @@ export default function StackScan({
   hint?: string;
   /** Extra steps for the CD just scanned, shown on the card (e.g. photos and grades on the Auto tab). */
   renderItem?: (item: BatchItem) => ReactNode;
+  /** Added to the "nothing found" notice, e.g. what happens if the barcode is right. */
+  notFoundHint?: string;
   /** The CD shown on the card (null when none), e.g. so the Auto tab holds it back while the seller works on it. */
   onCurrent?: (id: string | null) => void;
 }) {
@@ -105,6 +108,8 @@ export default function StackScan({
 
   const item = last && "id" in last ? items.find((x) => x.id === last.id) : undefined;
   const loading = item && (item.lookup === "queued" || item.lookup === "loading");
+  // The lookup came back without an album: often a misread barcode, so offer a rescan.
+  const notFound = !!item && !loading && (item.lookup === "error" || !item.title);
 
   return (
     <>
@@ -147,13 +152,19 @@ export default function StackScan({
           ) : (
             <p className="t-small text-muted">Removed from the list.</p>
           )}
+          {notFound && (
+            <p className="notice notice-warn t-small" role="alert">
+              Nothing found for barcode {item.barcode}. Check that it matches the number on the CD and tap Try again to
+              scan it again.{notFoundHint ? ` ${notFoundHint}` : ""}
+            </p>
+          )}
           {hint && item && "id" in last && !last.duplicate && <p className="t-small text-muted">{hint}</p>}
           {item && renderItem?.(item)}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" className="btn btn-secondary btn-lg" onClick={tryAgain}>
+            <button type="button" className={`btn btn-lg ${notFound ? "btn-primary" : "btn-secondary"}`} onClick={tryAgain}>
               Try again
             </button>
-            <button type="button" className="btn btn-primary btn-lg" onClick={() => { setLast(null); scanOnce(); }}>
+            <button type="button" className={`btn btn-lg ${notFound ? "btn-secondary" : "btn-primary"}`} onClick={() => { setLast(null); scanOnce(); }}>
               Next CD
               <Icon name="arrow" />
             </button>

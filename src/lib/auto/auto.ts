@@ -4,7 +4,8 @@
  * Pure helpers (no browser APIs) so they are easy to test. The run itself
  * lives in src/app/auto/useAutoRun.ts.
  */
-import type { BatchItem, AutoState, ListingDraftLike } from "../batch/queue";
+import { applyLookup, type BatchItem, type AutoState, type ListingDraftLike } from "../batch/queue";
+import type { LookupResponse } from "../lookup";
 import { conditionComplete, GRADES, type Grade, type SellerCondition } from "../listing/condition";
 import { discogsEvidence, discogsPriceFor, type DiscogsReference } from "../pricing/discogs";
 import type { GeneratedListing } from "../listing/types";
@@ -45,6 +46,9 @@ export function discogsCad(ref: DiscogsReference | null | undefined, grade: Grad
 /** At most this many photos per CD on the Auto tab (eBay allows 24). */
 export const AUTO_MAX_PHOTOS = 12;
 
+/** Stages while the run is working on a CD. */
+export const BUSY_STAGES: AutoState["stage"][] = ["identifying", "pricing", "writing", "publishing"];
+
 export function autoState(item: BatchItem): AutoState {
   return item.auto ?? { stage: "waiting", photos: [] };
 }
@@ -71,7 +75,7 @@ export function readyForAuto(items: BatchItem[]): BatchItem[] {
  */
 export function interruptedToWaiting(item: BatchItem): BatchItem {
   const a = item.auto;
-  if (!a || !["pricing", "writing", "publishing"].includes(a.stage)) return item;
+  if (!a || !BUSY_STAGES.includes(a.stage)) return item;
   return { ...item, auto: { ...a, stage: "waiting" } };
 }
 
@@ -211,7 +215,7 @@ export function autoSummary(items: BatchItem[]): AutoSummary {
   return {
     waiting: items.filter((x) => x.status === "pending" && stage(x) === "waiting").length,
     ready: readyForAuto(items).length,
-    running: items.filter((x) => ["pricing", "writing", "publishing"].includes(stage(x))).length,
+    running: items.filter((x) => BUSY_STAGES.includes(stage(x))).length,
     published: items.filter((x) => stage(x) === "published").length,
     failed: items.filter((x) => x.status === "pending" && stage(x) === "failed").length,
   };
@@ -220,6 +224,8 @@ export function autoSummary(items: BatchItem[]): AutoSummary {
 /** Short label for a CD's progress in the run. */
 export function stageLabel(stage: AutoState["stage"]): string {
   switch (stage) {
+    case "identifying":
+      return "Reading the cover…";
     case "pricing":
       return "Checking sold prices…";
     case "writing":
@@ -262,4 +268,76 @@ export function compareToComparables(price: number, check: PriceCheck | undefine
     median: Math.round(median * 100) / 100,
     cheaper: values.filter((v) => v < price).length,
   };
+}
+
+/**
+ * The barcode lookup found no album (eBay and MusicBrainz don't know it), so
+ * the price check could only search the bare barcode. Claude can still read
+ * the artist and album off the front cover photo, once per CD.
+ */
+export function needsCoverName(item: BatchItem): boolean {
+  const a = autoState(item);
+  return !item.title && a.photos.length > 0 && !a.coverChecked;
+}
+
+/**
+ * Names the CD from Claude's reading of its front cover. When that gives a new
+ * search, a price check saved from the bare barcode is dropped so the next one
+ * searches by artist and album (one more sold-price check, worth it since the
+ * barcode one found nothing to go on).
+ */
+export function applyCoverName(item: BatchItem, data: LookupResponse | null): BatchItem {
+  const a = { ...autoState(item), coverChecked: true };
+  const id = data?.identification;
+  const named = !!data && (!!data.album?.title || (!!id?.identified && !!(id.music?.album.trim() || id.title.trim())));
+  if (!data || !named) return { ...item, auto: a };
+  const looked = applyLookup(item, { ...data, gtin: data.gtin ?? (item.barcode || undefined) });
+  if (!looked.query || looked.query === item.query) return { ...looked, auto: a };
+  return { ...looked, auto: { ...a, priceCheck: undefined, discogs: undefined, discogsNote: undefined } };
+}
+
+/** Why a CD can't be priced: says whether the album was ever named, so the seller knows what was searched. */
+export function noCopiesMessage(item: BatchItem): string {
+  if (!item.title) {
+    return `Nothing found for barcode ${item.barcode}: eBay, MusicBrainz and Discogs don't know it, and the album couldn't be read off the front cover. Tap Try again to scan the barcode again, or list it by hand.`;
+  }
+  const name = [item.artist, item.title].filter(Boolean).join(" – ");
+  return `No sold or listed copies of ${name} found on eBay or Discogs, so there's no price to go on. Tap Try again to scan the barcode again, or list it by hand.`;
+}
+
+/**
+ * "Try again" on a CD that found nothing: the seller rescans its barcode
+ * (often misread the first time). Photos and grades stay; the album is looked
+ * up again. The saved price check is kept only when the same barcode comes
+ * back, so a rescan of the same number spends no second sold-price check.
+ */
+export function rescanned(item: BatchItem, gtin: string): BatchItem {
+  const a = autoState(item);
+  const same = gtin === item.barcode;
+  return {
+    ...item,
+    barcode: gtin,
+    lookup: "queued",
+    error: undefined,
+    title: undefined,
+    artist: undefined,
+    year: undefined,
+    coverUrl: undefined,
+    query: undefined,
+    scanned: undefined,
+    auto: {
+      ...a,
+      stage: "waiting",
+      coverChecked: undefined,
+      priceCheck: same ? a.priceCheck : undefined,
+      discogs: same ? a.discogs : undefined,
+      discogsNote: same ? a.discogsNote : undefined,
+    },
+  };
+}
+
+/** Whether "Try again" rescans the barcode: the CD failed before Claude wrote it (nothing found to price). */
+export function retryByRescan(item: BatchItem): boolean {
+  const a = autoState(item);
+  return a.stage === "failed" && !a.draft;
 }

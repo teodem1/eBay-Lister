@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { normalizeGtin } from "@/lib/identify/barcode";
+import { scanBarcode } from "@/lib/native/barcode";
+import { isNativeApp } from "@/lib/native/platform";
 import { AppBar, Icon, Spinner, TabBar } from "@/components/ui";
 import CdCover from "@/components/CdCover";
 import StackScan from "@/components/StackScan";
@@ -9,11 +13,22 @@ import { conditionComplete, conditionTitleSuffix } from "@/lib/listing/condition
 import { batchItemName, type BatchItem } from "@/lib/batch/queue";
 import { autoStore, batchStore, useAuto } from "@/lib/batch/store";
 import { useBackgroundLookups } from "@/lib/batch/useBackgroundLookups";
-import { autoState, autoSummary, missingForAuto, stageLabel, toListEntry } from "@/lib/auto/auto";
+import {
+  autoState,
+  autoSummary,
+  BUSY_STAGES,
+  missingForAuto,
+  rescanned,
+  retryByRescan,
+  stageLabel,
+  toListEntry,
+} from "@/lib/auto/auto";
 import { useAutoRun } from "./useAutoRun";
 import AutoCdSteps from "./AutoCdSteps";
 
 const noop = () => () => {};
+
+const BarcodeScanner = dynamic(() => import("@/components/BarcodeScanner"), { ssr: false });
 
 /**
  * "Auto": scan a stack; after each barcode take the front and back cover
@@ -26,11 +41,40 @@ export default function AutoScreen() {
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [scanCardId, setScanCardId] = useState<string | null>(null);
+  // A failed CD whose barcode is being scanned again (browser scanner open).
+  const [rescanId, setRescanId] = useState<string | null>(null);
+  const [rescanError, setRescanError] = useState<string | null>(null);
   // CDs the seller is still working on (on the scan card, or opened in the list) wait until they move on.
   const held = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    held.current = new Set([scanCardId, openId].filter((x): x is string => !!x));
-  }, [scanCardId, openId]);
+    held.current = new Set([scanCardId, openId, rescanId].filter((x): x is string => !!x));
+  }, [scanCardId, openId, rescanId]);
+
+  /** Puts the rescanned barcode on the CD: the album is looked up again and the CD is listed as usual. */
+  function applyRescan(id: string, raw: string) {
+    setRescanId(null);
+    const gtin = normalizeGtin(raw);
+    if (!gtin) {
+      setRescanError(`That code (${raw}) isn't a product barcode. Tap Try again to scan it again.`);
+      return;
+    }
+    autoStore.update(id, (x) => rescanned(x, gtin));
+  }
+
+  /** "Try again" on a CD that found nothing: scan its barcode again (often misread the first time). */
+  async function rescan(id: string) {
+    setRescanError(null);
+    if (!isNativeApp()) {
+      setRescanId(id);
+      return;
+    }
+    try {
+      const code = await scanBarcode();
+      if (code) applyRescan(id, code);
+    } catch (err) {
+      setRescanError(`Scanner error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   const run = useAutoRun(hydrated, held);
 
   useBackgroundLookups(autoStore, items, hydrated);
@@ -65,6 +109,7 @@ export default function AutoScreen() {
           renderItem={(item) => <AutoCdSteps key={item.id} item={item} startCamera />}
           onCurrent={setScanCardId}
           hint="It's listed in the background as soon as you tap Next CD or Done scanning."
+          notFoundHint="If the number is right, take the cover photos anyway: Claude reads the album off the front cover."
         />
 
         {!hydrated ? (
@@ -85,16 +130,27 @@ export default function AutoScreen() {
                       open={openId === item.id}
                       onToggle={() => setOpenId(openId === item.id ? null : item.id)}
                       onRetry={() => {
-                        autoStore.update(item.id, (x) => ({ ...x, auto: { ...autoState(x), stage: "waiting", error: undefined } }));
+                        if (retryByRescan(item)) {
+                          rescan(item.id);
+                          return;
+                        }
+                        // The error stays until the run starts, so a repeat of the same failure can say so.
+                        autoStore.update(item.id, (x) => ({ ...x, auto: { ...autoState(x), stage: "waiting" } }));
                         run.start(item.id);
                       }}
                     />
                   ))}
                 </ul>
+                {rescanError && (
+                  <p role="alert" className="notice notice-bad">
+                    {rescanError}
+                  </p>
+                )}
                 <p className="t-small flex gap-2 px-1 text-muted">
                   <Icon name="alert" size={16} className="mt-0.5" />
                   <span>
-                    Each CD uses one sold-price check (of 100 a month), even if it has to be tried again. Shipping, Best
+                    Each CD uses one sold-price check (of 100 a month), even if it has to be tried again. A CD whose
+                    barcode names no album is named from its front cover and checked once more by name. Shipping, Best
                     Offer and the 11% promotion come from your usual settings.
                   </span>
                 </p>
@@ -150,6 +206,9 @@ export default function AutoScreen() {
           </div>
         </div>
       )}
+      {rescanId && (
+        <BarcodeScanner onDetected={(code) => applyRescan(rescanId, code)} onClose={() => setRescanId(null)} />
+      )}
       <TabBar active="auto" />
     </>
   );
@@ -159,7 +218,7 @@ export default function AutoScreen() {
 function AutoRow({ item, open, onToggle, onRetry }: { item: BatchItem; open: boolean; onToggle: () => void; onRetry: () => void }) {
   const a = autoState(item);
   const missing = missingForAuto(item);
-  const busy = a.stage === "pricing" || a.stage === "writing" || a.stage === "publishing";
+  const busy = BUSY_STAGES.includes(a.stage);
   const loading = item.lookup === "queued" || item.lookup === "loading";
   const locked = busy || a.stage === "published";
   const rowRef = useRef<HTMLLIElement>(null);
@@ -202,6 +261,12 @@ function AutoRow({ item, open, onToggle, onRetry }: { item: BatchItem; open: boo
       {a.stage === "failed" && (
         <div className="flex flex-col gap-2 px-3 pb-3">
           <p className="notice notice-bad t-small">{a.error ?? "Something went wrong."}</p>
+          {a.sameAgain && a.failedAt && (
+            <p className="t-caption px-1 text-muted">
+              Checked again at {new Date(a.failedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              {a.tries ? ` (${a.tries} tries)` : ""}: same result.
+            </p>
+          )}
           <div className="flex gap-2">
             <button type="button" className="btn btn-secondary flex-1" onClick={onRetry}>
               Try again
