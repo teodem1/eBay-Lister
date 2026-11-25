@@ -44,6 +44,17 @@ export async function identifyFromPhoto(
   mediaType: ImageMediaType,
   client: Anthropic = new Anthropic(),
 ): Promise<PhotoIdentification> {
+  return identify({ type: "base64", media_type: mediaType, data: imageBase64 }, client);
+}
+
+/** Same as identifyFromPhoto, for a photo already online (e.g. an eBay-hosted CD cover). */
+export async function identifyFromImageUrl(url: string, client: Anthropic = new Anthropic()): Promise<PhotoIdentification> {
+  return identify({ type: "url", url }, client);
+}
+
+type ImageSource = { type: "base64"; media_type: ImageMediaType; data: string } | { type: "url"; url: string };
+
+async function identify(source: ImageSource, client: Anthropic): Promise<PhotoIdentification> {
   const response = await client.beta.messages.parse({
     model: "claude-opus-5-5",
     max_tokens: 16000,
@@ -59,7 +70,7 @@ export async function identifyFromPhoto(
       {
         role: "user",
         content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+          { type: "image", source },
           { type: "text", text: "What item is this? Fill in every field." },
         ],
       },

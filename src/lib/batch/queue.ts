@@ -65,7 +65,7 @@ export interface BatchItem {
   auto?: AutoState;
 }
 
-export type AutoStage = "waiting" | "pricing" | "writing" | "publishing" | "published" | "failed";
+export type AutoStage = "waiting" | "identifying" | "pricing" | "writing" | "publishing" | "published" | "failed";
 
 /** An Auto tab CD's run: one photo, a price from the sold-price check, Claude's draft, the publish. */
 export interface AutoState {
@@ -87,6 +87,14 @@ export interface AutoState {
   discogs?: DiscogsReference | null;
   /** Why there's no Discogs reference, when one was asked for. */
   discogsNote?: string;
+  /** Set once Claude tried to name the album from the front cover (barcode unknown to eBay and MusicBrainz). */
+  coverChecked?: boolean;
+  /** How many times the run tried this CD, and when it last failed. */
+  tries?: number;
+  failedAt?: string;
+  /** The last failure came back with the same message as the one before it. */
+  sameAgain?: boolean;
+  lastError?: string;
 }
 
 /** The published draft (same shape as ListingDraft, kept loose to avoid importing zod here). */

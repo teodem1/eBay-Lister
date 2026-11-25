@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  applyCoverName,
   autoDraft,
   autoState,
   discogsCad,
   finalAutoPrice,
   interruptedToWaiting,
+  needsCoverName,
+  noCopiesMessage,
   pickAutoPrice,
   priceEvidence,
   priceGrade,
@@ -19,6 +22,7 @@ import { autoStore } from "@/lib/batch/store";
 import { itemFromListing } from "@/lib/collection/collection";
 import { collectionStore } from "@/lib/collection/store";
 import type { GeneratedListing } from "@/lib/listing/types";
+import type { LookupResponse } from "@/lib/lookup";
 import { fetchPriceSuggestion, priceSuggestionBody } from "../listing/priceRequest";
 
 /** CDs worked on at once: Claude takes a while per listing, eBay doesn't mind two. */
@@ -40,17 +44,43 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 
 type PublishOk = { listingId: string; url: string; promoted?: { percent: number } | null; promotionError?: string };
 
+/** Claude's reading of the front cover photo, or null when it couldn't be read. */
+async function nameFromCover(imageUrl: string, barcode: string): Promise<LookupResponse | null> {
+  try {
+    const res = await fetch("/api/lookup/cover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageUrl, barcode }),
+    });
+    return res.ok ? ((await res.json()) as LookupResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A CD (e.g. a retry) that fails right away still shows its spinner for a moment, so the tap visibly did something. */
+const MIN_RETRY_MS = 900;
+
 /** Price check, Claude's listing and the publish for one CD. Never throws: failures are saved on the CD. */
 async function listOne(id: string): Promise<void> {
-  const start = autoStore.get(id);
-  if (!start) return;
-  const query = start.query ?? "";
-  const condition = start.condition!;
+  const began = Date.now();
+  const first = autoStore.get(id);
+  if (!first) return;
+  const before = first.auto?.lastError ?? first.auto?.error;
   try {
+    // 0. The barcode named no album: read it off the front cover, so prices are searched by name.
+    if (needsCoverName(first)) {
+      patchAuto(id, { stage: "identifying", error: undefined });
+      const named = await nameFromCover(autoState(first).photos[0], first.barcode);
+      autoStore.update(id, (x) => applyCoverName(x, named));
+    }
+    const start = autoStore.get(id)!;
+    const query = start.query ?? "";
+    const condition = start.condition!;
     // 1. Sold prices: one sold-comps call per CD, saved so a retry doesn't spend another.
+    patchAuto(id, { stage: "pricing", error: undefined });
     let check = autoState(start).priceCheck;
     if (!check) {
-      patchAuto(id, { stage: "pricing", error: undefined });
       const body = priceSuggestionBody(query, start.barcode, condition.condition);
       if (!body) throw new Error("Nothing to search prices for.");
       autoStore.update(id, (x) => ({ ...x, openedAt: x.openedAt ?? new Date().toISOString() }));
@@ -77,7 +107,7 @@ async function listOne(id: string): Promise<void> {
     const ebayPrice = pickAutoPrice(check);
     // Nothing sold or listed anywhere: no basis for a price, so this CD is not listed automatically.
     if (!ebayPrice && discogsPrice === undefined) {
-      throw new Error("No sold or listed copies found on eBay or Discogs, so there's no price to go on. List it by hand.");
+      throw new Error(noCopiesMessage(autoStore.get(id)!));
     }
 
     // 2. Claude writes the listing and picks the price from the sold and listed copies
@@ -120,7 +150,24 @@ async function listOne(id: string): Promise<void> {
     }));
     saveToCollection(autoStore.get(id)!);
   } catch (e) {
-    patchAuto(id, { stage: "failed", error: (e as Error).message });
+    const wait = MIN_RETRY_MS - (Date.now() - began);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    autoStore.update(id, (x) => {
+      const a = autoState(x);
+      const error = (e as Error).message;
+      return {
+        ...x,
+        auto: {
+          ...a,
+          stage: "failed",
+          error,
+          lastError: error,
+          sameAgain: before === error,
+          tries: (a.tries ?? 0) + 1,
+          failedAt: new Date().toISOString(),
+        },
+      };
+    });
   }
 }
 

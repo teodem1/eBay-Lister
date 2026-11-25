@@ -19,7 +19,12 @@ import {
   priceEvidence,
   readyForAuto,
   toListEntry,
+  applyCoverName,
+  needsCoverName,
+  noCopiesMessage,
+  stageLabel,
 } from "./auto";
+import type { LookupResponse } from "../lookup";
 
 const graded = { condition: "USED_EXCELLENT" as const, disc: "Near mint" as const, booklet: "Near mint" as const };
 
@@ -168,5 +173,72 @@ describe("collectible CDs and Discogs", () => {
     expect(finalAutoPrice(check(null, null), undefined, 40)).toMatchObject({ price: 40 });
     expect(discogsCad({ ...ref, suggestionCurrency: "USD" }, "Near mint")).toBeUndefined();
     expect(priceEvidence(c, 15, { ref, grade: "Near mint" })).toContain("Discogs price guide");
+  });
+});
+
+describe("naming a CD from its front cover", () => {
+  const unknown = cd({ title: undefined, query: "075778485496", barcode: "075778485496" });
+  const cover = (patch: Partial<LookupResponse> = {}): LookupResponse => ({
+    source: "photo",
+    query: "Peter Gabriel II Scratch CD",
+    identification: {
+      identified: true,
+      title: "Peter Gabriel II CD",
+      brand: "",
+      model: "",
+      category: "Music CDs",
+      gtin: "",
+      conditionNotes: "",
+      music: { artist: "Peter Gabriel", album: "Peter Gabriel (II)", year: "1978" },
+      searchQuery: "Peter Gabriel II Scratch CD",
+      confidence: "high",
+    },
+    results: { total: 0, items: [] },
+    notes: [],
+    ...patch,
+  });
+
+  it("only when the barcode named no album and there is a cover photo, once", () => {
+    expect(needsCoverName(unknown)).toBe(true);
+    expect(needsCoverName(cd({ title: "Wind & Wuthering" }))).toBe(false);
+    expect(needsCoverName(cd({ title: undefined, auto: { stage: "waiting", photos: [] } }))).toBe(false);
+    expect(needsCoverName(applyCoverName(unknown, null))).toBe(false);
+  });
+
+  it("names the CD and drops the price check made from the bare barcode", () => {
+    const priced = cd({
+      ...unknown,
+      auto: { ...unknown.auto!, priceCheck: check(null, null), discogs: null, discogsNote: "Discogs doesn't know this barcode." },
+    });
+    const named = applyCoverName(priced, cover());
+    expect(named.title).toBe("Peter Gabriel (II)");
+    expect(named.artist).toBe("Peter Gabriel");
+    expect(named.query).toBe("Peter Gabriel II CD");
+    expect(named.barcode).toBe("075778485496");
+    expect(named.scanned?.barcode).toBe("075778485496");
+    expect(named.auto?.priceCheck).toBeUndefined();
+    expect(named.auto?.discogs).toBeUndefined();
+    expect(named.auto?.coverChecked).toBe(true);
+    expect(named.auto?.photos).toEqual(unknown.auto!.photos);
+  });
+
+  it("keeps everything when Claude couldn't read the cover", () => {
+    const priced = cd({ ...unknown, auto: { ...unknown.auto!, priceCheck: check(null, null) } });
+    const unread = cover({ identification: { ...cover().identification!, identified: false, title: "", music: { artist: "", album: "", year: "" } } });
+    const after = applyCoverName(priced, unread);
+    expect(after.title).toBeUndefined();
+    expect(after.query).toBe("075778485496");
+    expect(after.auto?.priceCheck).toBeDefined();
+    expect(after.auto?.coverChecked).toBe(true);
+  });
+
+  it("says what was searched when nothing is found", () => {
+    expect(noCopiesMessage(unknown)).toContain("barcode 075778485496");
+    expect(noCopiesMessage(cd({ title: "Wind & Wuthering", artist: "Genesis" }))).toContain("Genesis – Wind & Wuthering");
+    expect(stageLabel("identifying")).toBe("Reading the cover…");
+  });
+
+  it("a CD left while reading the cover goes back to waiting", () => {
+    expect(interruptedToWaiting(cd({ auto: { stage: "identifying", photos: [] } })).auto?.stage).toBe("waiting");
   });
 });
