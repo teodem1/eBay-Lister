@@ -103,7 +103,9 @@ Screens (phone first):
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in
   sessionStorage by `stashScanned`). Each CD shows cover, album, artist, year, CAD price and user
-  categories, with search, category filter, sort, total inventory value and a JSON backup. Saving an edit to album,
+  categories, with search, category filter, sort, total inventory value and a JSON backup. "Mark as sold" in the edit sheet
+  saves `soldAt` (date) and an optional `soldPrice` on the CD (phone only, nothing sent to eBay); sold CDs leave the inventory
+  value, show under the In stock / Sold / All chips (`filterItems` `status`), and a new copy of a sold CD gets its own entry. Saving an edit to album,
   artist, year or price also updates the live eBay listing (`pushEditToEbay.ts` → `/api/listing/update-details` →
   `applyCollectionEdit` in `src/lib/ebay/listingEdits.ts`: reads the inventory item and offer, changes only the title's
   artist/album, those item specifics and the price (Best Offer decline kept at the same %), and puts them back). It uses

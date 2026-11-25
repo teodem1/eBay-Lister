@@ -23,6 +23,10 @@ export interface CollectionItem {
   categories: string[];
   /** The eBay listing's SKU, when the CD was listed from this app (edits are pushed to it). */
   sku?: string;
+  /** When the CD sold (YYYY-MM-DD). Set = sold; it then leaves the inventory value. */
+  soldAt?: string;
+  /** What it sold for, in CAD (optional). */
+  soldPrice?: number;
   addedAt: string;
   updatedAt: string;
 }
@@ -82,7 +86,8 @@ export function sameItem(a: CollectionItem, b: CollectionItem): boolean {
  * (manual price, categories, names they changed). Returns the list and the saved entry.
  */
 export function upsert(items: CollectionItem[], incoming: CollectionItem): { items: CollectionItem[]; saved: CollectionItem; isNew: boolean } {
-  const i = items.findIndex((x) => sameItem(x, incoming));
+  // A sold copy is history: another copy of the same CD gets its own entry.
+  const i = items.findIndex((x) => !isSold(x) && sameItem(x, incoming));
   if (i < 0) return { items: [incoming, ...items], saved: incoming, isNew: true };
   const old = items[i];
   const saved: CollectionItem = {
@@ -107,6 +112,33 @@ export function totalValue(items: CollectionItem[]): number {
   return Math.round(items.reduce((sum, i) => sum + (i.price ?? 0), 0) * 100) / 100;
 }
 
+export function isSold(item: CollectionItem): boolean {
+  return !!item.soldAt;
+}
+
+/** What the sold CDs brought in: the sold price, else the price it was listed at. */
+export function soldTotal(items: CollectionItem[]): number {
+  return Math.round(items.filter(isSold).reduce((sum, i) => sum + (i.soldPrice ?? i.price ?? 0), 0) * 100) / 100;
+}
+
+/** Today's date as YYYY-MM-DD in the phone's time zone. */
+export function today(now = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** The fields that mark a CD sold (date defaults to today; no price keeps the listed one as the guide). */
+export function markSold(soldAt: string, soldPrice?: number): Pick<CollectionItem, "soldAt" | "soldPrice"> {
+  return {
+    soldAt,
+    soldPrice: soldPrice !== undefined && Number.isFinite(soldPrice) && soldPrice >= 0 ? Math.round(soldPrice * 100) / 100 : undefined,
+  };
+}
+
+export const NOT_SOLD: Pick<CollectionItem, "soldAt" | "soldPrice"> = { soldAt: undefined, soldPrice: undefined };
+
+export type StatusFilter = "unsold" | "sold" | "all";
+
 /** Every category in use, with how many CDs carry it, most used first. */
 export function allCategories(items: CollectionItem[]): { name: string; count: number }[] {
   const counts = new Map<string, { name: string; count: number }>();
@@ -121,24 +153,26 @@ export function allCategories(items: CollectionItem[]): { name: string; count: n
   return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
-export type SortKey = "recent" | "artist" | "title" | "year" | "price";
+export type SortKey = "recent" | "sold" | "artist" | "title" | "year" | "price";
 
 /**
  * Search matches album, artist, year, barcode and categories (every word must match).
- * `category` keeps only CDs carrying that category.
+ * `category` keeps only CDs carrying that category; `status` keeps unsold, sold or all CDs.
  */
 export function filterItems(
   items: CollectionItem[],
-  { query = "", category, sort = "recent" }: { query?: string; category?: string; sort?: SortKey },
+  { query = "", category, sort = "recent", status = "all" }: { query?: string; category?: string; sort?: SortKey; status?: StatusFilter },
 ): CollectionItem[] {
   const words = norm(query).split(" ").filter(Boolean);
   const out = items.filter((item) => {
+    if (status !== "all" && isSold(item) !== (status === "sold")) return false;
     if (category && !item.categories.some((c) => norm(c) === norm(category))) return false;
     const hay = norm([item.title, item.artist, item.year ?? "", item.barcode ?? "", ...item.categories].join(" "));
     return words.every((w) => hay.includes(w));
   });
   const by: Record<SortKey, (a: CollectionItem, b: CollectionItem) => number> = {
     recent: (a, b) => b.addedAt.localeCompare(a.addedAt),
+    sold: (a, b) => (b.soldAt ?? "").localeCompare(a.soldAt ?? "") || b.updatedAt.localeCompare(a.updatedAt),
     artist: (a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title),
     title: (a, b) => a.title.localeCompare(b.title),
     year: (a, b) => (a.year ?? 9999) - (b.year ?? 9999),
@@ -171,6 +205,8 @@ export function parseBackup(json: string): CollectionItem[] {
       id: typeof x.id === "string" ? x.id : newId(),
       artist: typeof x.artist === "string" ? x.artist : "",
       categories: Array.isArray(x.categories) ? x.categories.filter((c) => typeof c === "string") : [],
+      soldAt: typeof x.soldAt === "string" && x.soldAt ? x.soldAt : undefined,
+      soldPrice: typeof x.soldPrice === "number" && Number.isFinite(x.soldPrice) ? x.soldPrice : undefined,
       addedAt: typeof x.addedAt === "string" ? x.addedAt : new Date().toISOString(),
       updatedAt: typeof x.updatedAt === "string" ? x.updatedAt : new Date().toISOString(),
     }));
@@ -179,7 +215,7 @@ export function parseBackup(json: string): CollectionItem[] {
 /** Merges a backup into the current list (existing entries win). */
 export function mergeBackup(items: CollectionItem[], imported: CollectionItem[]): CollectionItem[] {
   const out = [...items];
-  for (const item of imported) if (!out.some((x) => sameItem(x, item))) out.push(item);
+  for (const item of imported) if (!out.some((x) => x.id === item.id || (isSold(x) === isSold(item) && sameItem(x, item)))) out.push(item);
   return out;
 }
 
@@ -258,7 +294,7 @@ export function itemFromListing(listing: ListingSnapshot, scanned: CollectionIte
  * listing's details (they are newer than anything saved before).
  */
 export function saveReviewed(items: CollectionItem[], item: CollectionItem): { items: CollectionItem[]; isNew: boolean } {
-  const i = items.findIndex((x) => sameItem(x, item));
+  const i = items.findIndex((x) => !isSold(x) && sameItem(x, item));
   if (i < 0) return { items: [item, ...items], isNew: true };
   const old = items[i];
   const merged: CollectionItem = {

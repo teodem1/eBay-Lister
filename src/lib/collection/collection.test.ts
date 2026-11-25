@@ -9,6 +9,11 @@ import {
   parseBackup,
   saveReviewed,
   itemFromListing,
+  isSold,
+  markSold,
+  NOT_SOLD,
+  soldTotal,
+  today,
   totalValue,
   upsert,
   withCategory,
@@ -198,5 +203,46 @@ describe("saving from the listing screen", () => {
     expect(out.items).toHaveLength(1);
     expect(out.items[0]).toMatchObject({ id: "old", addedAt: "2026-01-01", price: 25, categories: ["90s", "Rock"] });
     expect(saveReviewed([], reviewed).isNew).toBe(true);
+  });
+});
+
+describe("sold CDs", () => {
+  const a = item({ title: "OK Computer", artist: "Radiohead", barcode: "1", price: 20, addedAt: "2026-11-01T00:00:00Z" });
+  const b = item({ title: "Kid A", artist: "Radiohead", price: 15, ...markSold("2026-11-20", 18.456) });
+  const c = item({ title: "Amnesiac", artist: "Radiohead", price: 12, ...markSold("2026-11-24") });
+
+  it("marks and unmarks", () => {
+    expect(markSold("2026-11-20", 18.456)).toEqual({ soldAt: "2026-11-20", soldPrice: 18.46 });
+    expect(markSold("2026-11-20", Number.NaN).soldPrice).toBeUndefined();
+    expect(isSold(b)).toBe(true);
+    expect(isSold({ ...b, ...NOT_SOLD })).toBe(false);
+    expect(today(new Date(2026, 0, 5, 23, 0))).toBe("2026-01-05");
+  });
+
+  it("filters by status and sorts by sold date", () => {
+    const all = [a, b, c];
+    expect(filterItems(all, { status: "unsold" }).map((i) => i.title)).toEqual(["OK Computer"]);
+    expect(filterItems(all, { status: "sold", sort: "sold" }).map((i) => i.title)).toEqual(["Amnesiac", "Kid A"]);
+    expect(filterItems(all, {})).toHaveLength(3);
+  });
+
+  it("totals sold price, else listed price", () => {
+    expect(soldTotal([a, b, c])).toBe(30.46);
+  });
+
+  it("a new copy of a sold CD gets its own entry", () => {
+    const sold = item({ title: "OK Computer", artist: "Radiohead", barcode: "1", ...markSold("2026-11-20") });
+    const again = item({ id: "new", title: "OK Computer", artist: "Radiohead", barcode: "1", price: 22 });
+    expect(saveReviewed([sold], again)).toMatchObject({ isNew: true });
+    expect(upsert([sold], again).isNew).toBe(true);
+  });
+
+  it("keeps sold fields through a backup and skips entries already here", () => {
+    const parsed = parseBackup(JSON.stringify({ items: [b, { ...a, soldAt: 5, soldPrice: "x" }] }));
+    expect(parsed[0]).toMatchObject({ soldAt: "2026-11-20", soldPrice: 18.46 });
+    expect(parsed[1].soldAt).toBeUndefined();
+    expect(parsed[1].soldPrice).toBeUndefined();
+    // Same id already on the phone (e.g. sold since the backup): not added twice.
+    expect(mergeBackup([{ ...a, ...markSold("2026-11-24") }], [a])).toHaveLength(1);
   });
 });
