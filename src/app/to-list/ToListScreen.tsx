@@ -88,6 +88,10 @@ export default function ToListScreen() {
 
         <section className="flex flex-col gap-3" aria-label="Add CDs">
           <StackScan store={batchStore} items={items} autoStart={autoScan} />
+          <Link href="/sort" className="btn btn-secondary h-12 w-full">
+            <Icon name="camera" size={20} strokeWidth={1.8} />
+            Photo of a pile: which are worth selling?
+          </Link>
           <form
             className="relative"
             onSubmit={(e) => {

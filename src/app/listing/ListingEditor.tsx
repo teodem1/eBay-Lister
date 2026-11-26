@@ -69,6 +69,8 @@ export default function ListingEditor({
     batchId?: string;
     /** Progress saved earlier for this CD (grades, photos, price check, draft). */
     saved?: ListingProgress;
+    /** A price check already made for this CD (e.g. on the Sort a pile screen). */
+    priceCheck?: PriceCheck;
   };
 }) {
   const saved = initial.saved;
@@ -100,11 +102,14 @@ export default function ListingEditor({
     return () => clearTimeout(t);
   }, [published, afterPublish]);
   // The price to list at: from ?price=, a suggestion option, or typed by the user.
-  const [price, setPrice] = useState<number | undefined>(saved?.price ?? initial.price);
+  const firstCheck = saved?.priceCheck ?? initial.priceCheck;
+  const [price, setPrice] = useState<number | undefined>(
+    saved?.price ?? initial.price ?? (initial.priceCheck ? defaultPrice(initial.priceCheck) : undefined),
+  );
   // A saved price check is reused: sold-comps allows 100 checks a month.
-  const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(saved?.priceCheck ?? null);
+  const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(firstCheck ?? null);
   const [priceLoading, setPriceLoading] = useState(
-    () => !saved?.priceCheck && priceSuggestionBody(initial.query, initial.barcode) !== null,
+    () => !firstCheck && priceSuggestionBody(initial.query, initial.barcode) !== null,
   );
   // The grades from the scan screen narrow the first price check to copies in that condition.
   const initialCondition = initial.condition?.condition;
@@ -158,7 +163,7 @@ export default function ListingEditor({
   }
 
   // Coming from the lookup screen: check prices straight away (unless this CD's check was saved).
-  const hasSavedCheck = !!saved?.priceCheck;
+  const hasSavedCheck = !!firstCheck;
   useEffect(() => {
     if (hasSavedCheck) return;
     const body = priceSuggestionBody(initial.query, initial.barcode, initialCondition);
