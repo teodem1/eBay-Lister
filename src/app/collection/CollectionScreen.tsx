@@ -23,6 +23,7 @@ import {
 } from "@/lib/collection/collection";
 import { collectionStore, useCollection } from "@/lib/collection/store";
 import { pushEditToEbay, type EbaySync } from "./pushEditToEbay";
+import CollectionSoldPrices from "./CollectionSoldPrices";
 import { saveTextFile } from "@/lib/native/share";
 
 const SORTS: { key: SortKey; label: string }[] = [
@@ -312,7 +313,10 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
   const onBack = useEffectEvent(() => onClose());
   useEffect(() => {
     window.history.pushState({ ...window.history.state, cdSheet: true }, "");
-    const onPop = () => onBack();
+    // Closing a sale's detail sheet on top lands back on this entry: stay open.
+    const onPop = () => {
+      if (!window.history.state?.cdSheet) onBack();
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -420,6 +424,7 @@ function EditSheet({ item, allCategories, onClose }: { item: CollectionItem; all
           {item.priceSource === "estimate" && price === (item.price?.toFixed(2) ?? "") && (
             <p className="hint -mt-2">Estimated from current eBay listings when you scanned it. Change it to set your own.</p>
           )}
+          {!isSold(item) && <CollectionSoldPrices item={item} price={priceValid ? priceNum : undefined} onPick={(p) => setPrice(p.toFixed(2))} />}
 
           <fieldset>
             <legend className="label">Categories</legend>
