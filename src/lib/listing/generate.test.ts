@@ -59,6 +59,7 @@ describe("generateListing", () => {
     expect(req.model).toBe("claude-opus-5-5");
     expect(req.messages[0].content).toContain("Marque (required)");
     expect(req.messages[0].content).toContain("en-CA");
+    expect(JSON.stringify(req.system)).toContain("combines shipping into one package");
   });
 
   it("swaps a condition the category refuses and uses the default package", async () => {

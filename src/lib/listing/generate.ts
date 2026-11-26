@@ -95,6 +95,7 @@ Description (descriptionHtml):
 - Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
 - Sections: short intro sentence, key features, condition, what's included, shipping note. Natural keyword use, no keyword stuffing.
 - Shipping note: the seller ships only to Canada and the United States. Say exactly that; never mention international or worldwide shipping.
+- Combined shipping: also say that buying more than one item (for a CD: "more than one CD") combines shipping into one package, so the buyer pays shipping once on the total weight.
 - Do not claim things the seller did not say (accessories included, original box, warranty, tested working). Put those in "checks" instead.
 
 Price: only when "Price evidence" is given. Pick the item price (shipping is charged separately) that should sell within a few weeks for the most money: weigh sold copies above asking prices, copies in the seller's condition above others, recent sales above old ones, and compare totals with shipping since buyers do. Stay inside the allowed range given. Give the reason in one short sentence (e.g. "Near mint copies sold for $16-19 in the last 3 months"). Without price evidence, price is 0 and priceReason is empty.
