@@ -3,6 +3,7 @@
  * Storage lives in ./store.ts.
  */
 import type { LookupResponse } from "../lookup";
+import type { PriceCheck } from "../../app/listing/priceRequest";
 
 export interface CollectionItem {
   id: string;
@@ -27,6 +28,10 @@ export interface CollectionItem {
   soldAt?: string;
   /** What it sold for, in CAD (optional). */
   soldPrice?: number;
+  /** The price check already made for this CD (when it was listed, or from Collection), so its sold prices show for free. */
+  priceCheck?: PriceCheck;
+  /** When that check was made (ISO). */
+  priceCheckedAt?: string;
   addedAt: string;
   updatedAt: string;
 }
@@ -243,6 +248,20 @@ export interface ListingSnapshot {
   barcode?: string;
   aspects: { name: string; value: string }[];
   imageUrls?: string[];
+  /** The price check the listing used, kept on the CD so Collection can show its sold prices without a new lookup. */
+  priceCheck?: PriceCheck;
+}
+
+/** Most sales or listings kept per list on a saved check (keeps the phone's storage small). */
+const KEPT_COMPARABLES = 30;
+
+/** A price check trimmed for saving on a Collection CD: newest sales and cheapest listings first. */
+export function trimCheck(check: PriceCheck): PriceCheck {
+  return {
+    ...check,
+    soldItems: [...check.soldItems].sort((a, b) => (b.soldDate ?? "").localeCompare(a.soldDate ?? "")).slice(0, KEPT_COMPARABLES),
+    currentItems: [...check.currentItems].sort((a, b) => a.price.value - b.price.value).slice(0, KEPT_COMPARABLES),
+  };
 }
 
 // Item specifics names eBay uses for music, in English and French.
@@ -284,6 +303,7 @@ export function itemFromListing(listing: ListingSnapshot, scanned: CollectionIte
     price: price ?? scanned?.price,
     priceSource: price !== undefined ? "manual" : scanned?.priceSource,
     categories: genres.reduce(withCategory, scanned?.categories ?? []),
+    ...(listing.priceCheck ? { priceCheck: trimCheck(listing.priceCheck), priceCheckedAt: stamp } : {}),
     addedAt: scanned?.addedAt ?? stamp,
     updatedAt: stamp,
   };

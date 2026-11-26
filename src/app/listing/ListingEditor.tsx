@@ -768,7 +768,7 @@ export default function ListingEditor({
                 </div>
               </div>
             )}
-            <SaveToCollection listing={draft} imageText={imageText} query={initial.query} published={!!published}>
+            <SaveToCollection listing={{ ...draft, priceCheck: priceCheck ?? undefined }} imageText={imageText} query={initial.query} published={!!published}>
               <button className="btn btn-primary btn-lg min-w-0 flex-1" disabled={loading !== null} onClick={publish}>
                 {loading === "publish" ? (
                   <>

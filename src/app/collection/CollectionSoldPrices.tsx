@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon, Spinner } from "@/components/ui";
 import SoldComparison from "@/app/review/SoldComparison";
 import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, type PriceCheck } from "@/app/listing/priceRequest";
 import { autoStore, batchStore } from "@/lib/batch/store";
-import { CURRENCY, type CollectionItem } from "@/lib/collection/collection";
+import { CURRENCY, trimCheck, type CollectionItem } from "@/lib/collection/collection";
+import { collectionStore } from "@/lib/collection/store";
 import { collectionCheckKey, collectionKeywords, priceChoices } from "@/lib/collection/soldPrices";
 import { useSoldQuotaWarning } from "@/lib/pricing/soldLimit";
 import { checkFromItems } from "@/lib/sort/worth";
@@ -13,19 +14,26 @@ import { priceCache } from "@/lib/sort/store";
 
 type Found = { check: PriceCheck; at?: string };
 
-/** A check already on this phone: the 30-day cache (shared with Sort a pile), else To list or Auto. Free. */
+/**
+ * Prices already looked up for this CD, free: the check saved on the CD when it
+ * was listed (or checked here before), else the 30-day cache shared with Sort a
+ * pile, else a check saved on To list or Auto (same barcode or SKU).
+ */
 function savedCheck(item: CollectionItem): Found | undefined {
+  if (item.priceCheck) return { check: item.priceCheck, at: item.priceCheckedAt };
   const key = collectionCheckKey(item);
   const hit = priceCache.entry(key);
   if (hit) return hit;
-  const check = checkFromItems([...batchStore.all(), ...autoStore.all()], key);
+  const items = [...batchStore.all(), ...autoStore.all()];
+  const bySku = item.sku ? items.find((x) => x.auto?.draft?.sku === item.sku && x.auto?.priceCheck) : undefined;
+  const check = bySku?.auto?.priceCheck ?? checkFromItems(items, key);
   return check ? { check } : undefined;
 }
 
 /**
  * "Sold prices" in the Collection edit sheet: the last sold copies of this CD
- * next to the price being edited, with one-tap prices to use. A saved check is
- * shown at once; a new one (one sold-comps.com lookup) only runs on tap.
+ * next to the price being edited, with one-tap prices to use. Prices already
+ * looked up show at once; a new lookup (one sold-comps.com call) only runs on tap.
  */
 export default function CollectionSoldPrices({
   item,
@@ -38,6 +46,13 @@ export default function CollectionSoldPrices({
   onPick: (price: number) => void;
 }) {
   const [found, setFound] = useState<Found | undefined>(() => (typeof window === "undefined" ? undefined : savedCheck(item)));
+  // Keep a check found elsewhere on the CD itself, so it stays after the cache drops it.
+  const kept = useRef(false);
+  useEffect(() => {
+    if (kept.current || !found || item.priceCheck) return;
+    kept.current = true;
+    collectionStore.update(item.id, { priceCheck: trimCheck(found.check), priceCheckedAt: found.at });
+  }, [found, item]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const quota = useSoldQuotaWarning();
@@ -55,6 +70,7 @@ export default function CollectionSoldPrices({
     if ("error" in result) return setError(result.error);
     const at = new Date();
     priceCache.put(collectionCheckKey(item), result, at);
+    collectionStore.update(item.id, { priceCheck: trimCheck(result), priceCheckedAt: at.toISOString() });
     setFound({ check: result, at: at.toISOString() });
   }
 
@@ -95,7 +111,7 @@ export default function CollectionSoldPrices({
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="label mb-0">Sold prices</h3>
         <span className="t-caption text-muted">
-          {found.at ? `Checked ${new Date(found.at).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}` : "Saved check"}
+          {found.at ? `Looked up ${new Date(found.at).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}` : "Looked up earlier"}
           {" · "}
           <button type="button" className="link px-1 py-1" disabled={loading || !canCheck} onClick={check}>
             {loading ? "Checking…" : "Check again"}
