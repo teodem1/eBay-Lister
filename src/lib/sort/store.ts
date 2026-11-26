@@ -70,8 +70,12 @@ export const sortStore = {
 
 export const priceCache = {
   get(key: string, now = Date.now()): PriceCheck | undefined {
+    return priceCache.entry(key, now)?.check;
+  },
+  /** The cached check and when it was made (ISO), within the 30 days. */
+  entry(key: string, now = Date.now()): { at: string; check: PriceCheck } | undefined {
     const hit = readJson<Cache>(CACHE_KEY, {})[key];
-    return hit && now - Date.parse(hit.at) < CACHE_TTL_MS ? hit.check : undefined;
+    return hit && now - Date.parse(hit.at) < CACHE_TTL_MS ? hit : undefined;
   },
   put(key: string, check: PriceCheck, now = new Date()) {
     const cache = readJson<Cache>(CACHE_KEY, {});
