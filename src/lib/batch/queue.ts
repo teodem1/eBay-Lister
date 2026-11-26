@@ -55,6 +55,8 @@ export interface BatchItem {
   error?: string;
   /** Disc and inlay grades picked before opening the listing screen. */
   condition?: Partial<SellerCondition>;
+  /** A price check already made (e.g. when sorting a pile photo), reused by the listing screen. */
+  priceCheck?: PriceCheck;
   progress?: ListingProgress;
   /** Set once the CD was opened on the listing screen (one sold-price check). */
   openedAt?: string;
@@ -116,6 +118,28 @@ export function addCode(items: BatchItem[], barcode: string, now = new Date(), o
     origin,
   };
   return { items: [...items, added], added };
+}
+
+/** A CD picked from a pile photo ("Sort a pile"), with its price check, ready to list. */
+export function itemFromSort(
+  cd: { artist: string; album: string; year: string; barcode: string; keywords: string; check?: PriceCheck; coverUrl?: string },
+  now = new Date(),
+): BatchItem {
+  const year = Number(cd.year);
+  return {
+    id: newId(),
+    origin: "stack",
+    barcode: cd.barcode,
+    addedAt: now.toISOString(),
+    status: "pending",
+    lookup: "done",
+    title: cd.album || cd.keywords,
+    artist: cd.artist || undefined,
+    year: Number.isInteger(year) && year > 1900 ? year : undefined,
+    coverUrl: cd.coverUrl,
+    query: cd.keywords,
+    priceCheck: cd.check,
+  };
 }
 
 /** Fills in the album name, cover and listing query from a barcode lookup. */

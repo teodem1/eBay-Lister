@@ -181,6 +181,10 @@ export default function ItemLookup() {
             <Icon name="stack" size={20} strokeWidth={1.8} />
             Scan a stack of CDs
           </Link>
+          <Link href="/sort" className="btn btn-secondary h-12 w-full">
+            <Icon name="camera" size={20} strokeWidth={1.8} />
+            Which CDs are worth selling? (one photo)
+          </Link>
         </section>
 
         {status.kind === "idle" && <HowItWorks />}

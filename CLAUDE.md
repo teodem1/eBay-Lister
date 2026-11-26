@@ -76,6 +76,14 @@ Screens (phone first):
   grades, photos, the price check and Claude's draft on the entry as the seller goes and restores them on return
   (a saved price check is reused, so it costs one sold-comps call per CD). Publishing marks it listed; a CD from a
   scanned stack then opens the next one (`/to-list?next=1`).
+- `/sort` — `src/app/sort/SortScreen.tsx` ("Sort a pile", linked from Scan and To list): one photo of several CDs side by
+  side (spines or covers). `/api/lookup/shelf` (`src/lib/identify/shelf.ts`, Claude vision, no eBay or sold-comps calls)
+  names each CD; the seller unticks or fixes names, sees how many sold-comps lookups pricing will use (at most
+  `MAX_PRICE_PER_RUN` = 12 per run; checks cached 30 days on the phone in `src/lib/sort/store.ts`, and checks already saved
+  on To list / Auto CDs are reused for free), then each CD gets one `/api/price-suggestion` call by name. CDs are ranked by
+  net after fees (`netAfterFees` in `src/lib/sort/worth.ts`: 14.95% eBay.ca Music fee + 11% promoted on price + $7.99
+  shipping, order fee, $1 mailer) against a $3 / $5 / $10 bar. "Add N worth selling to To list" makes To list entries
+  (`itemFromSort`) carrying the price check (`BatchItem.priceCheck`), which the listing screen reuses (`initial.priceCheck`).
 - Stack scans (To list and Auto) use `src/components/StackScan.tsx`: one barcode at a time, then a card with the CD found,
   "Next CD", "Try again" (drops that scan and rescans) and "Done scanning".
 - `/auto` — `src/app/auto/AutoScreen.tsx` ("Auto" tab, listing with no review screen; the other tabs are unchanged):

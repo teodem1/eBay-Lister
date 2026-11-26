@@ -26,5 +26,7 @@ export default function ResumeListing({ initial }: ComponentProps<typeof Listing
   const saved = item?.status === "pending" ? item.progress : undefined;
   // Grades just picked on the scan screen win over older saved ones.
   const condition = conditionComplete(initial.condition ?? {}) ? initial.condition : (saved?.condition ?? item?.condition);
-  return <ListingEditor initial={{ ...initial, condition, saved }} />;
+  // A price check made before (sorting a pile photo) is reused, so it costs no second lookup.
+  const priceCheck = item?.status === "pending" ? item.priceCheck : undefined;
+  return <ListingEditor initial={{ ...initial, condition, saved, priceCheck }} />;
 }
