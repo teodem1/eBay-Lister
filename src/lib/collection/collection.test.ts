@@ -14,6 +14,7 @@ import {
   NOT_SOLD,
   soldTotal,
   today,
+  trimCheck,
   totalValue,
   upsert,
   withCategory,
@@ -244,5 +245,44 @@ describe("sold CDs", () => {
     expect(parsed[1].soldPrice).toBeUndefined();
     // Same id already on the phone (e.g. sold since the backup): not added twice.
     expect(mergeBackup([{ ...a, ...markSold("2026-11-24") }], [a])).toHaveLength(1);
+  });
+});
+
+describe("saved price check on a Collection CD", () => {
+  const sale = (id: string, value: number, soldDate: string) => ({
+    itemId: id,
+    title: "x",
+    price: { value, currency: "CAD" },
+    shippingCost: null,
+    itemLocation: { country: "CA", postalCode: null },
+    shippingDestination: null,
+    condition: null,
+    soldDate,
+    quantitySold: 1,
+    url: null,
+  });
+  const check = {
+    current: null,
+    sold: null,
+    soldItems: Array.from({ length: 40 }, (_, i) => sale(`s${i}`, 10 + i, `2026-10-${String((i % 28) + 1).padStart(2, "0")}`)),
+    currentItems: Array.from({ length: 35 }, (_, i) => ({ ...sale(`c${i}`, 50 - i, ""), soldDate: null })),
+    unavailable: {},
+    keywords: "Genesis Wind",
+  };
+
+  it("keeps the newest 30 sales and cheapest 30 listings", () => {
+    const t = trimCheck(check);
+    expect(t.soldItems).toHaveLength(30);
+    expect(t.soldItems[0].soldDate! >= t.soldItems[29].soldDate!).toBe(true);
+    expect(t.currentItems).toHaveLength(30);
+    expect(t.currentItems[0].price.value).toBe(16);
+  });
+
+  it("saves the listing's price check on the CD", () => {
+    const now = new Date("2026-11-26T12:00:00Z");
+    const item = itemFromListing({ title: "t", aspects: [{ name: "Release Title", value: "Wind" }], priceCheck: check }, null, now);
+    expect(item.priceCheck?.soldItems).toHaveLength(30);
+    expect(item.priceCheckedAt).toBe(now.toISOString());
+    expect(itemFromListing({ title: "t", aspects: [] }, null, now).priceCheck).toBeUndefined();
   });
 });

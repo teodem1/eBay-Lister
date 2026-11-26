@@ -177,7 +177,15 @@ export function saveToCollection(item: BatchItem) {
   if (!draft) return;
   try {
     const entry = itemFromListing(
-      { title: draft.title, sku: draft.sku, price: draft.price, barcode: draft.barcode, aspects: draft.aspects, imageUrls: draft.imageUrls },
+      {
+        title: draft.title,
+        sku: draft.sku,
+        price: draft.price,
+        barcode: draft.barcode,
+        aspects: draft.aspects,
+        imageUrls: draft.imageUrls,
+        priceCheck: item.auto?.priceCheck,
+      },
       item.scanned ?? null,
     );
     collectionStore.saveReviewed(entry);
