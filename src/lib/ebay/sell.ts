@@ -556,6 +556,48 @@ export function bestOfferTerms(price: number, minPercent: number | undefined, cu
   };
 }
 
+/**
+ * Best Offer terms for a new price that keep the listing's own auto-decline (and auto-accept)
+ * at the same share of the price it had before. Falls back to `fallbackPercent` only when the
+ * listing had no decline price to scale from. Other fields on the terms are kept.
+ */
+export function rescaleBestOfferTerms(
+  terms: Record<string, unknown> | undefined,
+  oldPrice: number,
+  newPrice: number,
+  fallbackPercent: number | undefined,
+  currency: string,
+): Record<string, unknown> | undefined {
+  if (!terms || !(terms as { bestOfferEnabled?: boolean }).bestOfferEnabled) return terms;
+  const amount = (key: string) => Number((terms[key] as { value?: string } | undefined)?.value);
+  const scaled = (key: string) => {
+    const old = amount(key);
+    if (!Number.isFinite(old) || old <= 0 || !(oldPrice > 0)) return undefined;
+    // The old amount was rounded down to the cent, so first look for the whole percent that gives it
+    // (13.86 on 18.49 is 75%, not 74.96%); otherwise use the exact share.
+    const whole = Math.ceil((old / oldPrice) * 100 - 1e-9);
+    const exact = (old / oldPrice) * 100;
+    const ratio = Math.floor(Math.round(oldPrice * whole * 1000) / 1000) / 100 === old ? whole : exact;
+    if (ratio <= 0 || ratio >= 100) return undefined;
+    const value = Math.floor(Math.round(newPrice * ratio * 1000) / 1000) / 100;
+    const cur = (terms[key] as { currency?: string } | undefined)?.currency ?? currency;
+    return { value: value.toFixed(2), currency: cur };
+  };
+  const out: Record<string, unknown> = { ...terms };
+  const decline = scaled("autoDeclinePrice");
+  if (decline) out.autoDeclinePrice = decline;
+  else {
+    const fresh = bestOfferTerms(newPrice, fallbackPercent, currency);
+    if (fresh) out.autoDeclinePrice = fresh.autoDeclinePrice;
+  }
+  if (terms.autoAcceptPrice !== undefined) {
+    const accept = scaled("autoAcceptPrice");
+    if (accept) out.autoAcceptPrice = accept;
+    else delete out.autoAcceptPrice; // can't keep a fixed accept price that may now be above the new price
+  }
+  return out;
+}
+
 export function promotedCampaignName(percent: number): string {
   return `eBay Lister - Standard ${percent.toFixed(1)}%`;
 }

@@ -5,7 +5,7 @@
  * again never spends a second sold-price lookup.
  */
 import { useSyncExternalStore } from "react";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
 import type { SortCd, SortSession } from "./worth";
 
 const SESSION_KEY = "ebay-lister:sort:v1";
@@ -55,16 +55,10 @@ function subscribe(l: () => void) {
 
 export const sortStore = {
   useSession: () => useSyncExternalStore(subscribe, readSession, () => null),
-  get: readSession,
   start: (s: SortSession) => setSession(s),
-  clear: () => setSession(null),
   updateCd(id: string, patch: Partial<SortCd>) {
     const s = readSession();
     if (s) setSession({ ...s, cds: s.cds.map((cd) => (cd.id === id ? { ...cd, ...patch } : cd)) });
-  },
-  updateAll(patch: (cd: SortCd) => Partial<SortCd>) {
-    const s = readSession();
-    if (s) setSession({ ...s, cds: s.cds.map((cd) => ({ ...cd, ...patch(cd) })) });
   },
 };
 
@@ -75,9 +69,12 @@ export const priceCache = {
   /** The cached check and when it was made (ISO), within the 30 days. */
   entry(key: string, now = Date.now()): { at: string; check: PriceCheck } | undefined {
     const hit = readJson<Cache>(CACHE_KEY, {})[key];
-    return hit && now - Date.parse(hit.at) < CACHE_TTL_MS ? hit : undefined;
+    // A listings-only check (sold allowance used up) was never meant to be reused.
+    return hit && !hit.check.soldLimitReached && now - Date.parse(hit.at) < CACHE_TTL_MS ? hit : undefined;
   },
+  /** Keeps a check for 30 days. One without sold prices (allowance used up) isn't kept. */
   put(key: string, check: PriceCheck, now = new Date()) {
+    if (check.soldLimitReached) return;
     const cache = readJson<Cache>(CACHE_KEY, {});
     // Drop old entries so the cache stays small.
     for (const [k, v] of Object.entries(cache)) if (now.getTime() - Date.parse(v.at) >= CACHE_TTL_MS) delete cache[k];

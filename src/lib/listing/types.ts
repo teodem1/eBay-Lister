@@ -81,3 +81,9 @@ export interface GeneratedListing {
   /** The copy's special edition (no barcode, Canadian...), when Claude found one; prices it from that edition's sales. */
   edition?: Exclude<Edition, "none">;
 }
+
+// Shapes screens use from server modules, re-exported as types only, so screens
+// import them from here and never pull in zod, the Claude SDK or the eBay client.
+export type { ShelfCd } from "../identify/shelf";
+export type { ApplyResult, LiveListing, RefreshPreview } from "../ebay/refreshListings";
+export type { PriceCheck } from "../pricing/priceCheck";

@@ -4,7 +4,7 @@
  * those fields, and puts them back, which revises the live listing. Nothing
  * else in the listing (description, photos, condition, policies) is touched.
  */
-import { bestOfferTerms, type EbaySellClient } from "./sell";
+import { rescaleBestOfferTerms, type EbaySellClient } from "./sell";
 
 export interface CollectionEdit {
   /** The listing's SKU, when the Collection knows it. */
@@ -121,11 +121,15 @@ export async function applyCollectionEdit(
   const oldPrice = Number((offer.pricingSummary as { price?: { value?: string } } | undefined)?.price?.value);
   if (price !== undefined && price > 0 && Math.abs(price - oldPrice) >= 0.005) {
     const policies = { ...((offer.listingPolicies as Record<string, unknown>) ?? {}) };
-    const hadBestOffer = (policies.bestOfferTerms as { bestOfferEnabled?: boolean } | undefined)?.bestOfferEnabled;
-    if (hadBestOffer) {
-      // Keep the auto-decline at the same share of the new price.
-      policies.bestOfferTerms = bestOfferTerms(price, defaults.bestOfferMinPercent, defaults.currency) ?? policies.bestOfferTerms;
-    }
+    // Keep this listing's own auto-decline (and auto-accept) at the same share of the new price.
+    policies.bestOfferTerms = rescaleBestOfferTerms(
+      policies.bestOfferTerms as Record<string, unknown> | undefined,
+      oldPrice,
+      price,
+      defaults.bestOfferMinPercent,
+      defaults.currency,
+    );
+    if (policies.bestOfferTerms === undefined) delete policies.bestOfferTerms;
     const currency = (offer.pricingSummary as { price?: { currency?: string } } | undefined)?.price?.currency ?? defaults.currency;
     await client.putOfferRaw({
       ...offer,

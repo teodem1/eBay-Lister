@@ -46,7 +46,10 @@ Screens (phone first):
   Otherwise, before Claude writes, the seller grades the disc and the inlay separately in `ConditionPicker.tsx`
   (plus sealed, case, tested, defects; `src/lib/listing/condition.ts`). The eBay condition follows from the
   weaker of disc and inlay (`ebayConditionFromGrades`). It sets the
-  draft's condition and condition text; Claude never guesses them. Claude writes the listing automatically once the CD is graded
+  draft's condition and condition text; Claude never guesses them. A price check made before grading (Sort a pile, a
+  scan with no grades; `PriceCheck.condition` unset) is narrowed on the phone to copies in that condition by
+  `regradeCheck` (`src/lib/pricing/regrade.ts`), with no new lookup. With no barcode, the automatic write waits for two
+  photos so Claude can check the back cover for a no-barcode pressing. Claude writes the listing automatically once the CD is graded
   and the price check is back ("Write it again" rewrites it). The title ends with the seller's
   grades in the seller's template (`cdTitle`, e.g. "Genesis Wind & Wuthering CD (Disc: Near Mint / Inlay: Near Mint)"). Photos (shown right under the Item step, so they can be shot
   while prices load and Claude writes) come from the camera or gallery in `PhotoPicker.tsx`, centre-cropped to a 1600px square like a CD (`resizeImage` `square`); "Take photo" opens `CdCamera.tsx`, a live
@@ -83,7 +86,9 @@ Screens (phone first):
   side (spines or covers). `/api/lookup/shelf` (`src/lib/identify/shelf.ts`, Claude vision, no eBay or sold-comps calls)
   names each CD; the seller unticks or fixes names, sees how many sold-comps lookups pricing will use (at most
   `MAX_PRICE_PER_RUN` = 12 per run; checks cached 30 days on the phone in `src/lib/sort/store.ts`, and checks already saved
-  on To list / Auto CDs are reused for free), then each CD gets one `/api/price-suggestion` call by name. CDs are ranked by
+  on To list / Auto CDs are reused for free, `savedCheckFor` in `src/lib/pricing/savedCheck.ts`), then each CD gets exactly one
+  `/api/price-suggestion` call by name (no barcode, so it never makes a second call; the 12 paid lookups are enforced in
+  `runPricing`). A check that came back without sold prices (`soldLimitReached`) is never cached or carried to To list. CDs are ranked by
   net after fees (`netAfterFees` in `src/lib/sort/worth.ts`: 14.95% eBay.ca Music fee + 11% promoted on price + $7.99
   shipping, order fee, $1 mailer) against a $3 / $5 / $10 bar. "Add N worth selling to To list" makes To list entries
   (`itemFromSort`) carrying the price check (`BatchItem.priceCheck`), which the listing screen reuses (`initial.priceCheck`).
@@ -139,7 +144,7 @@ Screens (phone first):
   (`CollectionSoldPrices.tsx`, in-stock CDs only) shows the last sold copies (`SoldComparison`) and one-tap Quick sale /
   Typical / High prices (`priceChoices` in `src/lib/collection/soldPrices.ts`). Prices already looked up show at once for free:
   the check saved on the CD (`priceCheck`/`priceCheckedAt`, trimmed by `trimCheck`, set when the listing screen or the Auto
-  tab adds the CD, or by an earlier Collection check), else the Sort a pile 30-day cache (shared key `collectionCheckKey`),
+  tab adds the CD, or by an earlier Collection check), else the Sort a pile 30-day cache (`collectionCheckKey`, then the by-name `collectionNameKey` Sort uses),
   else To list / Auto (same SKU or barcode). A new lookup runs only on tap ("Check sold prices" / "Check again").
   Saving the picked price updates the eBay listing as any price edit does. Saving an edit to album,
   artist, year or price also updates the live eBay listing (`pushEditToEbay.ts` → `/api/listing/update-details` →
@@ -170,7 +175,8 @@ Server code:
   eBay condition enums live in `src/lib/ebay/conditions.ts` (re-exported by `sell.ts`) so screens can use them
   without bundling the client. Likewise zod schemas stay out of screen code: `SellerConditionSchema` is in
   `src/lib/listing/conditionSchema.ts`, `TITLE_MAX` in `src/lib/listing/limits.ts`. Screens import types only from
-  `src/lib/listing/types.ts`.
+  `src/lib/listing/types.ts` (it re-exports `PriceCheck`, `ShelfCd` and the Update live listings shapes as types).
+  `PriceCheck` lives in `src/lib/pricing/priceCheck.ts` (with `bestSuggestion`: sold, else listed).
 - `src/lib/ebay/publish.ts` — publish flow: location → inventory item → offer (create or update) → publish.
   Ported from `ebay_handler.py` in teodem1/ebay-item-listings-anthropic-claude.
 - `src/lib/ebay/oauth.ts` + `src/app/api/ebay/{connect,callback}` — one-time eBay sign-in that shows the refresh token for `EBAY_REFRESH_TOKEN` (needs `EBAY_RUNAME`).
@@ -201,7 +207,9 @@ Server code:
   Claude also returns the copy's `edition` (`EDITIONS` in `src/lib/pricing/edition.ts`). `editionPrice` takes the median of
   sold copies titled as that edition when it beats the typical other copy: the listing screen uses it unless the seller
   picked a price (notice with "Use $X"), Auto via `withEditionPrice`, and Update live listings raises (never lowers) a
-  live price to it (`applyRefresh` `raise`, Best Offer decline kept at the same %), from the phone's saved sold prices.
+  live price to it (`applyRefresh` `raise`), from the phone's saved sold prices. Any price change on a live listing
+  (Update live listings, Collection edits) keeps that listing's own Best Offer decline/accept share via
+  `rescaleBestOfferTerms` in `sell.ts` (the env % only when it had no decline).
   Package weight defaults to 115 g for a CD, +16 g per extra disc in the same case, +115 g per extra disc in a double jewel case (so 230 g) (`packageWeightKg`, `discCount`, `hasDoubleJewelCase` from Claude or the item text; a bare "19 CD" is an album name, only "2CD", "2 CDs", "3 discs", "2 CD set" count; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is the first card (right after the price step's listings) and is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.

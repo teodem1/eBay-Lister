@@ -319,6 +319,28 @@ describe("best offer", () => {
     expect(bestOfferTerms(14.99, undefined, "CAD")).toBeUndefined();
   });
 
+  it("rescales a listing's own decline and accept prices to a new price", async () => {
+    const { rescaleBestOfferTerms } = await import("./sell");
+    const terms = {
+      bestOfferEnabled: true,
+      autoDeclinePrice: { value: "16.00", currency: "CAD" },
+      autoAcceptPrice: { value: "18.00", currency: "CAD" },
+    };
+    // 80% decline and 90% accept on $20 stay 80% / 90% on $30, not the 70% default.
+    expect(rescaleBestOfferTerms(terms, 20, 30, 70, "CAD")).toEqual({
+      bestOfferEnabled: true,
+      autoDeclinePrice: { value: "24.00", currency: "CAD" },
+      autoAcceptPrice: { value: "27.00", currency: "CAD" },
+    });
+    // No decline to scale from: the default % applies.
+    expect(rescaleBestOfferTerms({ bestOfferEnabled: true }, 20, 30, 70, "CAD")).toEqual({
+      bestOfferEnabled: true,
+      autoDeclinePrice: { value: "21.00", currency: "CAD" },
+    });
+    // Best Offer off: left alone.
+    expect(rescaleBestOfferTerms({ bestOfferEnabled: false }, 20, 30, 70, "CAD")).toEqual({ bestOfferEnabled: false });
+  });
+
   it("sends bestOfferTerms on the offer from the server default", async () => {
     const { calls, fetchImpl } = fakeEbay({
       "POST /identity/v1/oauth2/token": token,

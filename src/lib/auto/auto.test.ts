@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BatchItem } from "../batch/queue";
 import type { GeneratedListing } from "../listing/types";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
 import type { PriceSuggestion } from "../pricing/suggestPrice";
 import {
   CD_CATEGORY_ID,

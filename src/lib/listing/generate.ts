@@ -86,6 +86,9 @@ export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 2.5 } as cons
 
 export type ClaudeListing = z.infer<typeof ClaudeListingSchema>;
 
+/** Open questions shown to the seller, at most. */
+export const MAX_CHECKS = 4;
+
 const SYSTEM = `You write eBay listings that rank in eBay search (Cassini) and turn browsers into buyers. Follow these rules exactly. Never pad with marketing language. When a fact is missing, leave it out and flag it; never guess it.
 
 Title: search real estate, not a headline.
@@ -308,7 +311,8 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     categorySuggestions: categories,
     conditionsByCategory,
     guessedFields,
-    checks: out.checks,
+    // The rules ask for at most 4; more is noise on the phone.
+    checks: out.checks.slice(0, MAX_CHECKS),
     warnings,
     edition: out.edition && out.edition !== "none" ? out.edition : undefined,
     claudePrice:

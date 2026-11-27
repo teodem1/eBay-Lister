@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
 import type { PriceSuggestion } from "../pricing/suggestPrice";
 import { checkKey } from "../sort/worth";
 import { collectionCheckKey, collectionKeywords, priceChoices } from "./soldPrices";

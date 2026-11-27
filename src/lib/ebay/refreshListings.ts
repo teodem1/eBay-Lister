@@ -9,12 +9,13 @@
  *    live listing. Price, Best Offer, policies (shipping), promotion, photos,
  *    condition, category and quantity are read back from eBay and sent unchanged.
  */
+import { barcodeFromSku } from "../identify/barcode";
 import { GRADES, type Grade } from "../listing/condition";
 import type { SellerCondition } from "../listing/conditionSchema";
 import { generateListing, type GenerateDeps } from "../listing/generate";
 import { TITLE_MAX } from "../listing/limits";
 import type { Edition } from "../pricing/edition";
-import { bestOfferTerms, CONDITIONS, type Condition, type EbaySellClient } from "./sell";
+import { CONDITIONS, rescaleBestOfferTerms, type Condition, type EbaySellClient } from "./sell";
 
 export interface LiveListing {
   sku: string;
@@ -55,6 +56,8 @@ type Raw = Record<string, unknown>;
 
 const product = (item: Raw) => (item.product as Raw | undefined) ?? {};
 const published = (offers: Raw[]) => offers.find((o) => o.status === "PUBLISHED");
+/** The offer's price, NaN when it has none. */
+const offerPrice = (offer: Raw) => Number((offer.pricingSummary as { price?: { value?: string } } | undefined)?.price?.value);
 const listingIdOf = (offer: Raw) => (offer.listing as { listingId?: string } | undefined)?.listingId;
 
 /** One page of live listings (inventory items with a published offer). */
@@ -75,7 +78,7 @@ export async function listLiveListings(
         const offer = published(await client.getOffersRaw(sku));
         if (!offer) return null;
         const p = product(item);
-        const price = Number((offer.pricingSummary as { price?: { value?: string } } | undefined)?.price?.value);
+        const price = offerPrice(offer);
         return {
           sku,
           listingId: listingIdOf(offer),
@@ -170,7 +173,7 @@ export function queryFromListing(item: Raw): string {
 function barcodeOf(item: Raw): string | undefined {
   const p = product(item);
   const first = (k: string) => (p[k] as string[] | undefined)?.[0];
-  return first("upc") ?? first("ean") ?? first("isbn") ?? (/^BC-(\d{8,14})-/i.exec(String(item.sku ?? ""))?.[1] || undefined);
+  return first("upc") ?? first("ean") ?? first("isbn") ?? barcodeFromSku(String(item.sku ?? ""));
 }
 
 /** Aspect names that mean the same field, spelled differently. */
@@ -178,7 +181,8 @@ function aspectKey(name: string): string {
   return name
     .toLowerCase()
     .replace(/catalogue/g, "catalog")
-    .replace(/country\/region of manufacture|country of manufacture/g, "country of origin")
+    // "Country/Region of Manufacture" and "Country of Origin" are two eBay aspects: only spellings of one merge.
+    .replace(/\bcountry of manufacture\b/g, "country/region of manufacture")
     .replace(/[^a-z0-9]/g, "");
 }
 
@@ -292,14 +296,19 @@ export async function applyRefresh(
     ...item,
     product: { ...product(item), title: after.title, description: after.descriptionHtml, aspects: after.aspects },
   });
-  const oldPrice = Number((offer.pricingSummary as { price?: { value?: string } } | undefined)?.price?.value);
+  const oldPrice = offerPrice(offer);
   let priced: Raw = {};
   if (raise && raise.price > 0 && Number.isFinite(oldPrice) && raise.price > oldPrice + 0.004) {
     const policies = { ...((offer.listingPolicies as Raw) ?? {}) };
-    if ((policies.bestOfferTerms as { bestOfferEnabled?: boolean } | undefined)?.bestOfferEnabled) {
-      // Keep the auto-decline at the same share of the new price.
-      policies.bestOfferTerms = bestOfferTerms(raise.price, raise.bestOfferMinPercent, raise.currency) ?? policies.bestOfferTerms;
-    }
+    // Keep this listing's own auto-decline (and auto-accept) at the same share of the new price.
+    policies.bestOfferTerms = rescaleBestOfferTerms(
+      policies.bestOfferTerms as Raw | undefined,
+      oldPrice,
+      raise.price,
+      raise.bestOfferMinPercent,
+      raise.currency,
+    );
+    if (policies.bestOfferTerms === undefined) delete policies.bestOfferTerms;
     const currency = (offer.pricingSummary as { price?: { currency?: string } } | undefined)?.price?.currency ?? raise.currency;
     priced = {
       listingPolicies: policies,

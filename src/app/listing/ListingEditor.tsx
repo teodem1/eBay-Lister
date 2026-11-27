@@ -1,7 +1,8 @@
 "use client";
 
 import { canadianSoldForMore } from "@/lib/pricing/canadian";
-import { editionPrice, type EditionPrice } from "@/lib/pricing/edition";
+import { regradeCheck } from "@/lib/pricing/regrade";
+import { editionPriceAbove, type EditionPrice } from "@/lib/pricing/edition";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/conditions";
@@ -106,9 +107,16 @@ export default function ListingEditor({
     return () => clearTimeout(t);
   }, [published, afterPublish]);
   // The price to list at: from ?price=, a suggestion option, or typed by the user.
-  const firstCheck = saved?.priceCheck ?? initial.priceCheck;
+  // A check carried from Sort a pile is reused, unless it came back without sold prices
+  // (allowance used up then): a fresh check gets them once the allowance resets.
+  // A check made before the CD was graded (Sort a pile, or a scan with no grades) is narrowed to
+  // copies in the seller's condition on the phone, from the sales it holds: no new lookup.
+  const graded = (check: PriceCheck | undefined, c: ConditionDraft) =>
+    check && conditionComplete(c) ? regradeCheck(check, c.condition) : check;
+  const carriedCheck = graded(initial.priceCheck?.soldLimitReached ? undefined : initial.priceCheck, initial.condition ?? {});
+  const firstCheck = graded(saved?.priceCheck, saved?.condition ?? initial.condition ?? {}) ?? carriedCheck;
   const [price, setPrice] = useState<number | undefined>(
-    saved?.price ?? initial.price ?? (initial.priceCheck ? defaultPrice(initial.priceCheck) : undefined),
+    saved?.price ?? initial.price ?? (carriedCheck ? defaultPrice(carriedCheck) : undefined),
   );
   // A saved price check is reused: sold-comps allows 100 checks a month.
   const [priceCheck, setPriceCheck] = useState<PriceCheck | null>(firstCheck ?? null);
@@ -121,6 +129,10 @@ export default function ListingEditor({
   // Once the user picks or types a price, a (re)loaded suggestion no longer overwrites it.
   const [editionNote, setEditionNote] = useState<(EditionPrice & { applied: boolean }) | null>(null);
   const priceChosen = useRef(initial.price !== undefined || !!saved?.priceChosen);
+  const condRef = useRef(cond);
+  useEffect(() => {
+    condRef.current = cond;
+  }, [cond]);
   const priceRequestId = useRef(0);
 
   function choosePrice(value: number | undefined) {
@@ -138,8 +150,11 @@ export default function ListingEditor({
         setPriceError(result.error);
         return;
       }
-      setPriceCheck(result);
-      const value = defaultPrice(result);
+      // Graded while the check was loading: narrow it to that condition.
+      const c = condRef.current;
+      const check = conditionComplete(c) ? regradeCheck(result, c.condition) : result;
+      setPriceCheck(check);
+      const value = defaultPrice(check);
       if (!priceChosen.current && value !== undefined) {
         setPrice(value);
         setDraft((d) => (d ? { ...d, price: value } : d));
@@ -202,19 +217,24 @@ export default function ListingEditor({
     return () => clearTimeout(t);
   }, [initial.batchId, published, query, barcode, cond, imageText, price, priceCheck, generated, draft, guessed]);
 
+  // No barcode: Claude looks at the front and back photos for a no-barcode pressing,
+  // so the automatic write waits for two photos ("Write listing with Claude" still works any time).
+  const photoUrls = imageText.split(/\s+/).filter((u) => u.startsWith("https://"));
+  const waitForPhotos = !barcode.trim() && photoUrls.length < 2;
+
   // Claude writes the listing on its own, once: as soon as the CD is graded and the price
   // check is back (its price goes into the listing). "Write it again" stays for a rewrite.
   const autoWritten = useRef(false);
   const generateRef = useRef<() => void>(() => {});
   useEffect(() => {
     if (autoWritten.current || generated || loading !== null || priceLoading) return;
-    if (!condReady || !query.trim()) return;
+    if (!condReady || !query.trim() || waitForPhotos) return;
     const t = setTimeout(() => {
       autoWritten.current = true;
       generateRef.current();
     }, 600);
     return () => clearTimeout(t);
-  }, [condReady, query, priceLoading, generated, loading]);
+  }, [condReady, query, priceLoading, generated, loading, waitForPhotos]);
 
   function update<K extends keyof Draft>(key: K, value: Draft[K], guessKey: string = key as string) {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
@@ -242,7 +262,7 @@ export default function ListingEditor({
           sellerCondition: condReady ? cond : undefined,
           canadianVersion: canadianSoldForMore(priceCheck?.soldItems) || undefined,
           // No barcode: Claude checks the photos taken so far for a no-barcode pressing.
-          imageUrls: barcode ? undefined : imageText.split(/\s+/).filter((u) => u.startsWith("https://")).slice(0, 3),
+          imageUrls: barcode ? undefined : photoUrls.slice(0, 3),
         }),
       });
       const data = await res.json();
@@ -250,10 +270,10 @@ export default function ListingEditor({
       const g = data as GeneratedListing;
       setGenerated(g);
       // A special edition that sold for more sets the price, unless the seller picked one.
-      const ep = editionPrice(priceCheck?.soldItems, g.edition);
-      const editionWins = !!ep && !priceChosen.current && ep.price > (price ?? 0);
+      const ep = editionPriceAbove(priceCheck?.soldItems, g.edition, price);
+      const editionWins = !!ep && !priceChosen.current;
       if (editionWins) setPrice(ep.price);
-      setEditionNote(ep && ep.price > (price ?? 0) ? { ...ep, applied: editionWins } : null);
+      setEditionNote(ep ? { ...ep, applied: editionWins } : null);
       // Keep the price chosen on this screen even if it changed while Claude was writing.
       setDraft({ ...g.draft, price: editionWins ? ep.price : (price ?? g.draft.price) });
       setGuessed(new Set(g.guessedFields));
@@ -268,6 +288,16 @@ export default function ListingEditor({
   // Changing the condition after Claude wrote the listing updates the draft too.
   function changeCondition(next: ConditionDraft) {
     setCond(next);
+    // First graded here: narrow an ungraded price check to copies in this condition.
+    if (priceCheck && !priceCheck.condition && conditionComplete(next)) {
+      const regraded = regradeCheck(priceCheck, next.condition);
+      setPriceCheck(regraded);
+      const value = defaultPrice(regraded);
+      if (!priceChosen.current && value !== undefined) {
+        setPrice(value);
+        setDraft((d) => (d ? { ...d, price: value } : d));
+      }
+    }
     if (!draft || !conditionComplete(next)) return;
     const allowed = generated?.conditionsByCategory?.[draft.categoryId] ?? [];
     setDraft((d) =>
@@ -446,7 +476,7 @@ export default function ListingEditor({
             {!editionNote.applied && (
               <button
                 type="button"
-                className="btn btn-secondary min-h-10 px-3 text-sm"
+                className="btn btn-secondary t-small min-h-10 px-3"
                 onClick={() => {
                   choosePrice(editionNote.price);
                   setEditionNote({ ...editionNote, applied: true });
@@ -467,7 +497,7 @@ export default function ListingEditor({
                 <p className="t-caption text-muted">Your CD&apos;s condition</p>
                 <p className="t-small font-medium">{conditionTitleSuffix(cond).replace(/^\(|\)$/g, "")}</p>
               </div>
-              <button type="button" className="btn btn-secondary min-h-10 px-3 text-sm" onClick={() => setEditCond(true)}>
+              <button type="button" className="btn btn-secondary t-small min-h-10 px-3" onClick={() => setEditCond(true)}>
                 Change
               </button>
             </div>
@@ -477,6 +507,12 @@ export default function ListingEditor({
         {!condReady && (
           <p className="t-small px-1 text-muted">
             Grade the disc and the inlay (or tick sealed). Claude then writes the listing on its own.
+          </p>
+        )}
+        {condReady && waitForPhotos && !draft && loading === null && (
+          <p className="t-small px-1 text-muted">
+            No barcode scanned: add the front and back photos and Claude writes the listing, checking the back for a
+            barcode (a no-barcode pressing is worth more).
           </p>
         )}
         <button
@@ -765,7 +801,7 @@ export default function ListingEditor({
                 {draft.aspects.map((a, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <input
-                      className={`${input} w-2/5 px-3 text-sm`}
+                      className={`${input} w-2/5 t-small px-3`}
                       value={a.name}
                       aria-label="Specific name"
                       onChange={(e) =>
@@ -799,7 +835,7 @@ export default function ListingEditor({
               </div>
               <div className="mt-3 flex items-center justify-between gap-3">
                 <button
-                  className="btn btn-secondary min-h-11 px-4 text-sm"
+                  className="btn btn-secondary t-small min-h-11 px-4"
                   onClick={() => update("aspects", [...draft.aspects, { name: "", value: "", guessed: false }])}
                 >
                   <Icon name="plus" size={18} /> Add specific
