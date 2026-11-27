@@ -4,7 +4,11 @@ import { previewRefresh } from "@/lib/ebay/refreshListings";
 import { albumByBarcode } from "@/lib/music/musicbrainz";
 import { errorResponse, sellClient } from "../shared";
 
-const Body = z.object({ sku: z.string().min(1).max(50) });
+const Body = z.object({
+  sku: z.string().min(1).max(50),
+  /** From the price check saved on the phone: copies titled Canadian sold for more. */
+  canadianVersion: z.boolean().optional(),
+});
 
 /** POST {sku}: Claude rewrites one live listing with the current rules. Nothing is sent to eBay. */
 export async function POST(request: Request) {
@@ -17,7 +21,7 @@ export async function POST(request: Request) {
       anthropic: new Anthropic(),
       config: got.config,
       albumFacts: (barcode) => albumByBarcode(barcode),
-    });
+    }, { canadianVersion: parsed.data.canadianVersion });
     return Response.json(preview);
   } catch (err) {
     return errorResponse(err);

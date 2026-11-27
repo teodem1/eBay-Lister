@@ -179,6 +179,12 @@ Server code:
   included, Shipping). A graded CD title stays "Artist Album CD (grades)" but fills the 80 characters with `titleExtras`
   (year, label, "Canada"...) put before " CD (" by `cdTitle`. With a barcode, the pressing's label, country, year,
   catalog number and disc count come from MusicBrainz (`albumFacts`, `releaseFactsText`) as certain facts.
+  A rare or special edition backed by a fact (seller's words, an uncommon pressing) is the first title extra, with shorter
+  forms after "||" (`cdTitle` takes the first that fits). Every CD was bought in Canada: when a sold copy titled Canadian
+  sold above the typical other copy (`canadianSoldForMore`, `src/lib/pricing/canadian.ts`, from the saved price check, no
+  new lookup), `canadianVersion` makes "Canadian Version" that edition phrase (Listing, Auto and Update live listings).
+  When no barcode was scanned, up to 3 photos (front, back) go to Claude (`imageUrls`); a fully visible back cover with no
+  barcode makes "Rare No Barcode" the edition phrase (early pressings collectors seek).
   Package weight defaults to 115 g for a CD, +16 g per extra disc in the same case, +115 g per extra disc in a double jewel case (so 230 g) (`packageWeightKg`, `discCount`, `hasDoubleJewelCase` from Claude or the item text; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is the first card (right after the price step's listings) and is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.

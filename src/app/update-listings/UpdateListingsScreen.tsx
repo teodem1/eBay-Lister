@@ -3,7 +3,11 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { AppBar, Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
+import type { PriceCheck } from "@/app/listing/priceRequest";
 import type { ApplyResult, LiveListing, RefreshPreview } from "@/lib/ebay/refreshListings";
+import { autoStore, batchStore } from "@/lib/batch/store";
+import { collectionStore } from "@/lib/collection/store";
+import { canadianSoldForMore } from "@/lib/pricing/canadian";
 
 const KEY = "ebay-lister:refresh:v1";
 const noop = () => () => {};
@@ -38,6 +42,24 @@ async function call<T>(url: string, body?: unknown): Promise<T> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Error ${res.status}`);
   return data as T;
+}
+
+/**
+ * The price check already saved on the phone for a live listing (no new lookup):
+ * on its Collection CD or Auto entry by SKU, else any saved check for its barcode.
+ */
+function savedCheck(sku: string): PriceCheck | undefined {
+  const barcode = /^BC-(\d{8,14})-/i.exec(sku)?.[1];
+  const cds = collectionStore.all();
+  const queue = [...autoStore.all(), ...batchStore.all()];
+  const check =
+    cds.find((x) => x.sku === sku && x.priceCheck)?.priceCheck ??
+    queue.find((x) => x.auto?.draft?.sku === sku && x.auto.priceCheck)?.auto?.priceCheck;
+  if (check || !barcode) return check;
+  return (
+    cds.find((x) => x.barcode === barcode && x.priceCheck)?.priceCheck ??
+    queue.map((x) => x.auto?.priceCheck ?? x.priceCheck ?? x.progress?.priceCheck).find((c, i) => c && queue[i].barcode === barcode)
+  );
 }
 
 /** Runs `work` on each item, two at a time, until done or stopped. */
@@ -106,7 +128,9 @@ export default function UpdateListingsScreen() {
       todo,
       async (r) => {
         try {
-          const preview = await call<RefreshPreview>("/api/listing/refresh/preview", { sku: r.listing.sku });
+          // Every CD was bought in Canada: say so when copies titled Canadian sold for more.
+          const canadianVersion = canadianSoldForMore(savedCheck(r.listing.sku)?.soldItems) || undefined;
+          const preview = await call<RefreshPreview>("/api/listing/refresh/preview", { sku: r.listing.sku, canadianVersion });
           patch(r.listing.sku, { preview, previewError: undefined });
         } catch (err) {
           patch(r.listing.sku, { previewError: (err as Error).message, include: false });

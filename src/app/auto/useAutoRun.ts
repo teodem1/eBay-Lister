@@ -1,5 +1,6 @@
 "use client";
 
+import { canadianSoldForMore } from "@/lib/pricing/canadian";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyCoverName,
@@ -121,6 +122,8 @@ async function listOne(id: string): Promise<void> {
         barcode: start.barcode || undefined,
         suggestedPrice: ebayPrice?.price ?? discogsPrice,
         sellerCondition: condition,
+        canadianVersion: canadianSoldForMore(check.soldItems) || undefined,
+        imageUrls: start.barcode ? undefined : photos.slice(0, 3),
         priceEvidence: priceEvidence(check, 15, discogs ? { ref: discogs, grade } : undefined),
       });
       const picked = finalAutoPrice(check, generated.claudePrice, discogsPrice)!;

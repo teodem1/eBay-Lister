@@ -50,6 +50,16 @@ describe("conditionTitleSuffix", () => {
     expect(cdTitle("Creedence Clearwater Revival The Best of Creedence Clearwater Revival", mint, 80, ["Canada", "2CD"])).toBe(
       "The Best of Creedence Clearwater Revival Canada 2CD (Disc: Mint / Inlay: Mint)",
     );
+    expect(
+      cdTitle("Creedence Clearwater Revival The Best of Creedence Clearwater Revival", mint, 80, [
+        "Rare Canadian Press||Rare Canada||Canada",
+        "2CD",
+        "1993",
+      ]),
+    ).toBe("The Best of Creedence Clearwater Revival Canada 2CD (Disc: Mint / Inlay: Mint)");
+    expect(cdTitle("Rush Moving Pictures", mint, 80, ["Rare Canadian Press||Rare Canada", "1981"])).toBe(
+      "Rush Moving Pictures Rare Canadian Press 1981 CD (Disc: Mint / Inlay: Mint)",
+    );
     expect(cdTitle("U2 War", mint)).toBe("U2 War CD (Disc: Mint / Inlay: Mint)");
   });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { canadianSoldForMore } from "@/lib/pricing/canadian";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/conditions";
@@ -235,6 +236,9 @@ export default function ListingEditor({
           notes: notes || undefined,
           suggestedPrice: price,
           sellerCondition: condReady ? cond : undefined,
+          canadianVersion: canadianSoldForMore(priceCheck?.soldItems) || undefined,
+          // No barcode: Claude checks the photos taken so far for a no-barcode pressing.
+          imageUrls: barcode ? undefined : imageText.split(/\s+/).filter((u) => u.startsWith("https://")).slice(0, 3),
         }),
       });
       const data = await res.json();

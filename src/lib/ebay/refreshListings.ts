@@ -219,6 +219,7 @@ export async function previewRefresh(
   client: EbaySellClient,
   sku: string,
   deps: Omit<GenerateDeps, "ebay">,
+  opts: { canadianVersion?: boolean } = {},
 ): Promise<RefreshPreview> {
   const item = await client.getInventoryItemRaw(sku);
   if (!item) throw new Error("eBay has no inventory item for this SKU.");
@@ -238,6 +239,13 @@ export async function previewRefresh(
       query: queryFromListing(item),
       barcode: barcodeOf(item),
       sellerCondition,
+      // The seller's own edition words ("RARE CANADIAN VERSION") must survive the rewrite.
+      notes: before.title
+        ? `My current eBay title: "${before.title}". Keep any edition words it has (rare, Canadian, promo, limited...), written without caps or asterisks.`
+        : undefined,
+      canadianVersion: opts.canadianVersion,
+      // Without a barcode, Claude looks at the photos for a no-barcode pressing.
+      imageUrls: ((p.imageUrls as string[] | undefined) ?? []).slice(0, 3),
       categoryId: typeof offer.categoryId === "string" ? offer.categoryId : undefined,
     },
     { ...deps, ebay: client },
