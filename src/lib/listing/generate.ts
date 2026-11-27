@@ -16,7 +16,7 @@ const ClaudeListingSchema = z.object({
   title: z.string().describe(`SEO title, at most ${TITLE_MAX} characters`),
   titleExtras: z
     .array(z.string())
-    .describe("Graded CD only: buyer search terms to add after the album name, most searched first (e.g. \"1977\", \"Atlantic\", \"Canada\", \"Remastered\"); empty otherwise"),
+    .describe("Graded CD only: buyer search terms to add after the album name; a rare edition phrase first (shorter forms after \"||\"), then the most searched (e.g. \"Rare Canadian Press||Rare Canada\", \"1977\", \"Atlantic\"); empty otherwise"),
   condition: z.enum(CONDITIONS),
   conditionDescription: z.string().describe("Short note on wear or defects; empty for new items"),
   brand: z.string().describe("Brand, or empty if unknown"),
@@ -86,11 +86,12 @@ Title: search real estate, not a headline.
 - eBay weighs the first ~40 characters most: put the exact words a buyer types first.
 - Order: what it is / model, the key differentiating spec, brand, then secondary search terms to fill the space.
 - Use the words buyers search, not the manufacturer's wording when they differ.
-- No marketing words nobody searches: amazing, premium, must-have, best, top quality, wow, L@@K, rare, classic, legendary, mint (unless it is the seller's grade), genuine (unless authenticity is a real search term).
+- No marketing words nobody searches: amazing, premium, must-have, best, top quality, wow, L@@K, classic, legendary, mint (unless it is the seller's grade), genuine (unless authenticity is a real search term). "Rare" only as part of a supported edition phrase (see "Rare and special editions").
 - No ALL CAPS words (except acronyms like CD, UK, LP), no "!!!", no emojis, no symbol spam: eBay can suppress them.
 - Never invent a model number, size or spec. If unsure, leave it out of the title.
 - For music, start with the artist and the album name as given in "Item" (never a seller's listing title), then format and useful specifics (year, country of pressing, label, edition).
 - A graded CD (the seller gives their condition): "title" is ONLY the artist and the album name as given in "Item", e.g. "Genesis Wind & Wuthering". The app adds " CD (Disc: ... / Inlay: ...)" itself, which leaves about 15 characters. Fill them with "titleExtras": short buyer search terms, most searched first, only facts from "Item", "Release facts" or the item specifics you are certain of. Good extras: "2CD" (or "3CD") for a multi-disc set, the original release year, the record label, "Canada" for a Canadian pressing, "Remastered", "Deluxe Edition", "Import", "Soundtrack", a specific style buyers search (e.g. "Prog Rock", "Blues"; not a broad word like "Rock" or "Music"). Never a condition word, "CD", or a word already in the title.
+- Rare and special editions: collectors search for them and they make a listing stand out, so when the CD is one, its edition phrase is the FIRST title extra, before the year or label. Examples: "Rare Canadian Press", "Rare Promo", "Limited Edition", "Numbered Edition", "Japan Import", "First Press", "Club Edition", "Out of Print", "Rare Digipak". Only when a fact supports it: the seller's notes or current title say so (e.g. "RARE CANADIAN VERSION" becomes "Rare Canadian Press"), the release facts show an uncommon pressing (a Canadian, promo, limited, numbered or club pressing), or the item text names the edition. Space is short, so give the phrase in shorter forms too, separated by "||", longest first: "Rare Canadian Press||Rare Canada||Canada". Write "Rare" at most once, never on its own and never without a supporting fact. When nothing supports it, add no edition phrase. Name the edition in the description's summary line and Key features as well.
 
 Item specifics: fill every applicable one.
 - Fill every aspect listed for the category, required ones first, and also the optional ones most sellers skip (e.g. for a CD: Artist, Release Title, Format, Genre, Style, Record Label, Release Year, Country/Region of Manufacture, Edition, Language, Type, Number of Discs, Catalog Number, Case Type, Features, Producer). An empty field is a lost filter match.

@@ -69,7 +69,7 @@ export function conditionTitleSuffix(sc: SellerCondition): string {
 /**
  * The listing title for a graded CD: "Artist Album CD (Disc: Near Mint / Inlay: Near Mint)".
  * Any format word Claude left at the end of the album name is dropped first.
- * `extras` are buyer search terms (year, label, "Canada", "Remastered", "2CD"...) put
+ * `extras` are buyer search terms (a rare edition, year, label, "Canada", "2CD"...) put
  * before " CD (...)", in order, each only if the whole title still fits in `max`,
  * so the title uses the 80 characters without ever cutting the album or the grades.
  */
@@ -82,7 +82,9 @@ export function cdTitle(album: string, sc: SellerCondition, max = 80, extras: st
   const room = max - suffix.length - 1;
   if (name.length > room) name = shortenName(name, room);
   for (const raw of extras) {
-    const extra = raw.replace(/\s+/g, " ").replace(/[()]/g, "").trim();
+    // "Rare Canadian Press||Rare Canada": the first form that fits.
+    const forms = raw.split("||").map((f) => f.replace(/\s+/g, " ").replace(/[()]/g, "").trim()).filter(Boolean);
+    const extra = forms.find((f) => name.length + 1 + f.length + 1 + suffix.length <= max) ?? forms[0] ?? "";
     // Never repeat a word the title already has; format words are the app's.
     if (!extra || /^(compact disc|cds?|\d\s*-?\s*(x\s*)?cds?|double cd)$/i.test(extra)) continue;
     const words = extra.toLowerCase().split(" ");

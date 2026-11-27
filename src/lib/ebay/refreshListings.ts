@@ -238,6 +238,10 @@ export async function previewRefresh(
       query: queryFromListing(item),
       barcode: barcodeOf(item),
       sellerCondition,
+      // The seller's own edition words ("RARE CANADIAN VERSION") must survive the rewrite.
+      notes: before.title
+        ? `My current eBay title: "${before.title}". Keep any edition words it has (rare, Canadian, promo, limited...), written without caps or asterisks.`
+        : undefined,
       categoryId: typeof offer.categoryId === "string" ? offer.categoryId : undefined,
     },
     { ...deps, ebay: client },
