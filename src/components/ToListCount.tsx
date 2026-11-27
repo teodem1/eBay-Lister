@@ -8,7 +8,7 @@ export default function ToListCount() {
   if (!pending) return null;
   return (
     <span
-      className="absolute -top-1 right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-bold tabular-nums text-brand-fg"
+      className="absolute -right-1 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border border-line bg-surface px-1 text-xs font-semibold tabular-nums text-foreground"
       aria-label={`${pending} to list`}
     >
       {pending > 99 ? "99+" : pending}

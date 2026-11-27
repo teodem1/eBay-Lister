@@ -60,12 +60,12 @@ export default function SaveToCollection({
       <div className="flex gap-2">
         <button
           type="button"
-          className="btn btn-secondary btn-lg shrink-0 px-4"
+          className="btn btn-secondary btn-lg min-w-0 flex-1 px-3"
           onClick={save}
           aria-label={saved ? "Save to Collection again" : "Add to Collection"}
         >
-          <Icon name={saved ? "check" : "discAdd"} size={22} strokeWidth={saved ? 2.4 : 1.9} />
-          <span>{saved ? "Saved" : "Collection"}</span>
+          {saved && <Icon name="check" size={20} strokeWidth={2.4} />}
+          <span className="truncate">{saved ? "Saved" : "Add to Collection"}</span>
         </button>
         {children}
       </div>

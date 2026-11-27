@@ -65,7 +65,7 @@ export default function CollectionScreen() {
   return (
     <>
       <AppBar title="Collection" />
-      <main className="page page-tabs">
+      <main className="page page-tabs pt-3">
         {!hydrated ? (
           <div className="skeleton h-32" />
         ) : items.length === 0 ? (

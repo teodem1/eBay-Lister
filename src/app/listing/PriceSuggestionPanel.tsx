@@ -73,7 +73,7 @@ function ComparableList({
             </button>
           ))}
       </div>
-      <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
         {shown.map((c) => {
           const active = selected === c.price.value;
           return (

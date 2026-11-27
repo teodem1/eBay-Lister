@@ -84,6 +84,8 @@ export default function ListingEditor({
   const condReady = conditionComplete(cond);
   // Graded on the scan screen: no need to ask again here (the picker opens only on "Change").
   const [editCond, setEditCond] = useState(() => !conditionComplete(initial.condition ?? {}));
+  // The item's name, barcode and notes show as a summary once known; "Edit" opens the fields.
+  const [editItem, setEditItem] = useState(() => !initial.query);
   const [loading, setLoading] = useState<"generate" | "publish" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
@@ -358,12 +360,33 @@ export default function ListingEditor({
   return (
     <>
       <AppBar
-        title="Create listing"
+        title="New listing"
         back={initial.batchId ? { href: "/to-list", label: "Back to To list" } : { href: "/", label: "Find another item" }}
       />
       <main className={`page ${draft ? "pb-36" : ""}`}>
         <section className="flex flex-col gap-3">
-          <StepHeading n={1} title="Item" />
+          {!editItem && query.trim() ? (
+            <div className="card flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="t-headline line-clamp-2">{query}</p>
+                {barcode && <p className="t-caption mt-0.5 tabular-nums text-muted">EAN {barcode}</p>}
+                {condReady && !editCond && (
+                  <p className="t-small mt-1 font-medium">{conditionTitleSuffix(cond).replace(/^\(|\)$/g, "").replace(" / ", " · ")}</p>
+                )}
+                {notes && <p className="t-small mt-0.5 line-clamp-2 text-muted">{notes}</p>}
+              </div>
+              <div className="flex shrink-0 flex-col items-end">
+                <button type="button" className="btn-link min-h-10" onClick={() => setEditItem(true)}>
+                  Edit
+                </button>
+                {condReady && !editCond && (
+                  <button type="button" className="btn-link min-h-10" onClick={() => setEditCond(true)}>
+                    Change grades
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="card space-y-4">
             <label className="block">
               <span className="label">Item</span>
@@ -392,7 +415,13 @@ export default function ListingEditor({
                 placeholder="Edition, what's included (obi strip, sticker, slipcase)"
               />
             </label>
+            {query.trim() && (
+              <button type="button" className="btn btn-secondary w-full" onClick={() => setEditItem(false)}>
+                Done
+              </button>
+            )}
           </div>
+          )}
         </section>
 
         {/* Photos first: shoot the CD while prices load and Claude writes the listing. */}
@@ -432,15 +461,17 @@ export default function ListingEditor({
         {editCond || !condReady ? (
           <ConditionPicker n={3} value={cond} onChange={changeCondition} />
         ) : (
-          <div className="card flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="t-caption text-muted">Your CD&apos;s condition</p>
-              <p className="t-small font-medium">{conditionTitleSuffix(cond).replace(/^\(|\)$/g, "")}</p>
+          editItem && (
+            <div className="card flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="t-caption text-muted">Your CD&apos;s condition</p>
+                <p className="t-small font-medium">{conditionTitleSuffix(cond).replace(/^\(|\)$/g, "")}</p>
+              </div>
+              <button type="button" className="btn btn-secondary min-h-10 px-3 text-sm" onClick={() => setEditCond(true)}>
+                Change
+              </button>
             </div>
-            <button type="button" className="btn btn-secondary min-h-10 px-3 text-sm" onClick={() => setEditCond(true)}>
-              Change
-            </button>
-          </div>
+          )
         )}
 
         {!condReady && (
@@ -781,7 +812,7 @@ export default function ListingEditor({
       </main>
 
       {generated && draft && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/90 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface px-4 pb-[calc(env(safe-area-inset-bottom)+0.625rem)] pt-2.5">
           <div className="mx-auto max-w-lg space-y-2">
             {error && <div className="max-h-[40vh] overflow-y-auto">{errorBox}</div>}
             {published && (

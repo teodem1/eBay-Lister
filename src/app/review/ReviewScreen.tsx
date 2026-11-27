@@ -28,14 +28,11 @@ export default function ReviewScreen() {
 
   return (
     <>
-      <AppBar title="Review" />
-      <main className="page page-tabs">
-        <header className="pt-1">
-          <h1 className="t-display">Review</h1>
-        </header>
+      <AppBar title="Review" subtitle="What the Auto tab published, with the sold prices behind each price." />
+      <main className="page page-tabs pt-3">
 
         <Link href="/update-listings" className="card flex items-center gap-3 p-3">
-          <Icon name="edit" size={20} className="text-brand" />
+          <Icon name="edit" size={20} className="text-brand-ink" />
           <span className="flex-1">
             <span className="t-title block">Update live listings</span>
             <span className="t-small text-muted">Rewrite titles, item specifics and descriptions of all your live listings</span>
