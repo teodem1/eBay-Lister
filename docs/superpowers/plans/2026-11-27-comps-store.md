@@ -50,7 +50,7 @@
 - [x] **Step 3: Implement.** Compare `accessToken(header)` with `accessToken(key)` through `sameString`. Never log the header.
 - [x] **Step 4:** `npm test && npm run lint && npm run build` — all pass.
 - [x] **Step 5:** Commit `feat: accept the access key as a request header`. Merge this branch into `comps-store`.
-- [ ] **Step 6 (seller approval):** merge to `main` and deploy; without any secret, the app still answers "This app is locked".
+- [x] **Step 6 (seller approval):** merge to `main` and deploy; without any secret, the app still answers "This app is locked".
 
 ### Task 0: Thread access gate (seller sets it up). Stop if it fails.
 
