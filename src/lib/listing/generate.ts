@@ -2,8 +2,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { CONDITIONS, nearestAllowedCondition, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
+import { CONDITIONS, nearestAllowedCondition, type AspectHint, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
+import { releaseFactsText, type AlbumInfo } from "../music/musicbrainz";
 import { cdKeywords } from "../pricing/version";
 import { cdTitle, conditionSummary } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
@@ -13,6 +14,9 @@ export const MODEL = "claude-opus-5-5";
 // Kept free of length limits: structured outputs don't enforce them, so we enforce in code below.
 const ClaudeListingSchema = z.object({
   title: z.string().describe(`SEO title, at most ${TITLE_MAX} characters`),
+  titleExtras: z
+    .array(z.string())
+    .describe("Graded CD only: buyer search terms to add after the album name, most searched first (e.g. \"1977\", \"Atlantic\", \"Canada\", \"Remastered\"); empty otherwise"),
   condition: z.enum(CONDITIONS),
   conditionDescription: z.string().describe("Short note on wear or defects; empty for new items"),
   brand: z.string().describe("Brand, or empty if unknown"),
@@ -75,28 +79,38 @@ export const DEFAULT_PACKAGE_CM = { length: 12, width: 15, height: 2.5 } as cons
 
 export type ClaudeListing = z.infer<typeof ClaudeListingSchema>;
 
-const SYSTEM = `You write eBay listings that rank well in eBay search (Cassini) and convert.
+const SYSTEM = `You write eBay listings that rank in eBay search (Cassini) and turn browsers into buyers. Follow these rules exactly. Never pad with marketing language. When a fact is missing, leave it out and flag it; never guess it.
 
-Title rules:
-- At most ${TITLE_MAX} characters. Use the space: brand, model, key specs (size, capacity, colour, edition), condition word if useful.
-- Put the words buyers search first. No ALL CAPS words except acronyms, no "L@@K", no emojis, no punctuation spam, no words like "wow" or "rare" unless true.
+Title: search real estate, not a headline.
+- At most ${TITLE_MAX} characters, and use them: empty title space is lost search matches.
+- eBay weighs the first ~40 characters most: put the exact words a buyer types first.
+- Order: what it is / model, the key differentiating spec, brand, then secondary search terms to fill the space.
+- Use the words buyers search, not the manufacturer's wording when they differ.
+- No marketing words nobody searches: amazing, premium, must-have, best, top quality, wow, L@@K, rare, classic, legendary, mint (unless it is the seller's grade), genuine (unless authenticity is a real search term).
+- No ALL CAPS words (except acronyms like CD, UK, LP), no "!!!", no emojis, no symbol spam: eBay can suppress them.
 - Never invent a model number, size or spec. If unsure, leave it out of the title.
 - For music, start with the artist and the album name as given in "Item" (never a seller's listing title), then format and useful specifics (year, country of pressing, label, edition).
-- When the seller gives their condition (a CD), the title is ONLY the artist and the album name as given in "Item", e.g. "Genesis Wind & Wuthering": no label, genre, year, format or condition words. The app adds " CD (Disc: ... / Inlay: ...)" itself.
+- A graded CD (the seller gives their condition): "title" is ONLY the artist and the album name as given in "Item", e.g. "Genesis Wind & Wuthering". The app adds " CD (Disc: ... / Inlay: ...)" itself, which leaves about 15 characters. Fill them with "titleExtras": short buyer search terms, most searched first, only facts from "Item", "Release facts" or the item specifics you are certain of. Good extras: the original release year, the record label, "Canada" for a Canadian pressing, "Remastered", "Deluxe Edition", "2CD", "Import", "Soundtrack", the genre when buyers search it (e.g. "Prog Rock"). Never a condition word, "CD", or a word already in the title.
 
-Item specifics:
-- Fill every aspect the category lists, required ones first, using eBay's usual values (e.g. "Apple", "128 GB").
-- Add other relevant aspects buyers filter on.
-- Mark guessed=true whenever the value is not stated by the seller and not certain from the barcode or exact model. If you have no reasonable value, give an empty string and guessed=true.
+Item specifics: fill every applicable one.
+- Fill every aspect listed for the category, required ones first, and also the optional ones most sellers skip (e.g. for a CD: Artist, Release Title, Format, Genre, Style, Record Label, Release Year, Country/Region of Manufacture, Edition, Language, Type, Number of Discs, Catalog Number, Case Type, Features, Producer). An empty field is a lost filter match.
+- When eBay lists values for an aspect, use one of those values exactly (spelling and case), so eBay's filters match. Only "Release facts" and the barcode count as certain for a CD's pressing (label, country, year, catalog number).
+- Never invent a value. Mark guessed=true whenever the value is not stated in the input and not certain from the barcode, release facts or exact model. If you have no reasonable value, give an empty string with guessed=true and add a short check (e.g. "Confirm the catalog number from the spine").
 
-Condition: when the seller gives their condition, use exactly that condition and describe the item's condition using only the seller's words and grades: never add defects, wear or claims (like "tested") they did not state, and never use the condition of other eBay listings. Otherwise pick only from the allowed conditions listed for the category, when a list is given.
+Condition: honest and plain beats conversion tricks. When the seller gives their condition, use exactly that condition and describe the item's condition using only the seller's words and grades: never add defects, wear or claims (like "tested") they did not state, never soften or upsell them ("great condition!"), and never use the condition of other eBay listings. Otherwise pick only from the allowed conditions listed for the category, when a list is given.
 
-Description (descriptionHtml):
-- Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, forms, external links, or inline event handlers.
-- Sections: short intro sentence, key features, condition, what's included, shipping note. Natural keyword use, no keyword stuffing.
-- Shipping note: the seller ships only to Canada and the United States. Say exactly that; never mention international or worldwide shipping.
-- Combined shipping: also say that buying more than one item (for a CD: "more than one CD") combines shipping into one package, so the buyer pays shipping once on the total weight.
+Description (descriptionHtml): scannable, factual, for a buyer skimming on a phone. No walls of text, no adjectives doing a fact's work.
+- Simple, mobile-friendly HTML: <h2>, <p>, <ul>/<li>, <strong>. No <script>, <style>, <iframe>, tables, forms, external links, or inline event handlers.
+- In this order:
+  1. One-line summary <p>: what it is (for a CD: artist, album, format, and pressing when known).
+  2. <h2>Key features</h2>: short bullets, one fact per line (for a CD: release year, label, number of discs, edition or remaster, genre). Only facts you are sure of.
+  3. <h2>Specifications</h2>: a bullet list mirroring the filled item specifics as "<strong>Name:</strong> value". Leave out empty ones.
+  4. <h2>Condition</h2>: precise and honest, only the seller's words and grades (for a CD: disc, inlay/booklet, case, tested, defects).
+  5. <h2>What's included</h2>: only what the seller's condition says is there (for a CD: the disc, plus the inlay/booklet and case unless the seller says they are missing). Never add things not stated (obi, stickers, original shrink wrap, extras).
+  6. <h2>Shipping</h2>: the seller ships only to Canada and the United States. Say exactly that; never mention international or worldwide shipping. Also say that buying more than one item (for a CD: "more than one CD") combines shipping into one package, so the buyer pays shipping once on the total weight.
 - Do not claim things the seller did not say (accessories included, original box, warranty, tested working). Put those in "checks" instead.
+
+Checks: short open questions for the seller, one per thing you flagged (aspects you left empty or guessed, facts to confirm from the disc or inlay), plus for a CD with defects in the seller's notes: "Add a close-up photo of each defect (it prevents disputes)".
 
 Price: only when "Price evidence" is given. Pick the item price (shipping is charged separately) that should sell within a few weeks for the most money: weigh sold copies above asking prices, copies in the seller's condition above others, recent sales above old ones, and compare totals with shipping since buyers do. Stay inside the allowed range given. Give the reason in one short sentence (e.g. "Near mint copies sold for $16-19 in the last 3 months"). Without price evidence, price is 0 and priceReason is empty.
 
@@ -104,8 +118,17 @@ Write the title, aspects values and description in the marketplace language give
 
 export interface GenerateDeps {
   anthropic: Anthropic;
+  /** Looks up the exact pressing for a barcode (MusicBrainz). Its facts go to Claude as certain. */
+  albumFacts?: (barcode: string) => Promise<AlbumInfo | null>;
   ebay?: EbaySellClient;
   config: EbayConfig;
+}
+
+/** One aspect for Claude: "- Format (required) [one of: CD, Vinyl, ...]". */
+export function aspectLine(a: AspectHint): string {
+  const tag = a.required ? " (required)" : "";
+  if (!a.values?.length) return `- ${a.name}${tag}`;
+  return `- ${a.name}${tag} [${a.selectionOnly ? "only" : "eBay values, use one when it fits"}: ${a.values.join(", ")}]`;
 }
 
 export function trimTitle(title: string, max = TITLE_MAX): string {
@@ -144,13 +167,15 @@ export function cdCategoryFirst(categories: CategorySuggestion[]): CategorySugge
 export async function generateListing(input: ItemInput, deps: GenerateDeps): Promise<GeneratedListing> {
   const warnings: string[] = [];
   let categories: CategorySuggestion[] = [];
-  let aspectHints: { name: string; required: boolean }[] = [];
+  let aspectHints: AspectHint[] = [];
   let conditionsByCategory: Record<string, Condition[]> = {};
 
   if (deps.ebay) {
     try {
       const treeId = await deps.ebay.getCategoryTreeId();
-      categories = cdCategoryFirst(await deps.ebay.suggestCategories(cdKeywords(input.query), treeId));
+      categories = input.categoryId
+        ? [{ categoryId: input.categoryId, categoryName: "", path: `the listing's category (ID ${input.categoryId})` }]
+        : cdCategoryFirst(await deps.ebay.suggestCategories(cdKeywords(input.query), treeId));
       if (categories[0]) aspectHints = await deps.ebay.getCategoryAspects(categories[0].categoryId, treeId);
     } catch (err) {
       warnings.push(`Could not look up the eBay category: ${(err as Error).message}`);
@@ -162,6 +187,16 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     }
   } else {
     warnings.push("eBay keys are not set, so no category was looked up. Enter a category ID by hand.");
+  }
+
+  // The exact pressing (label, country, year) makes the title and item specifics facts, not guesses.
+  let album: AlbumInfo | null = null;
+  if (input.barcode && deps.albumFacts) {
+    try {
+      album = await deps.albumFacts(input.barcode);
+    } catch {
+      album = null; // MusicBrainz is a bonus; never block the listing on it
+    }
   }
 
   const sellerConditionText = input.sellerCondition ? conditionSummary(input.sellerCondition) : "";
@@ -176,9 +211,8 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
         ? null
         : "Seller notes: none (condition unknown, treat as a guess)",
     categories[0] ? `eBay category: ${categories[0].path} (ID ${categories[0].categoryId})` : null,
-    aspectHints.length
-      ? `Item specifics for this category:\n${aspectHints.map((a) => `- ${a.name}${a.required ? " (required)" : ""}`).join("\n")}`
-      : null,
+    album ? `Release facts (MusicBrainz, for this barcode; certain):\n${releaseFactsText(album)}` : null,
+    aspectHints.length ? `Item specifics for this category:\n${aspectHints.map(aspectLine).join("\n")}` : null,
     input.priceEvidence ? `Price evidence:\n${input.priceEvidence}` : null,
     categories[0] && conditionsByCategory[categories[0].categoryId]
       ? `Allowed conditions for this category: ${conditionsByCategory[categories[0].categoryId].join(", ")}`
@@ -204,7 +238,9 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
   if (!out) throw new Error(`Claude returned no listing (stop reason: ${response.stop_reason}).`);
 
   // A graded CD gets the seller's title template: "Artist Album CD (Disc: Near Mint / Inlay: Near Mint)".
-  const title = input.sellerCondition ? cdTitle(out.title, input.sellerCondition, TITLE_MAX) : trimTitle(out.title);
+  const title = input.sellerCondition
+    ? cdTitle(out.title, input.sellerCondition, TITLE_MAX, out.titleExtras ?? [])
+    : trimTitle(out.title);
   // The seller's condition wins over Claude's; it is a fact, not a guess.
   const seller = input.sellerCondition;
   const guessedFields: string[] = seller
@@ -225,7 +261,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
       sku: makeSku(input.barcode),
       title,
       categoryId: categories[0]?.categoryId ?? "",
-      categoryName: categories[0]?.path,
+      categoryName: categories[0]?.categoryName ? categories[0].path : undefined,
       condition,
       conditionDescription: (seller ? sellerConditionText : out.conditionDescription) || undefined,
       aspects: out.aspects.filter((a) => a.name.trim()),

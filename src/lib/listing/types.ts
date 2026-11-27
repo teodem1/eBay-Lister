@@ -24,6 +24,8 @@ export const ItemInputSchema = z.object({
   sellerCondition: SellerConditionSchema.optional(),
   /** Sold and current prices as text (Auto tab): Claude then picks the price too. */
   priceEvidence: z.string().max(8000).optional(),
+  /** An existing listing's eBay category: used as is instead of eBay's suggestion. */
+  categoryId: z.string().regex(/^\d+$/).optional(),
 });
 export type ItemInput = z.infer<typeof ItemInputSchema>;
 

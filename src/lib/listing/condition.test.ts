@@ -44,6 +44,16 @@ describe("conditionTitleSuffix", () => {
     expect(long.length).toBeLessThanOrEqual(80);
     expect(long.endsWith(" CD (Disc: Near Mint / Inlay: Near Mint)")).toBe(true);
   });
+
+  it("fills the 80 characters with search terms that fit, never cutting the grades", () => {
+    const sc = { condition: "LIKE_NEW" as const, disc: "Near mint" as const, booklet: "Near mint" as const };
+    const t = cdTitle("Genesis Wind & Wuthering", sc, 80, ["1977", "Atlantic Records Remastered Edition", "Canada", "CD", "Genesis"]);
+    expect(t).toBe("Genesis Wind & Wuthering 1977 Canada CD (Disc: Near Mint / Inlay: Near Mint)");
+    expect(t.length).toBeLessThanOrEqual(80);
+    expect(cdTitle("Genesis Wind & Wuthering", { condition: "NEW" }, 80, ["(1977)", "Prog Rock"])).toBe(
+      "Genesis Wind & Wuthering 1977 Prog Rock CD (Sealed)",
+    );
+  });
 });
 
 describe("ebayConditionFromGrades", () => {

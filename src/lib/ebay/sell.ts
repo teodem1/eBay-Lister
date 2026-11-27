@@ -66,6 +66,15 @@ export interface OfferInput {
   bestOfferMinPercent?: number;
 }
 
+export interface AspectHint {
+  name: string;
+  required: boolean;
+  /** eBay's suggested values (dropdown), when it has some. */
+  values?: string[];
+  /** eBay only accepts one of the listed values. */
+  selectionOnly?: boolean;
+}
+
 export interface CategorySuggestion {
   categoryId: string;
   categoryName: string;
@@ -331,6 +340,15 @@ export class EbaySellClient {
     if (!res.ok) throw new EbayApiError("update offer", res.status, await readBody(res));
   }
 
+  /** One page of the seller's inventory items, as eBay stores them, with the total count. */
+  async listInventoryItems(offset = 0, limit = 100): Promise<{ items: Record<string, unknown>[]; total: number }> {
+    const res = await this.sellRequest("list inventory items", "GET", `/inventory_item?limit=${limit}&offset=${offset}`);
+    const data = await readBody(res);
+    if (!res.ok) throw new EbayApiError("list inventory items", res.status, data);
+    const d = data as { inventoryItems?: Record<string, unknown>[]; total?: number };
+    return { items: d.inventoryItems ?? [], total: d.total ?? d.inventoryItems?.length ?? 0 };
+  }
+
   /** SKUs that start with a prefix (e.g. "BC-0602547…-"), newest pages first scanned up to `max` items. */
   async findSkus(prefix: string, max = 1000): Promise<string[]> {
     const found: string[] = [];
@@ -490,17 +508,36 @@ export class EbaySellClient {
     }));
   }
 
-  /** Item specifics eBay expects for a category, with the required ones first. */
-  async getCategoryAspects(categoryId: string, treeId?: string): Promise<{ name: string; required: boolean }[]> {
+  /**
+   * Item specifics for a category: required first, then recommended, then optional
+   * (buyers filter on optional ones too). Each carries eBay's suggested values, so
+   * Claude can use the exact dropdown value that eBay's filters match.
+   */
+  async getCategoryAspects(categoryId: string, treeId?: string): Promise<AspectHint[]> {
     const tree = treeId ?? (await this.getCategoryTreeId());
     const data = (await this.taxonomyGet(
       "category aspects",
       `/category_tree/${tree}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`,
-    )) as { aspects?: { localizedAspectName: string; aspectConstraint?: { aspectRequired?: boolean; aspectUsage?: string } }[] };
-    return (data.aspects ?? [])
-      .filter((a) => a.aspectConstraint?.aspectRequired || a.aspectConstraint?.aspectUsage === "RECOMMENDED")
-      .slice(0, 25)
-      .map((a) => ({ name: a.localizedAspectName, required: Boolean(a.aspectConstraint?.aspectRequired) }));
+    )) as {
+      aspects?: {
+        localizedAspectName: string;
+        aspectConstraint?: { aspectRequired?: boolean; aspectUsage?: string; aspectMode?: string };
+        aspectValues?: { localizedValue: string }[];
+      }[];
+    };
+    const rank = (a: { aspectConstraint?: { aspectRequired?: boolean; aspectUsage?: string } }) =>
+      a.aspectConstraint?.aspectRequired ? 0 : a.aspectConstraint?.aspectUsage === "RECOMMENDED" ? 1 : 2;
+    return [...(data.aspects ?? [])]
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 40)
+      .map((a) => {
+        const values = (a.aspectValues ?? []).map((v) => v.localizedValue).filter(Boolean);
+        const hint: AspectHint = { name: a.localizedAspectName, required: Boolean(a.aspectConstraint?.aspectRequired) };
+        if (a.aspectConstraint?.aspectMode === "SELECTION_ONLY") hint.selectionOnly = true;
+        // Long lists (genres, years) are cut: Claude knows the common ones, the first few show the style.
+        if (values.length) hint.values = values.slice(0, 30);
+        return hint;
+      });
   }
 }
 
