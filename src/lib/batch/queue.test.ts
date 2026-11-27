@@ -7,6 +7,7 @@ import {
   batchListingHref,
   lookupsToStart,
   nextPending,
+  retryScan,
   summarize,
   type BatchItem,
 } from "./queue";
@@ -117,5 +118,38 @@ describe("batchListingHref", () => {
       inlay: "Very good",
       batch: item.id,
     });
+  });
+});
+
+describe("retryScan", () => {
+  const photos = ["https://i.ebayimg.com/front.jpg", "https://i.ebayimg.com/back.jpg"];
+  function withWork(item: BatchItem): BatchItem {
+    return { ...item, condition: { disc: "Near mint" }, auto: { stage: "waiting", photos } };
+  }
+
+  it("moves the photos and grades taken after a misread scan to the CD scanned again", () => {
+    const [first, again] = queue("111", "222");
+    const outcome = retryScan(withWork(first), again);
+    expect(outcome.action).toBe("move");
+    if (outcome.action !== "move") return;
+    expect(outcome.item.id).toBe(again.id);
+    expect(outcome.item.barcode).toBe("222");
+    expect(outcome.item.auto?.photos).toEqual(photos);
+    expect(outcome.item.condition).toEqual({ disc: "Near mint" });
+  });
+
+  it("keeps the CD when the rescan reads the same barcode", () => {
+    const [first] = queue("111");
+    expect(retryScan(withWork(first), withWork(first))).toEqual({ action: "keep" });
+  });
+
+  it("drops a first scan with no photos or grades, as before", () => {
+    const [first, again] = queue("111", "222");
+    expect(retryScan(first, again)).toEqual({ action: "remove" });
+  });
+
+  it("never overwrites a CD that already has its own photos", () => {
+    const [first, other] = queue("111", "222");
+    expect(retryScan(withWork(first), withWork(other))).toEqual({ action: "keep" });
   });
 });
