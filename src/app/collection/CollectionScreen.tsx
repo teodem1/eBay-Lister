@@ -162,9 +162,10 @@ export default function CollectionScreen() {
               </ul>
             )}
 
-            <Backup items={items} />
           </>
         )}
+        {/* Outside the branches above so a restore on an empty collection keeps its message. */}
+        {hydrated && <Backup items={items} />}
       </main>
       <TabBar active="collection" />
       {editItem && (
@@ -612,6 +613,7 @@ function EmptyState() {
       <h1 className="t-title">No CDs yet</h1>
       <p className="t-small max-w-xs text-muted">
         Scan a CD, review its listing, then tap Add to Collection (or publish it). It lands here with its cover, artist, year and your price.
+        Reinstalled the app? Restore your backup below.
       </p>
       <Link href="/" className="btn btn-primary mt-1">
         Scan a CD
@@ -628,6 +630,8 @@ function Backup({ items }: { items: CollectionItem[] }) {
   const [saving, setSaving] = useState(false);
   const [pasting, setPasting] = useState(false);
   const [pasted, setPasted] = useState("");
+  // A fresh install has nothing to save yet, only something to restore.
+  const empty = items.length === 0;
 
   async function exportFile() {
     const name = `cd-collection-${new Date().toISOString().slice(0, 10)}.json`;
@@ -670,20 +674,27 @@ function Backup({ items }: { items: CollectionItem[] }) {
   return (
     <section className="card flex flex-col gap-3">
       <div>
-        <h2 className="t-headline">Backup</h2>
+        <h2 className="t-headline">{empty ? "Restore a backup" : "Backup"}</h2>
         <p className="t-small text-muted">
-          Your collection is saved on this phone. Save a backup file now and then so you don&apos;t lose it if the app is
-          reinstalled.
+          {empty
+            ? "Have a backup file from before the app was reinstalled? Restore it to bring your CDs back."
+            : "Your collection is saved on this phone. Save a backup file now and then so you don't lose it if the app is reinstalled."}
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn btn-secondary" onClick={exportFile} disabled={saving}>
-          {saving ? "Saving…" : "Save backup"}
-        </button>
+      {empty ? (
         <button type="button" className="btn btn-secondary" onClick={() => fileRef.current?.click()}>
-          Restore
+          Restore from backup
         </button>
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="btn btn-secondary" onClick={exportFile} disabled={saving}>
+            {saving ? "Saving…" : "Save backup"}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => fileRef.current?.click()}>
+            Restore
+          </button>
+        </div>
+      )}
       <input
         ref={fileRef}
         type="file"

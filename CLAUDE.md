@@ -127,7 +127,7 @@ Screens (phone first):
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in
   sessionStorage by `stashScanned`). Each CD shows cover, album, artist, year, CAD price and user
-  categories, with search, category filter, sort, total inventory value and a JSON backup. "Mark as sold" in the edit sheet
+  categories, with search, category filter, sort, total inventory value and a JSON backup (Restore also shows on the empty collection, for a fresh install). "Mark as sold" in the edit sheet
   saves `soldAt` (date) and an optional `soldPrice` on the CD (phone only, nothing sent to eBay); sold CDs leave the inventory
   value, show under the In stock / Sold / All chips (`filterItems` `status`), and a new copy of a sold CD gets its own entry. Under the price, "Check sold prices"
   (`CollectionSoldPrices.tsx`, in-stock CDs only) shows the last sold copies (`SoldComparison`) and one-tap Quick sale /
