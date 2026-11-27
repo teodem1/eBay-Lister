@@ -4,6 +4,9 @@
  * entered APP_ACCESS_KEY once (on /unlock) may call them. The phone keeps a
  * cookie holding a hash of the key, never the key itself.
  *
+ * A client that cannot keep the cookie (the seller's Claude thread, whose network
+ * secret adds the key outside its session) sends the key in KEY_HEADER on API calls.
+ *
  * With APP_ACCESS_KEY unset the app stays open (local development, and so a
  * deploy before the key is set doesn't lock anyone out).
  *
@@ -47,6 +50,15 @@ export async function hasAccess(key: string | undefined, cookie: string | undefi
   if (!key) return true;
   if (!cookie) return false;
   return sameString(cookie, await accessToken(key));
+}
+
+/** Request header that carries the key itself, for API calls only. */
+export const KEY_HEADER = "x-elister-key";
+
+/** True only when a key is set and the header holds exactly that key (compared as hashes). */
+export async function hasHeaderAccess(key: string | undefined, header: string | null): Promise<boolean> {
+  if (!key || !header) return false;
+  return sameString(await accessToken(header), await accessToken(key));
 }
 
 /** Where to go after unlocking: only a path on this site, never another host. */

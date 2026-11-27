@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessToken, hasAccess, isPublicPath, safeNext, sameString } from "./access";
+import { accessToken, hasAccess, hasHeaderAccess, isPublicPath, KEY_HEADER, safeNext, sameString } from "./access";
 
 describe("app access key", () => {
   it("leaves the app open when no key is set", async () => {
@@ -15,6 +15,16 @@ describe("app access key", () => {
     expect(await hasAccess("s3cret-key", undefined)).toBe(false);
     expect(await hasAccess("s3cret-key", await accessToken("other"))).toBe(false);
     expect(await hasAccess("s3cret-key", "s3cret-key")).toBe(false);
+  });
+
+  it("accepts the key itself in the request header, and nothing else", async () => {
+    expect(KEY_HEADER).toBe("x-elister-key");
+    expect(await hasHeaderAccess("s3cret-key", "s3cret-key")).toBe(true);
+    for (const header of ["other", "s3cret-ke", "", null, await accessToken("s3cret-key")]) {
+      expect(await hasHeaderAccess("s3cret-key", header)).toBe(false);
+    }
+    expect(await hasHeaderAccess(undefined, "anything")).toBe(false);
+    expect(await hasHeaderAccess("", "")).toBe(false);
   });
 
   it("compares strings fully", () => {
