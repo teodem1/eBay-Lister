@@ -4,7 +4,7 @@ Status: approved by the seller 2026-11-27; research level amended to "lighter", 
 "(call)" marks a builder's decision.
 
 ## Intent
-From the existing Claude thread, the plugin rewrites every title, adds missing listing information and
+From a Claude Code session on this repository, the plugin rewrites every title, adds missing listing information and
 proposes prices from stored sold results, using as few SoldComps lookups and tokens as it can.
 
 ## Decided by the seller
@@ -17,7 +17,10 @@ proposes prices from stored sold results, using as few SoldComps lookups and tok
 - Lighter research: web research only for CDs asking C$20 or more. The rest are rewritten from listing
   facts and stored sales.
 - No Claude API credits (plan usage only); cheapest suitable model.
-- The key is held as a network secret on the thread's cloud environment (option A), which the session cannot
+- The work runs in Claude Code, not the Claude chat project (switched 2026-11-27, option C). The plugin becomes
+  a project skill (`.claude/skills/optimise-listing/`) and project agents (`.claude/agents/`), which the docs
+  say a cloud session loads; "plugin" below means these files. (call)
+- The key is held as a network secret on the session's cloud environment (option A), which the session cannot
   read; the app also accepts it in the `x-elister-key` header on `/api/*`.
 
 ## App (branch `comps-store`, from `main`; the `worth-it` branch stays undeployed)
@@ -59,7 +62,7 @@ proposes prices from stored sold results, using as few SoldComps lookups and tok
 - Phone storage plus backup file: no new service, but too small for full results.
 
 ## Limits and risks
-- This chat's workspace reaches the app. **Untested:** the network secret itself, checked before the rest is
+- **Untested:** the network secret and the skill and agents loading in a cloud session, both checked before the rest is
   built. Any session in that environment can then use the app, including its publish and edit routes, so the
   environment is used only for this plugin.
 - Blob on Hobby includes 1 GB, 2,000 advanced and 10,000 simple operations a month; exceeding an allowance
@@ -68,7 +71,7 @@ proposes prices from stored sold results, using as few SoldComps lookups and tok
 - Sold prices may include Best Offer sales at the asking price.
 - Under C$20, title words and missing details that only web research would find are not added.
 - The access lock is on (seller saw "This app is locked"). An earlier listing result came from a browser that
-  was already unlocked, so the thread itself is still untested.
+  was already unlocked, so the new session is still untested.
 
 ## Not included
 New screens, changes to grades, photos, shipping or promotion, automatic publishing.

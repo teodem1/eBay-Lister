@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** From the seller's Claude thread, the plugin rewrites live titles, adds missing information and reprices from stored sold results, after approval.
+**Goal:** From a Claude Code session on this repository, the plugin rewrites live titles, adds missing information and reprices from stored sold results, after approval.
 
 **Architecture:** The app saves every sold lookup to private Vercel Blob and exposes read and import routes behind the existing access key. The plugin reads stored results first, does arithmetic and safety checks in Python, and writes through the app's two existing update routes.
 
@@ -10,7 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-27-comps-store-design.md`
 
-**Repos:** app = `/home/claude/teodem1/ebay-lister` (branch `comps-store`); plugin = `/home/claude/ebay-cd-optimiser` (new branch `comps-flow` from `build`).
+**Where the code is:** one repository, branch `comps-store`. App = repository root. The former `ebay-cd-optimiser` plugin (v0.3.0) is now plain project files, so a cloud session loads it: the skill in `.claude/skills/optimise-listing/` (with `scripts/`, `references/`, `tests/`) and the agents in `.claude/agents/`. In Tasks 6-9, `scripts/`, `tests/`, `SKILL.md` and `README.md` are relative to the skill folder; `agents/` means `.claude/agents/`.
+
+## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
+
+- Done: Task 0A, deployed to production. Next: Task 0, then Tasks 1-10.
+- The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
+- Run `npm install` first. Read this plan's spec before Task 1.
 
 ## Global Constraints
 
@@ -26,7 +32,7 @@
 - Title ≤ **80** characters. Grades and condition never change.
 - Price: base needs **3** sales; a detail applies with **2+** matches, **1** is pending; changes over **50%** are flagged; CAD only.
 - App: read `node_modules/next/dist/docs/` before route code. Before each app commit: `npm test`, `npm run lint`; before the last: `npm run build`.
-- Plugin tests: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests`.
+- Plugin tests, from the skill folder: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests`.
 - Commit messages end with the session's `Co-Authored-By` and `Claude-Session` lines.
 
 ## Review Focus
@@ -54,7 +60,7 @@
 
 ### Task 0: Thread access gate (seller sets it up). Stop if it fails.
 
-- [ ] **Step 1:** At claude.ai/code, use an environment only the plugin thread uses. Edit it → **Network secrets** → **Add secret**: allowed website `e-bay-lister-nu.vercel.app`; custom header name `x-elister-key`, prefix empty, value = the access key. Add the variable `ELISTER_URL=https://e-bay-lister-nu.vercel.app` (not secret). The key is never typed in chat or stored as a variable.
+- [ ] **Step 1:** At claude.ai/code, create an environment used only for this work. Edit it → **Network secrets** → **Add secret**: allowed website `e-bay-lister-nu.vercel.app`; custom header name `x-elister-key`, prefix empty, value = the access key. Add the variable `ELISTER_URL=https://e-bay-lister-nu.vercel.app` (not secret). The key is never typed in chat or stored as a variable. Then start a session on this repository, branch `comps-store`, in that environment.
 - [ ] **Step 2:** In that session, run (reads nothing and changes nothing: a GET on a POST-only route):
 
 ```bash
@@ -62,6 +68,8 @@ curl -s -o /dev/null -w '%{http_code}\n' "$ELISTER_URL/api/price-suggestion"
 ```
 
 Expected: `405` (let through). `401`: secret not attached. Anything else: stop and revisit.
+
+- [ ] **Step 3:** Confirm the session lists the project skill `/optimise-listing` and the project agents `source-collector`, `listing-writer` and `collector-appraiser`, all without an `ebay-cd-optimiser:` prefix (prefixed ones are the older account plugin, which the seller should turn off). Use a normal session, not a thread in a Claude Code project, which does not load them. If any is missing, stop and fix the loading before Task 1.
 
 ### Task 1: Lookup record and keys (app)
 
@@ -142,7 +150,7 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 
 ### Task 6: Cache-first client (plugin)
 
-**Files:** Modify `skills/optimise-listing/scripts/app_client.py`. Create `scripts/listings.py`, `tests/test_listings.py`.
+**Files:** Modify `scripts/app_client.py`. Create `scripts/listings.py`, `tests/test_listings.py`.
 
 **Interfaces — Consumes:** routes of Tasks 4, 5. **Produces:**
 - `app_client.App(url, key, opener=None)` with `.get(path, params=None) -> dict`, `.post(path, body) -> dict`; same URL check, no redirects, raises `AppUnavailable`; with no `key` it makes no unlock call
@@ -192,20 +200,20 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - [ ] **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat: approved listing changes`.
 
-### Task 9: Skill, agents, version (plugin)
+### Task 9: Skill and agents
 
-**Files:** Modify `skills/optimise-listing/SKILL.md`, `agents/*.md`, `README.md`, `.claude-plugin/plugin.json`, `tests/test_package.py`.
+**Files:** Modify `SKILL.md`, `agents/*.md`, `README.md`, `tests/test_package.py`.
 
-- [ ] **Step 1: Failing tests:** version `0.4.0`; SKILL.md contains `C$20`, `every 5 CDs`, `batches of 5`, `Nothing is sent without approval`, `once per artist`, `only when evidence conflicts`, and each new script name; no `not worth deeper research`.
+- [ ] **Step 1: Failing tests:** SKILL.md contains `C$20`, `every 5 CDs`, `batches of 5`, `Nothing is sent without approval`, `once per artist`, `only when evidence conflicts`, and each new script name; no `not worth deeper research`.
 - [ ] **Step 2:** Run, FAIL.
 - [ ] **Step 3: Write.** Live-listing batch flow: usage gate → `list` → per CD `read`, `sold` → research if `research_needed` → write → `reprice` → `check` → approval table (old/new title, added information, old/new price, pending, evidence, date, over-50% flag) → `apply`. Only verified facts; list disagreements and unknowns. Titles are built with `title.py` as artist and album, then edition, year, label, genre; the writer reads the stored sold titles for words that go with higher sales and uses one only if true of this copy. Keep the single unlisted-CD flow, minus the C$40 gate, still publishing nothing (builder's call).
-- [ ] **Step 4:** Tests PASS; `claude plugin validate .` passes.
-- [ ] **Step 5:** Commit `feat: live listing batch flow 0.4.0`.
+- [ ] **Step 4:** Tests PASS.
+- [ ] **Step 5:** Commit `feat: live listing batch flow`.
 
 ### Task 10: Release (each step needs the seller's approval)
 
 - [ ] Create a private Blob store and connect it to `e-bay-lister` (Production).
 - [ ] Merge `comps-store`, deploy, confirm the locked message still appears without the key.
-- [ ] Install plugin 0.4.0; `listings.py check` → reachable and authorised.
+- [ ] In a new session on `main`, confirm the new `/optimise-listing` loads; `listings.py check` → reachable and authorised.
 - [ ] Import the backup (expected: 68 of its 74 checks carry sales; 6 are skipped).
 - [ ] 5-CD trial: record both usage percentages before and after; apply nothing until the table is approved.

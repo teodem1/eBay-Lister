@@ -4,6 +4,12 @@
 
 Guidance for Claude Code when working in this repository.
 
+## Current work
+
+Stored SoldComps results and plugin-driven listing updates, on branch `comps-store`. Start at "Resume here" in
+`docs/superpowers/plans/2026-11-27-comps-store.md`. No push, deployment, storage creation or eBay change without
+the seller's approval; never ask for or print the access key or the SoldComps key.
+
 ## Project
 
 eBay-Lister — a tool for creating and managing eBay listings. The codebase is
