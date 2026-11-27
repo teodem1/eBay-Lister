@@ -64,8 +64,8 @@ proposes prices from stored sold results, using as few SoldComps lookups and tok
 - 134 CDs have no backup check: about 134-268 lookups.
 - Sold prices may include Best Offer sales at the asking price.
 - Under C$20, title words and missing details that only web research would find are not added.
-- The live app returned listings to an unauthenticated test (reported by the seller): `APP_ACCESS_KEY` must
-  be set and redeployed before the plugin work relies on the app.
+- The access lock is on (seller saw "This app is locked"). An earlier listing result came from a browser that
+  was already unlocked, so the thread itself is still untested.
 
 ## Not included
 New screens, changes to grades, photos, shipping or promotion, automatic publishing.
