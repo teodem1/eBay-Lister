@@ -239,29 +239,55 @@ export function useAutoRun(hydrated: boolean, held: { current: ReadonlySet<strin
     if (items.some((x) => interruptedToWaiting(x) !== x)) autoStore.replace(items.map(interruptedToWaiting));
   }, [hydrated]);
 
+  /** Workers alive right now (at most PARALLEL). */
+  const workers = useRef(0);
+  /** CDs the seller tapped "Try again" on: listed even while their row is open (held). */
+  const retrying = useRef(new Set<string>());
+
+  /**
+   * Starts the run, or resumes it after Pause. With `onlyId` ("Try again" on one
+   * CD) it never adds a third CD at once and never un-pauses: a running run
+   * takes that CD next, a paused one lists just it when a slot is free (else on
+   * Resume).
+   */
   const start = useCallback(async (onlyId?: string) => {
-    if (active.current.size && !onlyId) return;
-    stop.current = false;
-    setPaused(false);
-    setRunning(true);
+    if (onlyId) retrying.current.add(onlyId);
+    else {
+      stop.current = false;
+      setPaused(false);
+    }
+    const pausedNow = stop.current;
+    const room = PARALLEL - workers.current;
+    if (room <= 0) return;
     // A CD the seller is still photographing or grading waits until they move on.
-    const next = () =>
+    const next = (only?: string) =>
       readyForAuto(autoStore.all()).find(
-        (x) => !active.current.has(x.id) && (onlyId ? x.id === onlyId : !held.current.has(x.id)),
+        (x) =>
+          !active.current.has(x.id) &&
+          (only ? x.id === only : !held.current.has(x.id) || retrying.current.has(x.id)),
       );
-    const worker = async () => {
-      for (let item = next(); item && !stop.current; item = next()) {
-        active.current.add(item.id);
-        try {
-          await listOne(item.id);
-        } finally {
-          active.current.delete(item.id);
+    const worker = async (only?: string) => {
+      workers.current++;
+      try {
+        for (let item = next(only); item && (only || !stop.current); item = next(only)) {
+          active.current.add(item.id);
+          retrying.current.delete(item.id);
+          try {
+            await listOne(item.id);
+          } finally {
+            active.current.delete(item.id);
+          }
+          if (only) break;
         }
-        if (onlyId) break;
+      } finally {
+        workers.current--;
+        if (!workers.current) setRunning(false);
       }
     };
-    await Promise.all(Array.from({ length: onlyId ? 1 : PARALLEL }, worker));
-    if (!active.current.size) setRunning(false);
+    const count = pausedNow ? 1 : room;
+    if (!next(pausedNow ? onlyId : undefined)) return;
+    setRunning(true);
+    await Promise.all(Array.from({ length: count }, () => worker(pausedNow ? onlyId : undefined)));
   }, [held]);
 
   /** Lets the CDs already started finish, and starts no more until resumed. */

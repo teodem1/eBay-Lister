@@ -25,6 +25,8 @@ import {
   stageLabel,
   rescanned,
   retryByRescan,
+  liveChangeForSku,
+  withLiveChange,
 } from "./auto";
 import type { LookupResponse } from "../lookup";
 
@@ -273,5 +275,53 @@ describe("Try again rescans the barcode", () => {
 
   it("the same barcode keeps its price check (no second sold-price check)", () => {
     expect(rescanned(failed, "075778485496").auto?.priceCheck).toBeDefined();
+  });
+});
+
+describe("withLiveChange", () => {
+  const published = cd({
+    auto: {
+      stage: "published",
+      photos: [],
+      price: 12,
+      draft: {
+        sku: "BC-075992731324-1",
+        title: "Old title",
+        categoryId: "176984",
+        aspects: [
+          { name: "Artist", value: "Genesis", guessed: false },
+          { name: "Genre", value: "Rock", guessed: true },
+        ],
+        descriptionHtml: "<p>old</p>",
+        quantity: 1,
+        imageUrls: [],
+        condition: "USED_EXCELLENT",
+        price: 12,
+      },
+    },
+  });
+
+  it("copies what Update live listings put on eBay onto the draft Review edits", () => {
+    const next = withLiveChange(published, {
+      title: "New title",
+      descriptionHtml: "<p>new</p>",
+      aspects: { Artist: ["Genesis"], Genre: ["Rock"], Format: ["CD", "Album"] },
+      price: 18,
+    });
+    expect(next.auto?.draft).toMatchObject({ title: "New title", descriptionHtml: "<p>new</p>", price: 18 });
+    expect(next.auto?.price).toBe(18);
+    expect(next.auto?.draft?.aspects).toEqual([
+      { name: "Artist", value: "Genesis", guessed: false },
+      { name: "Genre", value: "Rock", guessed: true },
+      { name: "Format", value: "CD | Album", guessed: false },
+    ]);
+  });
+
+  it("keeps fields the change doesn't carry, and only touches the same SKU", () => {
+    const next = withLiveChange(published, { price: 15 });
+    expect(next.auto?.draft?.title).toBe("Old title");
+    expect(next.auto?.draft?.aspects).toHaveLength(2);
+    expect(liveChangeForSku([published], "BC-other", { price: 20 })).toEqual([]);
+    expect(liveChangeForSku([published], "BC-075992731324-1", { price: 20 })[0].item.auto?.price).toBe(20);
   });
 });

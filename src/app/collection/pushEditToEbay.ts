@@ -3,6 +3,7 @@
 import type { CollectionItem } from "@/lib/collection/collection";
 import { collectionStore } from "@/lib/collection/store";
 import { autoStore } from "@/lib/batch/store";
+import { liveChangeForSku } from "@/lib/auto/auto";
 
 export type EbaySync =
   | { state: "working" }
@@ -29,14 +30,12 @@ export async function pushEditToEbay(item: CollectionItem, after: Fields): Promi
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { state: "failed", message: `Saved here, but eBay wasn't updated: ${data?.error ?? `error ${res.status}`}` };
     if (data.status === "not_found") return { state: "not_found", message: `Saved here. ${data.reason}` };
-    // Remember the listing found by barcode, and keep the Review tab's copy in step.
+    // Remember the listing found by barcode, and keep the Review tab's copy in step
+    // (its "Edit" re-sends the whole draft, so it must hold what eBay now has).
     if (data.sku && data.sku !== item.sku) collectionStore.update(item.id, { sku: data.sku });
-    if (after.price !== undefined) {
-      for (const x of autoStore.all()) {
-        if (x.auto?.draft?.sku === data.sku) {
-          autoStore.update(x.id, (y) => ({ ...y, auto: { ...y.auto!, draft: { ...y.auto!.draft!, price: after.price! } } }));
-        }
-      }
+    if (data.status === "updated" && data.sku) {
+      const change = { title: data.title, aspects: data.aspects, price: after.price };
+      for (const { id, item: next } of liveChangeForSku(autoStore.all(), data.sku, change)) autoStore.update(id, () => next);
     }
     return {
       state: "done",

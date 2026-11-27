@@ -191,7 +191,7 @@ async function searchActiveAny(
 ): Promise<{ items: Comparable[]; notes: string[]; matchedBy: ComparableResult["matchedBy"] }> {
   const items = await searchActive(client, q);
   if (!q.gtin) return { items, notes: [], matchedBy: "keywords" };
-  if (items.length >= MIN_BARCODE_MATCHES || !q.keywords?.trim()) {
+  if (items.length >= MIN_BARCODE_MATCHES || !hasName(q)) {
     return { items, notes: [`Listings with this exact barcode (${q.gtin}).`], matchedBy: "barcode" };
   }
   const byName = await searchActive(client, { ...q, gtin: undefined });
@@ -294,7 +294,7 @@ async function searchSoldAny(
   // sales is a second, by-name search spent (sold-comps.com quota is small).
   if (q.gtin) {
     items = await searchSoldComps(q, { ...sc, by: "barcode" });
-    if (items.length >= MIN_BARCODE_MATCHES || !q.keywords?.trim()) {
+    if (items.length >= MIN_BARCODE_MATCHES || !hasName(q)) {
       matchedBy = "barcode";
       notes.push(`Sales of this exact barcode (${q.gtin}), so the same pressing.`);
     } else {
@@ -311,6 +311,21 @@ async function searchSoldAny(
 
 /** Fewer barcode matches than this and the search falls back to the item name. */
 export const MIN_BARCODE_MATCHES = 3;
+
+/**
+ * True when the query has a name to fall back to. When eBay and MusicBrainz
+ * don't know a barcode, the item name is the barcode digits themselves:
+ * searching "by name" would only repeat the barcode search (and spend a
+ * second sold-comps.com call).
+ */
+export function hasName(q: ComparableQuery): boolean {
+  const k = q.keywords?.trim();
+  if (!k) return false;
+  const digits = k.replace(/[\s-]/g, "");
+  if (!/^\d+$/.test(digits) || !q.gtin) return true;
+  const bare = (s: string) => s.replace(/\D/g, "").replace(/^0+/, "");
+  return bare(digits) !== bare(q.gtin);
+}
 
 /**
  * Runs the active-listing and sold searches side by side so the screen can

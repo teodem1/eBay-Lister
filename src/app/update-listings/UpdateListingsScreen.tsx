@@ -6,6 +6,7 @@ import { formatMoney } from "@/app/listing/priceRequest";
 import type { PriceCheck } from "@/app/listing/priceRequest";
 import type { ApplyResult, LiveListing, RefreshPreview } from "@/lib/ebay/refreshListings";
 import { autoStore, batchStore } from "@/lib/batch/store";
+import { liveChangeForSku } from "@/lib/auto/auto";
 import { collectionStore } from "@/lib/collection/store";
 import { canadianSoldForMore } from "@/lib/pricing/canadian";
 import { editionPrice, type EditionPrice } from "@/lib/pricing/edition";
@@ -164,6 +165,11 @@ export default function UpdateListingsScreen() {
             price: r.raise?.price,
           });
           patch(r.listing.sku, { result });
+          if (result.status === "updated") {
+            // Review's "Edit" re-sends the Auto draft whole: keep it in step with what eBay now has.
+            const change = { ...r.preview!.after, price: r.raise?.price };
+            for (const { id, item } of liveChangeForSku(autoStore.all(), r.listing.sku, change)) autoStore.update(id, () => item);
+          }
         } catch (err) {
           patch(r.listing.sku, { result: { status: "failed", reason: (err as Error).message } });
         }

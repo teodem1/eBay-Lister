@@ -11,33 +11,52 @@
 import type { Comparable } from "../ebay/types";
 import type { Condition } from "../ebay/sell";
 
-/** Other versions, by a title word. Each is skipped if the seller's keywords use it too. */
-const OTHER_VERSIONS: { label: string; re: RegExp }[] = [
-  { label: "Japanese", re: /\bjapan(ese)?\b|\bobi\b|\bshm[- ]?cd\b|\bblu[- ]?spec\b/i },
+/**
+ * Other versions, by a title word. `re` spots the version in a comparable's
+ * title; `ask` is the stricter test for the seller asking for that version.
+ * Words that are often part of an album name ("Record", "Tapes", "Japan")
+ * are only in `re`: "A New World Record" or "Made in Japan" is still a CD.
+ */
+const OTHER_VERSIONS: { label: string; re: RegExp; ask?: RegExp }[] = [
+  {
+    label: "Japanese",
+    re: /\bjapan(ese)?\b|\bobi\b|\bshm[- ]?cd\b|\bblu[- ]?spec\b/i,
+    // "Japan" asks for it, but not in "Made in Japan" / "Live in Japan" (album names).
+    ask: /\bjapanese\b|\bobi\b|\bshm[- ]?cd\b|\bblu[- ]?spec\b|(?<!\bin )\bjapan\b/i,
+  },
   { label: "SACD", re: /\bsacd\b/i },
-  { label: "vinyl", re: /\bvinyl\b|\blps?\b|\brecord\b|\b(7|10|12)"|\b33 ?rpm\b/i },
-  { label: "cassette", re: /\bcass?ette\b|\btapes?\b|\b8[- ]?track\b/i },
+  { label: "vinyl", re: /\bvinyl\b|\blps?\b|\brecord\b|\b(7|10|12)"|\b33 ?rpm\b/i, ask: /\bvinyl\b|\blps?\b|\b(7|10|12)"|\b33 ?rpm\b/i },
+  { label: "cassette", re: /\bcass?ette\b|\btapes?\b|\b8[- ]?track\b/i, ask: /\bcass?ette\b|\b8[- ]?track\b/i },
   { label: "DVD", re: /\bdvd\b|\bblu[- ]?ray\b/i },
   { label: "box set", re: /\bbox(ed)? ?set\b/i },
   { label: "lot", re: /\blot\b|\bbundle\b/i },
   { label: "signed", re: /\bsigned\b|\bautograph(ed)?\b/i },
 ];
 
-/** True when the item text names a format other than CD (the seller then sells that). */
+/**
+ * True when the item text names a format other than CD (the seller then sells that).
+ * "Record" and "tapes" don't count: they are album words far more often (ELO "A New
+ * World Record", Dylan "The Basement Tapes") than a CD seller's way to say vinyl.
+ */
 export function namesOtherFormat(keywords: string): boolean {
-  return /\b(vinyl|lps?|records?|cass?ettes?|tapes?|8[- ]?track|dvd|blu[- ]?ray)\b/i.test(keywords);
+  return /\b(vinyl|lps?|cass?ettes?|8[- ]?track|dvd|blu[- ]?ray)\b/i.test(keywords);
 }
+
+const EXCLUDED_FORMATS = ["vinyl", "lp", "cassette", "tape", "record"];
 
 /**
  * Keywords for a CD search: adds "CD" and, for eBay's web search (used by
- * sold-comps.com), excludes other formats with -word. Unchanged when the
- * seller's text names another format.
+ * sold-comps.com), excludes other formats with -word, except words that are in
+ * the item name itself. Unchanged when the seller's text names another format.
  */
 export function cdKeywords(keywords: string, opts: { exclude?: boolean } = {}): string {
   const k = keywords.trim();
   if (!k || namesOtherFormat(k)) return k;
   const withCd = /\bcds?\b/i.test(k) ? k : `${k} CD`;
-  return opts.exclude ? `${withCd} -vinyl -lp -cassette -tape -record` : withCd;
+  if (!opts.exclude) return withCd;
+  const own = new Set(words(k));
+  const minus = EXCLUDED_FORMATS.filter((w) => !own.has(w) && !own.has(`${w}s`));
+  return minus.length ? `${withCd} ${minus.map((w) => `-${w}`).join(" ")}` : withCd;
 }
 
 /** Only CDs of the item: drops other formats, lots and signed copies (unless the seller's text names them). */
@@ -48,10 +67,20 @@ export function onlyCds(items: Comparable[], keywords = ""): Comparable[] {
 /** Fewer matching copies than this and the filter is dropped (too little data). */
 export const MIN_MATCHES = 3;
 
-/** The other-version label a title has, unless the seller's keywords share it. */
+function words(text: string): string[] {
+  return text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+}
+
+/**
+ * The other-version label a title has, unless the seller's keywords ask for it.
+ * Words of the item name are ignored in the title, so "Record" in "A New World
+ * Record CD" isn't read as vinyl while "A New World Record LP" still is.
+ */
 export function otherVersion(title: string, keywords = ""): string | null {
+  const own = new Set(words(keywords));
+  const rest = own.size ? title.replace(/[\p{L}\p{N}']+/gu, (w) => (own.has(w.toLowerCase()) ? " " : w)) : title;
   for (const v of OTHER_VERSIONS) {
-    if (v.re.test(title) && !v.re.test(keywords)) return v.label;
+    if (v.re.test(rest) && !(v.ask ?? v.re).test(keywords)) return v.label;
   }
   return null;
 }

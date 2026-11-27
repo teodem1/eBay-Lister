@@ -64,7 +64,10 @@ Screens (phone first):
   (`cdKeywords`, `onlyCds`) unless the item text names another format; the notes box is not shown.
   With a barcode, sold (sold-comps keyword = bare 12-digit UPC) and current (Browse `gtin`)
   searches return that exact pressing; only with fewer than 3 matches do they search by name (a second
-  sold-comps call). Barcode matches skip the Canadian-copies filter.
+  sold-comps call). When the only name is the barcode itself (eBay and MusicBrainz didn't know it), no name
+  search runs (`hasName` in `comparables.ts`). Format words that are often album words ("Record", "Tapes", "Made in
+  Japan") don't count as the seller asking for vinyl, tapes or Japanese copies, and the item name's own words are
+  ignored in comparable titles (`otherVersion`, `namesOtherFormat`). Barcode matches skip the Canadian-copies filter.
 
   After a successful publish (the green "Published" notice shows for 1.5 s) the app reloads `/` fresh for the next CD.
 
@@ -114,6 +117,9 @@ Screens (phone first):
   "Done" removes a listing from Review (only on the phone; it stays on eBay).
   "Edit" (`src/app/auto/EditPublishedSheet.tsx`: title, price, description) sends the draft to
   `/api/listing/revise` (`reviseListing` in `publish.ts`: replaces the inventory item and offer of the same SKU, no republish).
+  Since it re-sends the whole saved draft, Update live listings and Collection edits copy what they put on eBay back onto
+  that draft (`withLiveChange` / `liveChangeForSku` in `src/lib/auto/auto.ts`). "Try again" on one Auto CD never makes a
+  third CD run at once and never un-pauses the run (`useAutoRun` `start(onlyId)`).
 - `/update-listings` — `src/app/update-listings/UpdateListingsScreen.tsx` ("Update live listings", linked from Review):
   rewrites every live listing with the current listing rules. "Find" lists inventory items with a published offer
   (`/api/listing/refresh`), "Preview" has Claude rewrite each (`/api/listing/refresh/preview`, `previewRefresh` in
@@ -196,7 +202,7 @@ Server code:
   sold copies titled as that edition when it beats the typical other copy: the listing screen uses it unless the seller
   picked a price (notice with "Use $X"), Auto via `withEditionPrice`, and Update live listings raises (never lowers) a
   live price to it (`applyRefresh` `raise`, Best Offer decline kept at the same %), from the phone's saved sold prices.
-  Package weight defaults to 115 g for a CD, +16 g per extra disc in the same case, +115 g per extra disc in a double jewel case (so 230 g) (`packageWeightKg`, `discCount`, `hasDoubleJewelCase` from Claude or the item text; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
+  Package weight defaults to 115 g for a CD, +16 g per extra disc in the same case, +115 g per extra disc in a double jewel case (so 230 g) (`packageWeightKg`, `discCount`, `hasDoubleJewelCase` from Claude or the item text; a bare "19 CD" is an album name, only "2CD", "2 CDs", "3 discs", "2 CD set" count; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is the first card (right after the price step's listings) and is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.
   Publish leaves Brand and MPN empty for CDs/music (`isMusicDraft`, `withoutBrandAndMpn`); other items get them filled

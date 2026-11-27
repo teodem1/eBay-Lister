@@ -353,3 +353,41 @@ export function retryByRescan(item: BatchItem): boolean {
   const a = autoState(item);
   return a.stage === "failed" && !a.draft;
 }
+
+/** What a later change put on the live eBay listing (Update live listings, a Collection edit). */
+export interface LiveChange {
+  title?: string;
+  /** eBay's shape: name -> values. */
+  aspects?: Record<string, string[]>;
+  descriptionHtml?: string;
+  price?: number;
+}
+
+/**
+ * Copies a change made on the live listing back onto the Auto CD's saved draft,
+ * so a later "Edit" on Review (which re-sends the whole draft) doesn't put the
+ * old title, item specifics, description or price back on eBay.
+ */
+export function withLiveChange(item: BatchItem, change: LiveChange): BatchItem {
+  const draft = item.auto?.draft;
+  if (!draft) return item;
+  const next = { ...draft };
+  if (change.title?.trim()) next.title = change.title;
+  if (change.descriptionHtml?.trim()) next.descriptionHtml = change.descriptionHtml;
+  if (change.price !== undefined && change.price > 0) next.price = change.price;
+  if (change.aspects) {
+    // Brand and MPN stay out of a CD's aspects on eBay; the draft keeps its own.
+    const before = new Map(draft.aspects.map((x) => [x.name.toLowerCase(), x]));
+    next.aspects = Object.entries(change.aspects).map(([name, values]) => {
+      const value = values.join(" | ");
+      const old = before.get(name.toLowerCase());
+      return { name, value, guessed: old ? old.guessed && old.value === value : false };
+    });
+  }
+  return { ...item, auto: { ...item.auto!, draft: next, price: next.price } };
+}
+
+/** Applies `change` to every Auto CD whose published draft has this SKU. */
+export function liveChangeForSku(items: BatchItem[], sku: string, change: LiveChange): { id: string; item: BatchItem }[] {
+  return items.filter((x) => x.auto?.draft?.sku === sku).map((x) => ({ id: x.id, item: withLiveChange(x, change) }));
+}
