@@ -221,6 +221,8 @@ Server code:
 Access: with `APP_ACCESS_KEY` set, `src/proxy.ts` (Next 16's renamed middleware) locks every page and API route:
 API calls without the `el_access` cookie get 401, pages redirect to `/unlock` (`src/app/unlock/page.tsx` →
 `/api/unlock`), which sets an httpOnly cookie holding a SHA-256 of the key for a year (`src/lib/auth/access.ts`).
+API calls (never pages) may instead send the key in the `x-elister-key` header, which the seller's Claude
+thread gets from a network secret.
 Unset, the app stays open.
 
 Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine).
