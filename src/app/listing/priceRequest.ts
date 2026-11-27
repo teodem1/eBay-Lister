@@ -1,7 +1,9 @@
-import type { Comparable, ComparableQuery } from "@/lib/ebay/types";
+import type { ComparableQuery } from "@/lib/ebay/types";
 import type { Condition } from "@/lib/ebay/sell";
-import type { PriceSuggestion } from "@/lib/pricing/suggestPrice";
+import { bestSuggestion, type PriceCheck } from "../../lib/pricing/priceCheck";
 import { noteSoldQuota } from "../../lib/pricing/soldLimit";
+
+export type { PriceCheck };
 
 /** A product barcode (UPC/EAN/GTIN) is 8 to 14 digits. */
 export function isGtin(code: string): boolean {
@@ -36,35 +38,20 @@ export function formatMoney(amount: number, currency: string): string {
   }
 }
 
-export interface PriceCheck {
-  /** From active eBay listings right now (asking prices). */
-  current: PriceSuggestion | null;
-  /** From items sold recently (SOLD_LOOKBACK_DAYS, default a year). */
-  sold: PriceSuggestion | null;
-  /** The listings behind each price, so the seller can compare them. */
-  currentItems: Comparable[];
-  soldItems: Comparable[];
-  /** Why a price is missing, shown to the user. */
-  unavailable: { current?: string; sold?: string };
-  /** The item text the check searched for (decides which titles are other versions). */
-  keywords: string;
-  /** The sold-comps.com monthly allowance was used up, so there are no sold prices. */
-  soldLimitReached?: boolean;
-  /** sold-comps.com lookups left this period, when it says. */
-  soldRemaining?: number;
-}
 
 /** The price to prefill: last-sold recommended when there is one, else current. */
 export function defaultPrice(check: PriceCheck): number | undefined {
-  const usable = (s: PriceSuggestion | null) => (s && s.usedCount > 0 ? s : null);
-  return (usable(check.sold) ?? usable(check.current))?.itemPrice.recommended;
+  return bestSuggestion(check)?.suggestion.itemPrice.recommended;
 }
+
+/** A failed price check. `soldLimitReached` when the sold-comps allowance is used up. */
+export type PriceCheckError = { error: string; soldLimitReached?: boolean };
 
 /** Calls POST /api/price-suggestion. Never throws: failures come back as { error }. */
 export async function fetchPriceSuggestion(
-  body: ComparableQuery,
+  body: ComparableQuery & { sellerCondition?: Condition },
   fetchImpl: typeof fetch = fetch,
-): Promise<PriceCheck | { error: string }> {
+): Promise<PriceCheck | PriceCheckError> {
   try {
     const res = await fetchImpl("/api/price-suggestion", {
       method: "POST",
@@ -73,7 +60,9 @@ export async function fetchPriceSuggestion(
     });
     const data = await res.json().catch(() => ({}));
     noteSoldQuota(data);
-    if (!res.ok || !("current" in data || "sold" in data)) return { error: data?.error ?? "Price check failed" };
+    if (!res.ok || !("current" in data || "sold" in data)) {
+      return { error: data?.error ?? "Price check failed", soldLimitReached: data?.soldLimitReached || undefined };
+    }
     return {
       soldLimitReached: data.soldLimitReached || undefined,
       soldRemaining: data.soldRemaining,
@@ -83,6 +72,7 @@ export async function fetchPriceSuggestion(
       currentItems: data.current?.comparables?.items ?? [],
       soldItems: data.sold?.comparables?.items ?? [],
       unavailable: data.unavailable ?? {},
+      condition: body.sellerCondition,
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Price check failed" };

@@ -4,26 +4,16 @@
  * listing is worth money. Pure, so screens and tests share it.
  */
 import type { Comparable } from "../ebay/types";
+import { CANADIAN_TITLE, editionPrice } from "./edition";
 
-/** A title that names the Canadian version ("Canadian", "Canada", "CDN"). */
-export const CANADIAN_TITLE = /\b(canad(a|ian)|cdn)\b/i;
-
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
+export { CANADIAN_TITLE };
 
 /**
- * True when a sold copy titled Canadian sold for more than the typical (median)
- * copy that wasn't, or when the only sold copies are Canadian ones.
+ * True when the copies titled Canadian typically (median) sold for more than the
+ * typical copy that wasn't, or when the only sold copies are Canadian ones.
+ * The same test as the Canadian edition price, so one high outlier among cheap
+ * Canadian copies doesn't put "Canadian Version" in the title.
  */
 export function canadianSoldForMore(sold: Comparable[] | undefined): boolean {
-  const priced = (sold ?? []).filter((c) => Number.isFinite(c.price?.value) && c.price.value > 0);
-  const canadian = priced.filter((c) => CANADIAN_TITLE.test(c.title));
-  if (canadian.length === 0) return false;
-  const others = priced.filter((c) => !CANADIAN_TITLE.test(c.title));
-  if (others.length === 0) return true;
-  const typical = median(others.map((c) => c.price.value));
-  return canadian.some((c) => c.price.value > typical);
+  return editionPrice(sold, "canadian") !== null;
 }

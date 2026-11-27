@@ -1,5 +1,6 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { getEbayConfig } from "@/lib/ebay/config";
-import { claudeErrorMessage } from "@/lib/claude/errors";
+import { claudeErrorMessage, claudeErrorStatus } from "@/lib/claude/errors";
 import { EbayApiError, EbaySellClient } from "@/lib/ebay/sell";
 
 /** The user-token eBay client, or a 500 response when the server lacks the eBay settings. */
@@ -16,6 +17,7 @@ export function errorResponse(err: unknown): Response {
     return Response.json({ error: err.message, step: err.step, details: err.body }, { status: 502 });
   }
   const claude = claudeErrorMessage(err);
-  if (claude) return Response.json({ error: claude }, { status: 502 });
+  // Same status as the other routes (429 when Claude is busy or out of credits), so the phone can tell.
+  if (claude) return Response.json({ error: claude }, { status: err instanceof Anthropic.APIError ? claudeErrorStatus(err) : 502 });
   return Response.json({ error: (err as Error).message }, { status: 500 });
 }

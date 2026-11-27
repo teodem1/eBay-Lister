@@ -9,13 +9,17 @@ import type { Comparable } from "../ebay/types";
 export const EDITIONS = ["none", "canadian", "no_barcode", "early_press", "promo", "club", "limited", "japan"] as const;
 export type Edition = (typeof EDITIONS)[number];
 
+/** A title that names the Canadian version ("Canadian", "Canada", "CDN"). */
+export const CANADIAN_TITLE = /\b(canad(a|ian)|cdn)\b/i;
+
 /** What a sold listing's title says when it is that edition. */
 const TITLE: Record<Exclude<Edition, "none">, RegExp> = {
-  canadian: /\b(canad(a|ian)|cdn)\b/i,
+  canadian: CANADIAN_TITLE,
   no_barcode: /\bno[\s-]*(upc|bar[\s-]*code)\b|\bbarcode[\s-]*less\b|\bwithout (a )?(upc|bar[\s-]*code)\b/i,
   early_press: /\b(early|first|1st|original|orig\.?) (press(ing)?|issue|edition)\b|\btarget cd\b|\bwest germany\b/i,
   promo: /\bpromo(tional)?\b/i,
-  club: /\b(club edition|bmg|columbia house|crc)\b/i,
+  // "BMG" alone is a label (Sony BMG), not a club copy: only BMG's club names count.
+  club: /\b(club edition|record club|music club|bmg (direct|music service|club)|columbia house|crc)\b/i,
   limited: /\b(limited|ltd\.?|numbered)( edition)?\b/i,
   japan: /\bjapan(ese)?\b|\bobi\b/i,
 };
@@ -30,7 +34,7 @@ export const EDITION_LABEL: Record<Exclude<Edition, "none">, string> = {
   japan: "Japan",
 };
 
-function median(xs: number[]): number {
+export function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
@@ -72,4 +76,14 @@ export function editionPrice(sold: Comparable[] | undefined, edition: Edition | 
     high,
     reason: `${n} ${EDITION_LABEL[edition]} ${n === 1 ? "copy" : "copies"} sold for ${low === high ? money(low) : `${money(low)}-${money(high)}`}`,
   };
+}
+
+/** The edition's price when it beats `price` (the price picked or listed now), else null. */
+export function editionPriceAbove(
+  sold: Comparable[] | undefined,
+  edition: Edition | undefined,
+  price: number | undefined,
+): EditionPrice | null {
+  const ep = editionPrice(sold, edition);
+  return ep && ep.price > (price ?? 0) ? ep : null;
 }

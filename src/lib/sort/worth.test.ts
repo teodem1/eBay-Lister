@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
 import type { PriceSuggestion } from "../pricing/suggestPrice";
 import type { BatchItem } from "../batch/queue";
 import { itemFromSort } from "../batch/queue";
 import { cleanShelf } from "../identify/shelf";
 import {
-  checkFromItems,
   checkKey,
   netAfterFees,
   rankCds,
   sessionFromShelf,
   sortKeywords,
   sortPrice,
-  toPrice,
+  pricingPlan,
   verdict,
   type SortCd,
 } from "./worth";
+import { savedCheckFor } from "../pricing/savedCheck";
 
 const suggestion = (recommended: number, usedCount = 5) =>
   ({ usedCount, currency: "CAD", itemPrice: { quickSale: recommended - 2, recommended, high: recommended + 2 } }) as PriceSuggestion;
@@ -92,13 +92,13 @@ describe("sessionFromShelf", () => {
 describe("toPrice", () => {
   it("counts only the lookups not already on the phone", () => {
     const cds = [cd({ album: "a" }), cd({ album: "b" }), cd({ album: "c", selected: false }), cd({ album: "d", state: "priced" })];
-    const plan = toPrice(cds, (c) => c.album === "b");
+    const plan = pricingPlan(cds, (c) => c.album === "b");
     expect(plan.all.map((c) => c.album)).toEqual(["a", "b"]);
     expect(plan.paid).toBe(1);
   });
 });
 
-describe("checkKey and checkFromItems", () => {
+describe("checkKey and savedCheckFor", () => {
   it("ignores case, punctuation and filler words", () => {
     expect(checkKey("The Beatles - Abbey Road CD")).toBe(checkKey("beatles abbey road"));
     expect(sortKeywords({ artist: " Pink Floyd ", album: "The Wall", edition: "2CD" })).toBe("Pink Floyd The Wall 2CD");
@@ -108,8 +108,22 @@ describe("checkKey and checkFromItems", () => {
     const items = [
       { id: "1", barcode: "", progress: { priceCheck: saved } } as unknown as BatchItem,
     ];
-    expect(checkFromItems(items, checkKey("genesis duke"))).toBe(saved);
-    expect(checkFromItems(items, checkKey("genesis abacab"))).toBeUndefined();
+    expect(savedCheckFor(items, { key: checkKey("genesis duke") })).toBe(saved);
+    expect(savedCheckFor(items, { key: checkKey("genesis abacab") })).toBeUndefined();
+  });
+  it("matches by SKU (Auto or a listing in progress) and barcode, and skips listings-only checks", () => {
+    const bySku = check(20, null, "A");
+    const byCode = check(15, null, "B");
+    const limited = { ...check(null, 9, "Genesis Duke"), soldLimitReached: true };
+    const items = [
+      { id: "1", barcode: "", progress: { priceCheck: bySku, draft: { sku: "ITEM-1" } } } as unknown as BatchItem,
+      { id: "2", barcode: "0777", auto: { priceCheck: byCode } } as unknown as BatchItem,
+      { id: "3", barcode: "", priceCheck: limited } as unknown as BatchItem,
+    ];
+    expect(savedCheckFor(items, { sku: "ITEM-1" })).toBe(bySku);
+    expect(savedCheckFor(items, { sku: "BC-0777-X" })).toBeUndefined(); // too short to be a barcode
+    expect(savedCheckFor(items, { barcode: "0777" })).toBe(byCode);
+    expect(savedCheckFor(items, { key: checkKey("genesis duke") })).toBeUndefined();
   });
 });
 

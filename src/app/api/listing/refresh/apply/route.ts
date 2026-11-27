@@ -25,17 +25,17 @@ const Body = z.object({
 export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "The rewrite is not complete." }, { status: 400 });
-  const got = sellClient();
-  if (got instanceof Response) return got;
+  const ebay = sellClient();
+  if (ebay instanceof Response) return ebay;
   const { sku, expectedTitle, after, price } = parsed.data;
   try {
     return Response.json(
       await applyRefresh(
-        got.client,
+        ebay.client,
         sku,
         expectedTitle,
         { ...after, descriptionHtml: sanitizeDescription(after.descriptionHtml) },
-        price ? { price, bestOfferMinPercent: got.config.bestOfferMinPercent, currency: got.config.currency } : undefined,
+        price ? { price, bestOfferMinPercent: ebay.config.bestOfferMinPercent, currency: ebay.config.currency } : undefined,
       ),
     );
   } catch (err) {

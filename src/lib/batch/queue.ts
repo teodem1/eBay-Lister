@@ -13,7 +13,8 @@ import { itemFromLookup, type CollectionItem } from "../collection/collection";
 import { listingQuery, type LookupResponse } from "../lookup";
 import type { GeneratedListing } from "../listing/types";
 import type { SellerCondition } from "../listing/conditionSchema";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
+import type { SortCd } from "../sort/worth";
 import type { DiscogsReference } from "../pricing/discogs";
 
 export type BatchStatus = "pending" | "listed" | "skipped";
@@ -122,7 +123,7 @@ export function addCode(items: BatchItem[], barcode: string, now = new Date(), o
 
 /** A CD picked from a pile photo ("Sort a pile"), with its price check, ready to list. */
 export function itemFromSort(
-  cd: { artist: string; album: string; year: string; barcode: string; keywords: string; check?: PriceCheck; coverUrl?: string },
+  cd: Pick<SortCd, "artist" | "album" | "year" | "barcode" | "check"> & { keywords: string; coverUrl?: string },
   now = new Date(),
 ): BatchItem {
   const year = Number(cd.year);
@@ -138,7 +139,8 @@ export function itemFromSort(
     year: Number.isInteger(year) && year > 1900 ? year : undefined,
     coverUrl: cd.coverUrl,
     query: cd.keywords,
-    priceCheck: cd.check,
+    // A check that came back without sold prices (allowance used up) isn't kept: listing it gets a full one.
+    priceCheck: cd.check?.soldLimitReached ? undefined : cd.check,
   };
 }
 

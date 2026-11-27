@@ -46,13 +46,13 @@ const offer = {
 const base = { title: "Meddle", artist: "Pink Floyd", year: 1971, price: 18.49 };
 
 describe("applyCollectionEdit", () => {
-  it("changes the price and keeps Best Offer at the same share", async () => {
+  it("changes the price and keeps Best Offer at the listing's own share (75% here, not the 70% default)", async () => {
     const c = fakeClient(offer);
     const r = await applyCollectionEdit(c as unknown as EbaySellClient, { sku: "BC-123-AAA", before: base, after: { ...base, price: 20 } }, { bestOfferMinPercent: 70, currency: "CAD" });
     expect(r).toEqual({ status: "updated", sku: "BC-123-AAA", listingId: "L1", changed: ["price"] });
     const sent = c.putOfferRaw.mock.calls[0][0] as unknown as typeof offer;
     expect(sent.pricingSummary.price.value).toBe("20.00");
-    expect(sent.listingPolicies.bestOfferTerms.autoDeclinePrice.value).toBe("14.00");
+    expect(sent.listingPolicies.bestOfferTerms.autoDeclinePrice.value).toBe("15.00");
     expect(sent.listingPolicies.fulfillmentPolicyId).toBe("F");
     expect(c.putInventoryItemRaw).not.toHaveBeenCalled();
   });
