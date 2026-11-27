@@ -210,3 +210,17 @@ Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine
 - Keep eBay API calls behind a small client module so they can be mocked in
   tests.
 - Prefer small, focused commits with descriptive messages.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `teodem1/eBay-Lister`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root (created lazily). See `docs/agents/domain.md`.
