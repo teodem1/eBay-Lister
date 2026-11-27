@@ -17,7 +17,8 @@
 - App screens do not change. The `worth-it` branch stays undeployed.
 - Nothing reaches eBay without the seller's approval of that batch.
 - No Claude API features: never call `/api/listing/generate`, `/api/listing/refresh/preview`, `/api/lookup/*`.
-- Never request, print or store the access key or SoldComps key. The plugin reads `ELISTER_URL`, `ELISTER_ACCESS_KEY`.
+- Never request, print or store the access key or SoldComps key. The plugin reads `ELISTER_URL`; the network secret adds the key outside the session, so the plugin holds none (`ELISTER_ACCESS_KEY` stays an optional fallback).
+- Order: Task 0A, Task 0, then Tasks 1-10.
 - No real eBay, SoldComps, Blob or Claude calls while building: tests use fakes.
 - No push, deployment, Blob store creation or eBay change without approval.
 - Web research only when the listing's asking price is **C$20 or more**. Plan usage stop **80%**, rechecked every **5** CDs.
@@ -38,28 +39,29 @@
 
 ---
 
-### Task 0: Thread access gate (seller, no code). Stop if it fails.
+### Task 0A: Key header (app, own branch `access-header` from `main`)
 
-- [ ] **Step 1:** In the Claude thread's code environment settings (not in chat), add `ELISTER_URL` = `https://e-bay-lister-nu.vercel.app` and `ELISTER_ACCESS_KEY`, and allow that host in network access. Whether the seller's thread offers these settings is **unverified**.
-- [ ] **Step 2:** In the thread, run:
+**Files:** Modify `src/lib/auth/access.ts` (+ test), `src/proxy.ts`. Create `src/proxy.test.ts`.
+
+**Interfaces — Produces:** `KEY_HEADER = "x-elister-key"`; `hasHeaderAccess(key: string | undefined, header: string | null): Promise<boolean>`. A request to `/api/*` with this header equal to `APP_ACCESS_KEY` is let through.
+
+- [ ] **Step 1: Failing tests:** `hasHeaderAccess` true for the exact key; false for a wrong, empty or missing header and when no key is set. Proxy with a key set: `/api/listing/refresh` with the right header passes, wrong header answers 401 with today's message; a page request with the right header still redirects to `/unlock`; the cookie still works; no key set stays open.
+- [ ] **Step 2:** `npx vitest run src/lib/auth src/proxy.test.ts` — FAIL.
+- [ ] **Step 3: Implement.** Compare `accessToken(header)` with `accessToken(key)` through `sameString`. Never log the header.
+- [ ] **Step 4:** `npm test && npm run lint && npm run build` — all pass.
+- [ ] **Step 5:** Commit `feat: accept the access key as a request header`. Merge this branch into `comps-store`.
+- [ ] **Step 6 (seller approval):** merge to `main` and deploy; without any secret, the app still answers "This app is locked".
+
+### Task 0: Thread access gate (seller sets it up). Stop if it fails.
+
+- [ ] **Step 1:** At claude.ai/code, use an environment only the plugin thread uses. Edit it → **Network secrets** → **Add secret**: allowed website `e-bay-lister-nu.vercel.app`; custom header name `x-elister-key`, prefix empty, value = the access key. Add the variable `ELISTER_URL=https://e-bay-lister-nu.vercel.app` (not secret). The key is never typed in chat or stored as a variable.
+- [ ] **Step 2:** In that session, run (reads nothing and changes nothing: a GET on a POST-only route):
 
 ```bash
-python3 - <<'EOF'
-import json, os, urllib.request, urllib.error
-u = os.environ.get("ELISTER_URL", ""); k = os.environ.get("ELISTER_ACCESS_KEY", "")
-print("url set:", bool(u), "| key set:", bool(k))
-try:
-    r = urllib.request.urlopen(urllib.request.Request(u + "/api/unlock",
-        json.dumps({"key": k}).encode(), {"Content-Type": "application/json"}), timeout=30)
-    print("unlock status:", r.status)
-except urllib.error.HTTPError as e:
-    print("unlock status:", e.code)
-except Exception as e:
-    print("unreachable:", type(e).__name__)
-EOF
+curl -s -o /dev/null -w '%{http_code}\n' "$ELISTER_URL/api/price-suggestion"
 ```
 
-Expected: `url set: True | key set: True` and `unlock status: 200`. Anything else: stop and revisit the design.
+Expected: `405` (let through). `401`: secret not attached. Anything else: stop and revisit.
 
 ### Task 1: Lookup record and keys (app)
 
@@ -143,11 +145,11 @@ Expected: `url set: True | key set: True` and `unlock status: 200`. Anything els
 **Files:** Modify `skills/optimise-listing/scripts/app_client.py`. Create `scripts/listings.py`, `tests/test_listings.py`.
 
 **Interfaces — Consumes:** routes of Tasks 4, 5. **Produces:**
-- `app_client.App(url, key, opener=None)` with `.get(path, params=None) -> dict`, `.post(path, body) -> dict`; same URL check, no redirects, raises `AppUnavailable`
+- `app_client.App(url, key, opener=None)` with `.get(path, params=None) -> dict`, `.post(path, body) -> dict`; same URL check, no redirects, raises `AppUnavailable`; with no `key` it makes no unlock call
 - `listings.sold(app, listing, refresh=False) -> {"source": "stored"|"lookup"|"lookup_unsaved", "partial": bool, "saved_at": str|None, "data_file": str}`; the file holds `{"lookup", "filtered"}`
 - CLI `listings.py check|list|read|sold|import` (JSON on stdin); `check` prints only `{"reachable","authorised"}`; `read` and `sold` write private files and print a short headline with paths
 
-- [ ] **Step 1: Failing tests** (fake opener): stored hit makes no `/api/price-suggestion` call; miss makes exactly one, then reads again → `"lookup"`; 502 or 503 from `/api/comps` raises and makes **no** lookup; second read still empty → `"lookup_unsaved"`, one lookup, items taken from the answer; `soldLimitReached` raises; `refresh=True` looks up once; `import` sends only items with `soldItems`; no output contains the key. Existing `test_app_client.py` still passes.
+- [ ] **Step 1: Failing tests** (fake opener): with no key, requests go out without a cookie and without calling `/api/unlock`; stored hit makes no `/api/price-suggestion` call; miss makes exactly one, then reads again → `"lookup"`; 502 or 503 from `/api/comps` raises and makes **no** lookup; second read still empty → `"lookup_unsaved"`, one lookup, items taken from the answer; `soldLimitReached` raises; `refresh=True` looks up once; `import` sends only items with `soldItems`; no output contains the key. Existing `test_app_client.py` still passes.
 - [ ] **Step 2:** Run, FAIL.
 - [ ] **Step 3: Implement.** Send `barcode`, `name` = `listing.query`, `condition` = `sellerCondition.condition`.
 - [ ] **Step 4:** PASS.

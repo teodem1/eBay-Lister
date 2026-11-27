@@ -17,6 +17,8 @@ proposes prices from stored sold results, using as few SoldComps lookups and tok
 - Lighter research: web research only for CDs asking C$20 or more. The rest are rewritten from listing
   facts and stored sales.
 - No Claude API credits (plan usage only); cheapest suitable model.
+- The key is held as a network secret on the thread's cloud environment (option A), which the session cannot
+  read; the app also accepts it in the `x-elister-key` header on `/api/*`.
 
 ## App (branch `comps-store`, from `main`; the `worth-it` branch stays undeployed)
 1. Private Blob store, one file per lookup: key = barcode digits, else normalised "artist album". (call)
@@ -57,8 +59,9 @@ proposes prices from stored sold results, using as few SoldComps lookups and tok
 - Phone storage plus backup file: no new service, but too small for full results.
 
 ## Limits and risks
-- **Untested:** whether the Claude app thread can reach the app and hold `ELISTER_ACCESS_KEY` outside chat.
-  If not, nothing can be read or applied, so this is tested before anything else is built.
+- This chat's workspace reaches the app. **Untested:** the network secret itself, checked before the rest is
+  built. Any session in that environment can then use the app, including its publish and edit routes, so the
+  environment is used only for this plugin.
 - Blob on Hobby includes 1 GB, 2,000 advanced and 10,000 simple operations a month; exceeding an allowance
   can block access. The expected volume (a few hundred writes) is inside it.
 - 134 CDs have no backup check: about 134-268 lookups.
