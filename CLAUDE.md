@@ -119,8 +119,9 @@ Screens (phone first):
   (`/api/listing/refresh`), "Preview" has Claude rewrite each (`/api/listing/refresh/preview`, `previewRefresh` in
   `src/lib/ebay/refreshListings.ts`: grades read back from the condition text / title by `sellerConditionFromListing`,
   same category, nothing sent to eBay), then "Update N on eBay" (`/api/listing/refresh/apply`, `applyRefresh`) replaces
-  only title, item specifics (merged: old values kept, guessed values skipped, Brand/MPN untouched) and description.
-  Price, Best Offer, policies, promotion, photos and condition are read back and sent unchanged; a listing whose title
+  only title, item specifics (merged: old values kept, guessed values skipped, Brand/MPN untouched) and description,
+  plus a price raise for a special edition that sold for more. Policies, promotion, photos and condition are read back
+  and sent unchanged; a listing whose title
   changed since the preview is skipped. Previews are kept on the phone (`ebay-lister:refresh:v1`).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
@@ -185,6 +186,10 @@ Server code:
   new lookup), `canadianVersion` makes "Canadian Version" that edition phrase (Listing, Auto and Update live listings).
   When no barcode was scanned, up to 3 photos (front, back) go to Claude (`imageUrls`); a fully visible back cover with no
   barcode makes "Rare No Barcode" the edition phrase (early pressings collectors seek).
+  Claude also returns the copy's `edition` (`EDITIONS` in `src/lib/pricing/edition.ts`). `editionPrice` takes the median of
+  sold copies titled as that edition when it beats the typical other copy: the listing screen uses it unless the seller
+  picked a price (notice with "Use $X"), Auto via `withEditionPrice`, and Update live listings raises (never lowers) a
+  live price to it (`applyRefresh` `raise`, Best Offer decline kept at the same %), from the phone's saved sold prices.
   Package weight defaults to 115 g for a CD, +16 g per extra disc in the same case, +115 g per extra disc in a double jewel case (so 230 g) (`packageWeightKg`, `discCount`, `hasDoubleJewelCase` from Claude or the item text; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is the first card (right after the price step's listings) and is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { CONDITIONS, nearestAllowedCondition, type AspectHint, type CategorySuggestion, type Condition, type EbaySellClient } from "../ebay/sell";
 import type { EbayConfig } from "../ebay/config";
 import { releaseFactsText, type AlbumInfo } from "../music/musicbrainz";
+import { EDITIONS } from "../pricing/edition";
 import { cdKeywords } from "../pricing/version";
 import { cdTitle, conditionSummary } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
@@ -35,6 +36,9 @@ const ClaudeListingSchema = z.object({
   checks: z.array(z.string()).describe("Short things the seller must verify before publishing"),
   price: z.number().describe("Only when price evidence is given: the item price to list at; otherwise 0"),
   priceReason: z.string().describe("Only when price evidence is given: one short sentence on why; otherwise empty"),
+  edition: z
+    .enum(EDITIONS)
+    .describe("The copy's special edition when a fact supports it (the same one as the title's edition phrase), else none"),
   discCount: z.number().describe("For a CD: how many discs (2 for a double album or 2CD set); 1 if unsure or not a CD"),
   doubleJewelCase: z
     .boolean()
@@ -115,7 +119,7 @@ Description (descriptionHtml): scannable, factual, for a buyer skimming on a pho
 
 Checks: at most 4 short open questions for the seller, the ones that matter most to a buyer first (e.g. a pressing fact you could not confirm, a remaster or reissue question). Never ask about the language, the case grade or the case type of a standard CD. Plus for a CD with defects in the seller's notes: "Add a close-up photo of each defect (it prevents disputes)".
 
-Price: only when "Price evidence" is given. Pick the item price (shipping is charged separately) that should sell within a few weeks for the most money: weigh sold copies above asking prices, copies in the seller's condition above others, recent sales above old ones, and compare totals with shipping since buyers do. Stay inside the allowed range given. Give the reason in one short sentence (e.g. "Near mint copies sold for $16-19 in the last 3 months"). Without price evidence, price is 0 and priceReason is empty.
+Price: only when "Price evidence" is given. Pick the item price (shipping is charged separately) that should sell within a few weeks for the most money: weigh sold copies above asking prices, copies in the seller's condition above others, recent sales above old ones, and compare totals with shipping since buyers do. When the copy is a special edition (no barcode, Canadian, early press, promo...), price it from the sold copies titled as that edition when they sold higher, since that is what a collector pays. Stay inside the allowed range given. Give the reason in one short sentence (e.g. "Near mint copies sold for $16-19 in the last 3 months"). Without price evidence, price is 0 and priceReason is empty.
 
 Write the title, aspects values and description in the marketplace language given by the user.`;
 
@@ -301,6 +305,7 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     guessedFields,
     checks: out.checks,
     warnings,
+    edition: out.edition && out.edition !== "none" ? out.edition : undefined,
     claudePrice:
       input.priceEvidence && Number.isFinite(out.price) && out.price > 0
         ? { price: Math.round(out.price * 100) / 100, reason: (out.priceReason ?? "").trim() }

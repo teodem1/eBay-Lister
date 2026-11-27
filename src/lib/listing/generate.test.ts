@@ -8,6 +8,7 @@ const config = getEbayConfig({});
 
 const claudeOut: ClaudeListing = {
   titleExtras: [],
+  edition: "none",
   title: "Nintendo Switch OLED Blanche 64 Go Console Portable Complète Boîte Manettes Joy-Con Dock HDMI Très Bon",
   condition: "USED_VERY_GOOD",
   conditionDescription: "",

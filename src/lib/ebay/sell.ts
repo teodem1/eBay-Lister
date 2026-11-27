@@ -548,7 +548,8 @@ export class EbaySellClient {
  */
 export function bestOfferTerms(price: number, minPercent: number | undefined, currency: string) {
   if (!minPercent || minPercent <= 0 || minPercent >= 100) return undefined;
-  const decline = Math.floor(price * (minPercent / 100) * 100) / 100;
+  // Rounded first so float noise (22 x 70% = 15.3999...) doesn't take off a cent.
+  const decline = Math.floor(Math.round(price * minPercent * 1000) / 1000) / 100;
   return {
     bestOfferEnabled: true,
     autoDeclinePrice: { value: decline.toFixed(2), currency },

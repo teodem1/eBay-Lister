@@ -4,6 +4,7 @@
  * Pure helpers (no browser APIs) so they are easy to test. The run itself
  * lives in src/app/auto/useAutoRun.ts.
  */
+import type { EditionPrice } from "../pricing/edition";
 import { applyLookup, type BatchItem, type AutoState, type ListingDraftLike } from "../batch/queue";
 import type { LookupResponse } from "../lookup";
 import { conditionComplete, GRADES, type Grade, type SellerCondition } from "../listing/condition";
@@ -165,6 +166,17 @@ export function finalAutoPrice(
   const price = Math.min(bounds.max, Math.max(bounds.min, claude.price));
   const clamped = price !== claude.price ? ` (kept inside ${money(bounds.min)}-${money(bounds.max)})` : "";
   return { price, basis: `Claude: ${claude.reason || "picked from sold and listed copies"}${clamped}` };
+}
+
+/**
+ * A special edition (no barcode, Canadian...) whose sold copies went for more
+ * than the price picked: the edition's typical sold price wins.
+ */
+export function withEditionPrice(
+  picked: { price: number; basis: string },
+  edition: EditionPrice | null,
+): { price: number; basis: string } {
+  return edition && edition.price > picked.price ? { price: edition.price, basis: edition.reason } : picked;
 }
 
 /** Claude's draft with the automatic price and the seller's photos, ready for /api/listing/publish. */
