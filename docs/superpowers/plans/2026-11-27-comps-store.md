@@ -45,11 +45,11 @@
 
 **Interfaces — Produces:** `KEY_HEADER = "x-elister-key"`; `hasHeaderAccess(key: string | undefined, header: string | null): Promise<boolean>`. A request to `/api/*` with this header equal to `APP_ACCESS_KEY` is let through.
 
-- [ ] **Step 1: Failing tests:** `hasHeaderAccess` true for the exact key; false for a wrong, empty or missing header and when no key is set. Proxy with a key set: `/api/listing/refresh` with the right header passes, wrong header answers 401 with today's message; a page request with the right header still redirects to `/unlock`; the cookie still works; no key set stays open.
-- [ ] **Step 2:** `npx vitest run src/lib/auth src/proxy.test.ts` — FAIL.
-- [ ] **Step 3: Implement.** Compare `accessToken(header)` with `accessToken(key)` through `sameString`. Never log the header.
-- [ ] **Step 4:** `npm test && npm run lint && npm run build` — all pass.
-- [ ] **Step 5:** Commit `feat: accept the access key as a request header`. Merge this branch into `comps-store`.
+- [x] **Step 1: Failing tests:** `hasHeaderAccess` true for the exact key; false for a wrong, empty or missing header and when no key is set. Proxy with a key set: `/api/listing/refresh` with the right header passes, wrong header answers 401 with today's message; a page request with the right header still redirects to `/unlock`; the cookie still works; no key set stays open.
+- [x] **Step 2:** `npx vitest run src/lib/auth src/proxy.test.ts` — FAIL.
+- [x] **Step 3: Implement.** Compare `accessToken(header)` with `accessToken(key)` through `sameString`. Never log the header.
+- [x] **Step 4:** `npm test && npm run lint && npm run build` — all pass.
+- [x] **Step 5:** Commit `feat: accept the access key as a request header`. Merge this branch into `comps-store`.
 - [ ] **Step 6 (seller approval):** merge to `main` and deploy; without any secret, the app still answers "This app is locked".
 
 ### Task 0: Thread access gate (seller sets it up). Stop if it fails.
