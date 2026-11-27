@@ -58,10 +58,12 @@ describe("generateListing", () => {
     expect(out.warnings).toEqual([]);
 
     const req = parse.mock.calls[0][0];
-    expect(req.model).toBe("claude-opus-5-5");
+    expect(req.model).toBe("claude-sonnet-5-5");
     expect(req.messages[0].content).toContain("Marque (required)");
     expect(req.messages[0].content).toContain("en-CA");
     expect(JSON.stringify(req.system)).toContain("combines shipping into one package");
+    // The listing rules are cached so a batch pays full price for them once.
+    expect(req.system[0].cache_control).toEqual({ type: "ephemeral" });
   });
 
   it("swaps a condition the category refuses and uses the default package", async () => {

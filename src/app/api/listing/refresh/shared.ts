@@ -1,4 +1,5 @@
 import { getEbayConfig } from "@/lib/ebay/config";
+import { claudeErrorMessage } from "@/lib/claude/errors";
 import { EbayApiError, EbaySellClient } from "@/lib/ebay/sell";
 
 /** The user-token eBay client, or a 500 response when the server lacks the eBay settings. */
@@ -14,5 +15,7 @@ export function errorResponse(err: unknown): Response {
   if (err instanceof EbayApiError) {
     return Response.json({ error: err.message, step: err.step, details: err.body }, { status: 502 });
   }
+  const claude = claudeErrorMessage(err);
+  if (claude) return Response.json({ error: claude }, { status: 502 });
   return Response.json({ error: (err as Error).message }, { status: 500 });
 }

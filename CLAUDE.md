@@ -172,6 +172,10 @@ Server code:
 - sold-comps.com allowance: a 429/402 (or a 403 that says limit/quota) is `isSoldCompsLimit`; the price check then
   returns `soldLimitReached` (and `soldRemaining` when a rate-limit header says so). The phone remembers it
   (`src/lib/pricing/soldLimit.ts`) and `SoldLimitBanner` under every `AppBar` warns when it is used up or 10 or fewer are left.
+- Claude models (cost): listing writing (`generate.ts` `MODEL`) and cover identification (`vision.ts`) use
+  `claude-sonnet-5-5`; Sort a pile (`shelf.ts`, many small spines in one photo) stays on `claude-opus-5-5`; album names
+  from eBay titles use Haiku. The listing rules (`SYSTEM`) are prompt-cached (`cache_control`). Claude API errors reach
+  the phone as short messages ("Out of Claude API credits...") via `claudeErrorMessage` in `src/lib/claude/errors.ts`.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
 - `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description, following the
   seller's eBay listing skill (`SYSTEM`): search words first, no marketing words or caps, every applicable item specific
