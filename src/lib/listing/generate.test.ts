@@ -2,11 +2,12 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { getEbayConfig } from "../ebay/config";
 import type { EbaySellClient } from "../ebay/sell";
-import { cdCategoryFirst, discCount, hasDoubleJewelCase, packageWeightKg, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
+import { aspectLine, cdCategoryFirst, discCount, hasDoubleJewelCase, packageWeightKg, generateListing, sanitizeDescription, trimTitle, type ClaudeListing } from "./generate";
 
 const config = getEbayConfig({});
 
 const claudeOut: ClaudeListing = {
+  titleExtras: [],
   title: "Nintendo Switch OLED Blanche 64 Go Console Portable Complète Boîte Manettes Joy-Con Dock HDMI Très Bon",
   condition: "USED_VERY_GOOD",
   conditionDescription: "",
@@ -175,5 +176,62 @@ describe("weight per disc", () => {
     expect(hasDoubleJewelCase(false, "2CD set in fatbox")).toBe(true);
     expect(hasDoubleJewelCase(false, "Live double jewel case")).toBe(true);
     expect(hasDoubleJewelCase(false, "Live double CD")).toBe(false);
+  });
+});
+
+describe("listing rules from the eBay listing skill", () => {
+  it("adds search terms to a graded CD title and gives Claude the pressing and eBay's values", async () => {
+    const { client, parse } = fakeAnthropic({ ...claudeOut, title: "Genesis Wind & Wuthering", titleExtras: ["1977", "Canada"] });
+    const ebay = {
+      getCategoryTreeId: vi.fn().mockResolvedValue("2"),
+      suggestCategories: vi.fn(),
+      getCategoryAspects: vi.fn().mockResolvedValue([
+        { name: "Artist", required: true },
+        { name: "Format", required: false, values: ["CD", "Vinyl"], selectionOnly: true },
+      ]),
+      getCategoryConditions: vi.fn().mockResolvedValue({}),
+    } as unknown as EbaySellClient;
+    const albumFacts = vi.fn().mockResolvedValue({
+      title: "Wind & Wuthering",
+      artist: "Genesis",
+      genres: ["progressive rock"],
+      mbid: "x",
+      release: { label: "Atlantic", country: "CA", date: "1977" },
+    });
+    const out = await generateListing(
+      {
+        query: "Genesis Wind & Wuthering",
+        barcode: "075678154323",
+        categoryId: "176984",
+        sellerCondition: { condition: "LIKE_NEW", disc: "Near mint", booklet: "Near mint" },
+      },
+      { anthropic: client, ebay, config, albumFacts },
+    );
+    expect(out.draft.title).toBe("Genesis Wind & Wuthering 1977 Canada CD (Disc: Near Mint / Inlay: Near Mint)");
+    expect(out.draft.categoryId).toBe("176984");
+    expect(ebay.suggestCategories).not.toHaveBeenCalled();
+    expect(albumFacts).toHaveBeenCalledWith("075678154323");
+    const text = parse.mock.calls[0][0].messages[0].content as string;
+    expect(text).toContain("Record label: Atlantic");
+    expect(text).toContain("Country of release: Canada");
+    expect(text).toContain("- Format [only: CD, Vinyl]");
+    const system = JSON.stringify(parse.mock.calls[0][0].system);
+    expect(system).toContain("first ~40 characters");
+    expect(system).toContain("must-have");
+    expect(system).toContain("What's included");
+  });
+
+  it("keeps listing when the MusicBrainz lookup fails", async () => {
+    const { client } = fakeAnthropic(claudeOut);
+    const albumFacts = vi.fn().mockRejectedValue(new Error("timeout"));
+    const out = await generateListing({ query: "x", barcode: "123456789012" }, { anthropic: client, config, albumFacts });
+    expect(out.draft.title).toBeTruthy();
+  });
+
+  it("writes an aspect line with eBay's values", () => {
+    expect(aspectLine({ name: "Genre", required: false, values: ["Rock", "Pop"] })).toBe(
+      "- Genre [eBay values, use one when it fits: Rock, Pop]",
+    );
+    expect(aspectLine({ name: "Artist", required: true })).toBe("- Artist (required)");
   });
 });

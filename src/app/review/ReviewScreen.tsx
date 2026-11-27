@@ -34,6 +34,15 @@ export default function ReviewScreen() {
           <h1 className="t-display">Review</h1>
         </header>
 
+        <Link href="/update-listings" className="card flex items-center gap-3 p-3">
+          <Icon name="edit" size={20} className="text-brand" />
+          <span className="flex-1">
+            <span className="t-title block">Update live listings</span>
+            <span className="t-small text-muted">Rewrite titles, item specifics and descriptions of all your live listings</span>
+          </span>
+          <Icon name="chevron" size={18} className="text-subtle" />
+        </Link>
+
         {!hydrated ? (
           <div className="skeleton h-32" />
         ) : published.length === 0 ? (

@@ -17,6 +17,23 @@ export interface AlbumInfo {
   /** Genre-like tags from MusicBrainz, most voted first. */
   genres: string[];
   mbid: string;
+  /** Facts about this exact pressing, when MusicBrainz has them (barcode lookups). */
+  release?: ReleaseFacts;
+}
+
+/** What MusicBrainz knows about one pressing: used as facts in the listing's title and item specifics. */
+export interface ReleaseFacts {
+  label?: string;
+  catalogNumber?: string;
+  /** Two-letter country of release, e.g. "CA", "US", "XE" (Europe). */
+  country?: string;
+  /** Release date of this pressing, "YYYY" or "YYYY-MM-DD". */
+  date?: string;
+  /** Number of discs. */
+  discs?: number;
+  /** Medium format, e.g. "CD", "Enhanced CD". */
+  format?: string;
+  packaging?: string;
 }
 
 const API = "https://musicbrainz.org/ws/2";
@@ -32,6 +49,10 @@ interface MbRelease {
   "artist-credit"?: { name: string; joinphrase?: string }[];
   "release-group"?: { id: string; "primary-type"?: string };
   tags?: { name: string; count: number }[];
+  country?: string;
+  packaging?: string;
+  "label-info"?: { "catalog-number"?: string; label?: { name?: string } }[];
+  media?: { format?: string }[];
 }
 
 /** Album for a UPC/EAN printed on a CD, or null when MusicBrainz doesn't know it. */
@@ -86,7 +107,46 @@ export function toAlbum(r: MbRelease): AlbumInfo {
       .map((t) => t.name)
       .slice(0, 3),
     mbid: r.id,
+    release: releaseFacts(r),
   };
+}
+
+function releaseFacts(r: MbRelease): ReleaseFacts | undefined {
+  const label = r["label-info"]?.find((l) => l.label?.name && !/^\[no label\]$/i.test(l.label.name));
+  const facts: ReleaseFacts = {
+    label: label?.label?.name,
+    catalogNumber: label?.["catalog-number"] || undefined,
+    country: r.country || undefined,
+    date: r.date || undefined,
+    discs: r.media?.length || undefined,
+    format: r.media?.[0]?.format || undefined,
+    packaging: r.packaging && r.packaging !== "None" ? r.packaging : undefined,
+  };
+  const set = Object.fromEntries(Object.entries(facts).filter(([, v]) => v !== undefined)) as ReleaseFacts;
+  return Object.keys(set).length ? set : undefined;
+}
+
+const COUNTRY_NAMES: Record<string, string> = {
+  CA: "Canada", US: "United States", GB: "United Kingdom", XE: "Europe", DE: "Germany", JP: "Japan",
+  FR: "France", NL: "Netherlands", AU: "Australia", IT: "Italy", MX: "Mexico", BR: "Brazil", XW: "Worldwide",
+};
+
+/** The pressing facts as plain lines for Claude, e.g. "Record label: Atlantic". */
+export function releaseFactsText(album: AlbumInfo): string {
+  const r = album.release ?? {};
+  const lines = [
+    `Artist: ${album.artist}`,
+    `Album: ${album.title}`,
+    r.date ? `Release date of this pressing: ${r.date}` : album.year ? `Release year: ${album.year}` : null,
+    r.label ? `Record label: ${r.label}` : null,
+    r.catalogNumber ? `Catalog number: ${r.catalogNumber}` : null,
+    r.country ? `Country of release: ${COUNTRY_NAMES[r.country] ?? r.country}` : null,
+    r.format ? `Format: ${r.format}` : null,
+    r.discs ? `Number of discs: ${r.discs}` : null,
+    r.packaging ? `Packaging: ${r.packaging}` : null,
+    album.genres.length ? `Genre tags: ${album.genres.join(", ")}` : null,
+  ];
+  return lines.filter(Boolean).join("\n");
 }
 
 function escape(s: string): string {

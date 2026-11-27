@@ -114,6 +114,14 @@ Screens (phone first):
   "Done" removes a listing from Review (only on the phone; it stays on eBay).
   "Edit" (`src/app/auto/EditPublishedSheet.tsx`: title, price, description) sends the draft to
   `/api/listing/revise` (`reviseListing` in `publish.ts`: replaces the inventory item and offer of the same SKU, no republish).
+- `/update-listings` — `src/app/update-listings/UpdateListingsScreen.tsx` ("Update live listings", linked from Review):
+  rewrites every live listing with the current listing rules. "Find" lists inventory items with a published offer
+  (`/api/listing/refresh`), "Preview" has Claude rewrite each (`/api/listing/refresh/preview`, `previewRefresh` in
+  `src/lib/ebay/refreshListings.ts`: grades read back from the condition text / title by `sellerConditionFromListing`,
+  same category, nothing sent to eBay), then "Update N on eBay" (`/api/listing/refresh/apply`, `applyRefresh`) replaces
+  only title, item specifics (merged: old values kept, guessed values skipped, Brand/MPN untouched) and description.
+  Price, Best Offer, policies, promotion, photos and condition are read back and sent unchanged; a listing whose title
+  changed since the preview is skipped. Previews are kept on the phone (`ebay-lister:refresh:v1`).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in
@@ -164,7 +172,13 @@ Server code:
   returns `soldLimitReached` (and `soldRemaining` when a rate-limit header says so). The phone remembers it
   (`src/lib/pricing/soldLimit.ts`) and `SoldLimitBanner` under every `AppBar` warns when it is used up or 10 or fewer are left.
 - `src/lib/identify/` — Claude vision photo identification, barcode helpers.
-- `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description.
+- `src/lib/listing/generate.ts` — Claude writes the SEO title, item specifics and HTML description, following the
+  seller's eBay listing skill (`SYSTEM`): search words first, no marketing words or caps, every applicable item specific
+  (optional ones too) using eBay's listed values (`getCategoryAspects` returns them, `aspectLine`), unknowns flagged in
+  `checks` rather than invented, description in a fixed order (summary, Key features, Specifications, Condition, What's
+  included, Shipping). A graded CD title stays "Artist Album CD (grades)" but fills the 80 characters with `titleExtras`
+  (year, label, "Canada"...) put before " CD (" by `cdTitle`. With a barcode, the pressing's label, country, year,
+  catalog number and disc count come from MusicBrainz (`albumFacts`, `releaseFactsText`) as certain facts.
   Package weight defaults to 115 g for a CD, +16 g per extra disc in the same case, +115 g per extra disc in a double jewel case (so 230 g) (`packageWeightKg`, `discCount`, `hasDoubleJewelCase` from Claude or the item text; edited in grams) and 12 × 15 × 2.5 cm (`DEFAULT_PACKAGE_CM`, a CD mailer).
   The description says the seller ships only to Canada and the US. On the review step it is the first card (right after the price step's listings) and is edited as plain text
   (`DescriptionEditor.tsx`, `src/lib/listing/descriptionText.ts`: "## " heading, "- " bullet, **bold**) with a Preview tab.
