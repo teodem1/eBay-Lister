@@ -93,6 +93,20 @@ export function cdTitle(album: string, sc: SellerCondition, max = 80, extras: st
   return `${name} ${suffix}`;
 }
 
+/**
+ * "Creedence Clearwater Revival The Best of Creedence Clearwater Revival" names the
+ * artist twice: the leading copy goes, so the album name survives whole.
+ */
+function withoutRepeatedArtist(name: string): string {
+  const words = name.split(" ");
+  for (let n = Math.floor(words.length / 2); n >= 1; n--) {
+    const head = words.slice(0, n).join(" ").toLowerCase();
+    if (head.length < 4) continue;
+    if (` ${words.slice(n).join(" ").toLowerCase()} `.includes(` ${head} `)) return words.slice(n).join(" ");
+  }
+  return name;
+}
+
 const DANGLING = /\s+(and|&|of|the|a|an|in|on|to|for|with|from|at|by|or|-|–|:)$/i;
 
 /**
@@ -100,7 +114,8 @@ const DANGLING = /\s+(and|&|of|the|a|an|in|on|to|for|with|from|at|by|or|-|–|:)
  * in brackets first, then cuts at a word and never ends on "and", "of", "the"...
  */
 function shortenName(name: string, room: number): string {
-  let out = name;
+  let out = withoutRepeatedArtist(name);
+  if (out.length <= room) return out;
   for (const cut of [/\s*\([^)]*\)?\s*$/, /\s*\[[^\]]*\]?\s*$/, /\s*[:–]\s.*$|:\S.*$/, /\s+-\s.*$/]) {
     if (out.length <= room) break;
     const shorter = out.replace(cut, "").trim();
