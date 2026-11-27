@@ -74,24 +74,45 @@ export function conditionTitleSuffix(sc: SellerCondition): string {
  * so the title uses the 80 characters without ever cutting the album or the grades.
  */
 export function cdTitle(album: string, sc: SellerCondition, max = 80, extras: string[] = []): string {
-  const suffix = `CD ${conditionTitleSuffix(sc)}`.trim();
-  let name = album.replace(/\s+/g, " ").replace(/[\s\-–,]*\b(compact disc|cd)\b\s*$/i, "").trim();
+  // A disc count ("2CD", "3 CD", "double CD") replaces the format word: "... 2CD (Disc: ...)".
+  const discs = extras.map((e) => /^\s*(\d)\s*-?\s*(?:x\s*)?cds?\s*$/i.exec(e)?.[1]).find(Boolean);
+  const format = discs && discs !== "1" ? `${discs}CD` : "CD";
+  const suffix = `${format} ${conditionTitleSuffix(sc)}`.trim();
+  let name = album.replace(/\s+/g, " ").replace(/[\s\-–,]*\b(compact disc|\d?\s*cds?)\b\s*$/i, "").trim();
   const room = max - suffix.length - 1;
-  if (name.length > room) {
-    const cut = name.slice(0, room + 1);
-    const space = cut.lastIndexOf(" ");
-    name = (space > room * 0.6 ? cut.slice(0, space) : name.slice(0, room)).trim();
-  }
+  if (name.length > room) name = shortenName(name, room);
   for (const raw of extras) {
     const extra = raw.replace(/\s+/g, " ").replace(/[()]/g, "").trim();
-    // Never repeat a word the title already has, and the format word "CD" is the app's.
-    if (!extra || /^(compact disc|cds?)$/i.test(extra)) continue;
+    // Never repeat a word the title already has; format words are the app's.
+    if (!extra || /^(compact disc|cds?|\d\s*-?\s*(x\s*)?cds?|double cd)$/i.test(extra)) continue;
     const words = extra.toLowerCase().split(" ");
     const have = `${name} ${suffix}`.toLowerCase().split(/[\s/()]+/);
     if (words.every((w) => have.includes(w))) continue;
     if (name.length + 1 + extra.length + 1 + suffix.length <= max) name = `${name} ${extra}`;
   }
   return `${name} ${suffix}`;
+}
+
+const DANGLING = /\s+(and|&|of|the|a|an|in|on|to|for|with|from|at|by|or|-|–|:)$/i;
+
+/**
+ * Fits "Artist Album" into `room` characters: drops a subtitle after ":" or " - " or
+ * in brackets first, then cuts at a word and never ends on "and", "of", "the"...
+ */
+function shortenName(name: string, room: number): string {
+  let out = name;
+  for (const cut of [/\s*\([^)]*\)?\s*$/, /\s*\[[^\]]*\]?\s*$/, /\s*[:–]\s.*$|:\S.*$/, /\s+-\s.*$/]) {
+    if (out.length <= room) break;
+    const shorter = out.replace(cut, "").trim();
+    if (shorter.length >= room * 0.4) out = shorter;
+  }
+  if (out.length > room) {
+    const piece = out.slice(0, room + 1);
+    const space = piece.lastIndexOf(" ");
+    out = (space > room * 0.6 ? piece.slice(0, space) : out.slice(0, room)).trim();
+  }
+  while (DANGLING.test(out)) out = out.replace(DANGLING, "").trim();
+  return out.replace(/[\s,;:&-]+$/, "").trim();
 }
 
 /** Which eBay condition each grade maps to (eBay's music conditions). */
