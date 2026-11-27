@@ -11,9 +11,8 @@
  * The shipping the buyer pays is taken to cover the Canada Post label, so it
  * only counts through the fees charged on it.
  */
-import type { BatchItem } from "../batch/queue";
 import type { ShelfCd } from "../identify/shelf";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import { bestSuggestion, type PriceCheck } from "../pricing/priceCheck";
 
 export const SORT_FEES = {
   /** eBay.ca Music (not vinyl), no Store, since March 2025. Check Seller Hub if it changes. */
@@ -42,10 +41,12 @@ export function netAfterFees(price: number, fees = SORT_FEES): number {
 
 export type SortVerdict = "worth" | "low" | "none";
 
+/** Where a price came from: "sold" (last sold copies) or "listed" (current listings only). */
+export type PriceFrom = NonNullable<ReturnType<typeof bestSuggestion>>["from"];
+
 export interface SortPrice {
   price: number;
-  /** Where the price came from: "sold" (last sold copies) or "listed" (current listings only). */
-  from: "sold" | "listed";
+  from: PriceFrom;
   /** How many copies the price uses. */
   count: number;
   net: number;
@@ -118,13 +119,10 @@ export function checkKey(keywords: string, barcode = ""): string {
 
 /** The price to judge a CD by: last sold recommended, else current listings. */
 export function sortPrice(check: PriceCheck | undefined, fees = SORT_FEES): SortPrice | null {
-  if (!check) return null;
-  const sold = check.sold && check.sold.usedCount > 0 ? check.sold : null;
-  const listed = check.current && check.current.usedCount > 0 ? check.current : null;
-  const s = sold ?? listed;
-  if (!s) return null;
-  const price = s.itemPrice.recommended;
-  return { price, from: sold ? "sold" : "listed", count: s.usedCount, net: netAfterFees(price, fees) };
+  const best = bestSuggestion(check);
+  if (!best) return null;
+  const price = best.suggestion.itemPrice.recommended;
+  return { price, from: best.from, count: best.suggestion.usedCount, net: netAfterFees(price, fees) };
 }
 
 export function verdict(cd: SortCd, minNet: number): SortVerdict | null {
@@ -149,20 +147,15 @@ export function rankCds(cds: SortCd[], minNet: number): SortCd[] {
     .map((x) => x.cd);
 }
 
-/** CDs picked for a price check that still need one, and how many of those spend a lookup. */
-export function toPrice(cds: SortCd[], cached: (cd: SortCd) => boolean): { all: SortCd[]; paid: number } {
-  const all = cds.filter((cd) => cd.selected && (cd.state === "new" || cd.state === "error") && sortKeywords(cd));
-  return { all, paid: all.filter((cd) => !cached(cd)).length };
+/** A cover photo from the copies a check found, for a CD with no cover of its own. */
+export function coverFromCheck(check: PriceCheck | undefined): string | undefined {
+  return [...(check?.soldItems ?? []), ...(check?.currentItems ?? [])].find((c) => c.imageUrl)?.imageUrl ?? undefined;
 }
 
-/** A saved price check for the same CD on the To list or Auto tab, so it isn't paid for twice. */
-export function checkFromItems(items: BatchItem[], key: string): PriceCheck | undefined {
-  for (const x of items) {
-    const check = x.priceCheck ?? x.progress?.priceCheck ?? x.auto?.priceCheck;
-    if (!check) continue;
-    if (checkKey(check.keywords) === key || (x.barcode && key.startsWith(`${x.barcode}|`))) return check;
-  }
-  return undefined;
+/** CDs picked for a price check that still need one, and how many of those spend a lookup. */
+export function pricingPlan(cds: SortCd[], cached: (cd: SortCd) => boolean): { all: SortCd[]; paid: number } {
+  const all = cds.filter((cd) => cd.selected && (cd.state === "new" || cd.state === "error") && sortKeywords(cd));
+  return { all, paid: all.filter((cd) => !cached(cd)).length };
 }
 
 function round2(n: number): number {

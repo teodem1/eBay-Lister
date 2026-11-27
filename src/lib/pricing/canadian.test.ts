@@ -24,5 +24,7 @@ describe("canadianSoldForMore", () => {
     expect(canadianSoldForMore([c("U2 War CD", 10), c("U2 War CD", 14)])).toBe(false);
     expect(canadianSoldForMore([c("U2 War CD", 10), c("U2 War CD", 14), c("U2 War CDN press", 9)])).toBe(false);
     expect(canadianSoldForMore(undefined)).toBe(false);
+    // One Canadian copy just above the median among cheaper Canadian ones: the Canadian median is lower.
+    expect(canadianSoldForMore([c("A CD Canada", 10.5), c("A CD Canada", 7), c("A CD Canada", 6), c("A CD", 8), c("A CD", 10)])).toBe(false);
   });
 });

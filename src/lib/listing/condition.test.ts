@@ -66,6 +66,12 @@ describe("conditionTitleSuffix", () => {
     expect(cdTitle("U2 War", mint)).toBe("U2 War CD (Disc: Mint / Inlay: Mint)");
   });
 
+  it("never uses \"Rare\" on its own, and at most once", () => {
+    const mint = { condition: "LIKE_NEW" as const, disc: "Mint" as const, booklet: "Mint" as const };
+    expect(cdTitle("U2 War", mint, 80, ["Rare"])).toBe("U2 War CD (Disc: Mint / Inlay: Mint)");
+    expect(cdTitle("U2 War", mint, 80, ["Rare Promo", "Rare Canada"])).toBe("U2 War Rare Promo Canada CD (Disc: Mint / Inlay: Mint)");
+  });
+
   it("fills the 80 characters with search terms that fit, never cutting the grades", () => {
     const sc = { condition: "LIKE_NEW" as const, disc: "Near mint" as const, booklet: "Near mint" as const };
     const t = cdTitle("Genesis Wind & Wuthering", sc, 80, ["1977", "Atlantic Records Remastered Edition", "Canada", "CD", "Genesis"]);

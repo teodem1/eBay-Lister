@@ -3,12 +3,12 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { AppBar, Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
-import type { PriceCheck } from "@/app/listing/priceRequest";
-import type { ApplyResult, LiveListing, RefreshPreview } from "@/lib/ebay/refreshListings";
+import type { ApplyResult, LiveListing, PriceCheck, RefreshPreview } from "@/lib/listing/types";
 import { autoStore, batchStore } from "@/lib/batch/store";
 import { collectionStore } from "@/lib/collection/store";
 import { canadianSoldForMore } from "@/lib/pricing/canadian";
-import { editionPrice, type EditionPrice } from "@/lib/pricing/edition";
+import { editionPriceAbove, type EditionPrice } from "@/lib/pricing/edition";
+import { savedCheckFor } from "@/lib/pricing/savedCheck";
 
 const KEY = "ebay-lister:refresh:v1";
 const noop = () => () => {};
@@ -49,20 +49,10 @@ async function call<T>(url: string, body?: unknown): Promise<T> {
 
 /**
  * The price check already saved on the phone for a live listing (no new lookup):
- * on its Collection CD or Auto entry by SKU, else any saved check for its barcode.
+ * on its Collection CD, Auto or To list entry by SKU, else any saved check for its barcode.
  */
 function savedCheck(sku: string): PriceCheck | undefined {
-  const barcode = /^BC-(\d{8,14})-/i.exec(sku)?.[1];
-  const cds = collectionStore.all();
-  const queue = [...autoStore.all(), ...batchStore.all()];
-  const check =
-    cds.find((x) => x.sku === sku && x.priceCheck)?.priceCheck ??
-    queue.find((x) => x.auto?.draft?.sku === sku && x.auto.priceCheck)?.auto?.priceCheck;
-  if (check || !barcode) return check;
-  return (
-    cds.find((x) => x.barcode === barcode && x.priceCheck)?.priceCheck ??
-    queue.map((x) => x.auto?.priceCheck ?? x.priceCheck ?? x.progress?.priceCheck).find((c, i) => c && queue[i].barcode === barcode)
-  );
+  return savedCheckFor([...autoStore.all(), ...batchStore.all()], { sku }, collectionStore.all());
 }
 
 /** Runs `work` on each item, two at a time, until done or stopped. */
@@ -136,8 +126,7 @@ export default function UpdateListingsScreen() {
           const canadianVersion = canadianSoldForMore(check?.soldItems) || undefined;
           const preview = await call<RefreshPreview>("/api/listing/refresh/preview", { sku: r.listing.sku, canadianVersion });
           // A special edition that sold for more than this listing's price raises it.
-          const ep = editionPrice(check?.soldItems, preview.edition);
-          const raise = ep && r.listing.price !== undefined && ep.price > r.listing.price ? ep : undefined;
+          const raise = r.listing.price === undefined ? undefined : (editionPriceAbove(check?.soldItems, preview.edition, r.listing.price) ?? undefined);
           patch(r.listing.sku, { preview, previewError: undefined, raise });
         } catch (err) {
           patch(r.listing.sku, { previewError: (err as Error).message, include: false });
@@ -275,7 +264,7 @@ function PreviewCard({ row, onToggle }: { row: Row; onToggle: () => void }) {
         <div className="min-w-0 flex-1">
           <p className="t-caption text-muted line-through">{p?.before.title || row.listing.title}</p>
           {p && (
-            <p className="mt-1 font-semibold leading-snug">
+            <p className="t-headline mt-1">
               {p.after.title} <span className="t-caption font-normal text-muted">({p.after.title.length}/80)</span>
             </p>
           )}

@@ -14,12 +14,12 @@ const Body = z.object({
 export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Send the listing's sku." }, { status: 400 });
-  const got = sellClient();
-  if (got instanceof Response) return got;
+  const ebay = sellClient();
+  if (ebay instanceof Response) return ebay;
   try {
-    const preview = await previewRefresh(got.client, parsed.data.sku, {
+    const preview = await previewRefresh(ebay.client, parsed.data.sku, {
       anthropic: new Anthropic(),
-      config: got.config,
+      config: ebay.config,
       albumFacts: (barcode) => albumByBarcode(barcode),
     }, { canadianVersion: parsed.data.canadianVersion });
     return Response.json(preview);

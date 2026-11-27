@@ -38,6 +38,11 @@ describe("editionPrice", () => {
     expect(editionPrice([c("X CD", 9), c("X CD", 10), c("X CD Canadian version", 16)], "canadian")?.price).toBe(16);
     expect(editionPrice(sold, "early_press")?.price).toBe(24);
   });
+  it("doesn't count a Sony BMG label copy as a club edition", () => {
+    const q = [c("Queen Greatest Hits CD", 10), c("Queen Greatest Hits CD Sony BMG", 12), c("Queen Greatest Hits CD BMG Direct club", 14)];
+    expect(editionPrice(q, "club")).toMatchObject({ price: 14, count: 1 });
+    expect(editionPrice([c("Queen CD", 10), c("Queen CD Sony BMG", 25)], "club")).toBeNull();
+  });
   it("is null with no edition, no copies of it, or copies that sold for less", () => {
     expect(editionPrice(sold, "none")).toBeNull();
     expect(editionPrice(sold, "promo")).toBeNull();

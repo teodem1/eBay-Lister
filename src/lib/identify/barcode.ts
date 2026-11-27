@@ -29,3 +29,8 @@ function isbn10To13(isbn10: string): string {
     .reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 1 : 3), 0);
   return core + String((10 - (sum % 10)) % 10);
 }
+
+/** The barcode in the SKU of a CD listed with one: "BC-<barcode>-…". */
+export function barcodeFromSku(sku: string | undefined): string | undefined {
+  return /^BC-(\d{8,14})-/i.exec(sku ?? "")?.[1];
+}

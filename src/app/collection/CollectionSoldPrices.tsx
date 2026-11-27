@@ -7,9 +7,9 @@ import { defaultPrice, fetchPriceSuggestion, formatMoney, priceSuggestionBody, t
 import { autoStore, batchStore } from "@/lib/batch/store";
 import { CURRENCY, trimCheck, type CollectionItem } from "@/lib/collection/collection";
 import { collectionStore } from "@/lib/collection/store";
-import { collectionCheckKey, collectionKeywords, priceChoices } from "@/lib/collection/soldPrices";
+import { collectionCheckKey, collectionKeywords, collectionNameKey, priceChoices } from "@/lib/collection/soldPrices";
+import { reusable, savedCheckFor } from "@/lib/pricing/savedCheck";
 import { useSoldQuotaWarning } from "@/lib/pricing/soldLimit";
-import { checkFromItems } from "@/lib/sort/worth";
 import { priceCache } from "@/lib/sort/store";
 
 type Found = { check: PriceCheck; at?: string };
@@ -20,13 +20,15 @@ type Found = { check: PriceCheck; at?: string };
  * pile, else a check saved on To list or Auto (same barcode or SKU).
  */
 function savedCheck(item: CollectionItem): Found | undefined {
-  if (item.priceCheck) return { check: item.priceCheck, at: item.priceCheckedAt };
-  const key = collectionCheckKey(item);
-  const hit = priceCache.entry(key);
+  if (reusable(item.priceCheck)) return { check: item.priceCheck!, at: item.priceCheckedAt };
+  // Sort a pile caches by name (no barcode), so both keys are tried.
+  const hit = priceCache.entry(collectionCheckKey(item)) ?? priceCache.entry(collectionNameKey(item));
   if (hit) return hit;
-  const items = [...batchStore.all(), ...autoStore.all()];
-  const bySku = item.sku ? items.find((x) => x.auto?.draft?.sku === item.sku && x.auto?.priceCheck) : undefined;
-  const check = bySku?.auto?.priceCheck ?? checkFromItems(items, key);
+  const check = savedCheckFor([...batchStore.all(), ...autoStore.all()], {
+    sku: item.sku,
+    barcode: item.barcode,
+    key: collectionNameKey(item),
+  });
   return check ? { check } : undefined;
 }
 
@@ -49,7 +51,7 @@ export default function CollectionSoldPrices({
   // Keep a check found elsewhere on the CD itself, so it stays after the cache drops it.
   const kept = useRef(false);
   useEffect(() => {
-    if (kept.current || !found || item.priceCheck) return;
+    if (kept.current || !found || found.check.soldLimitReached || reusable(item.priceCheck)) return;
     kept.current = true;
     collectionStore.update(item.id, { priceCheck: trimCheck(found.check), priceCheckedAt: found.at });
   }, [found, item]);
@@ -69,15 +71,18 @@ export default function CollectionSoldPrices({
     setLoading(false);
     if ("error" in result) return setError(result.error);
     const at = new Date();
+    // A check without sold prices (allowance used up) shows now but isn't kept, so the next check gets them.
     priceCache.put(collectionCheckKey(item), result, at);
-    collectionStore.update(item.id, { priceCheck: trimCheck(result), priceCheckedAt: at.toISOString() });
+    if (!result.soldLimitReached) collectionStore.update(item.id, { priceCheck: trimCheck(result), priceCheckedAt: at.toISOString() });
     setFound({ check: result, at: at.toISOString() });
   }
 
   const cost =
     quota?.kind === "limit"
       ? "Sold-price lookups are used up this month, so this shows current listings only."
-      : "Uses 1 of your sold-price lookups.";
+      : item.barcode
+        ? "Uses 1 of your sold-price lookups (2 if few copies with this barcode sold)."
+        : "Uses 1 of your sold-price lookups.";
 
   if (!found) {
     return (

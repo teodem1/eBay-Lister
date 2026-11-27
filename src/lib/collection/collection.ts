@@ -3,7 +3,7 @@
  * Storage lives in ./store.ts.
  */
 import type { LookupResponse } from "../lookup";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
 
 export interface CollectionItem {
   id: string;

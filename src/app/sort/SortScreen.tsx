@@ -10,21 +10,24 @@ import { fetchPriceSuggestion, formatMoney, priceSuggestionBody } from "@/app/li
 import { batchStore, autoStore } from "@/lib/batch/store";
 import { itemFromSort } from "@/lib/batch/queue";
 import { useSoldQuotaWarning } from "@/lib/pricing/soldLimit";
-import type { ShelfCd } from "@/lib/identify/shelf";
+import type { ShelfCd } from "@/lib/listing/types";
+import { savedCheckFor } from "@/lib/pricing/savedCheck";
+import { CURRENCY } from "@/lib/collection/collection";
 import {
   DEFAULT_MIN_NET,
   MAX_PRICE_PER_RUN,
   MIN_NET_CHOICES,
   SORT_FEES,
-  checkFromItems,
   checkKey,
+  coverFromCheck,
+  pricingPlan,
   rankCds,
   sessionFromShelf,
   sortKeywords,
   sortPrice,
-  toPrice,
   verdict,
   type SortCd,
+  type SortVerdict,
 } from "@/lib/sort/worth";
 import { priceCache, readMinNet, saveMinNet, sortStore } from "@/lib/sort/store";
 
@@ -32,14 +35,18 @@ const noop = () => () => {};
 /** Two price checks at a time, like the Auto tab. */
 const PARALLEL = 2;
 
+/**
+ * Cache key: the search text only. Sort prices by name (one lookup per CD), so a
+ * barcode read off a spine isn't part of it; Collection looks it up the same way.
+ */
 function keyOf(cd: SortCd) {
-  return checkKey(sortKeywords(cd), cd.barcode);
+  return checkKey(sortKeywords(cd));
 }
 
-/** A price check already on this phone for this CD: the cache, else To list or Auto. */
+/** A price check already on this phone for this CD: the cache, else To list or Auto (same barcode or name). */
 function knownCheck(cd: SortCd) {
   const key = keyOf(cd);
-  return priceCache.get(key) ?? checkFromItems([...batchStore.all(), ...autoStore.all()], key);
+  return priceCache.get(key) ?? savedCheckFor([...batchStore.all(), ...autoStore.all()], { barcode: cd.barcode, key });
 }
 
 /**
@@ -57,10 +64,11 @@ export default function SortScreen() {
   const [minNet, setMinNet] = useState(() => (typeof window === "undefined" ? DEFAULT_MIN_NET : readMinNet(DEFAULT_MIN_NET)));
   const [sentNote, setSentNote] = useState<string | null>(null);
   const stop = useRef(false);
+  const paidThisRun = useRef(0);
   const quota = useSoldQuotaWarning();
 
   const cds = session?.cds ?? [];
-  const plan = toPrice(cds, (cd) => !!knownCheck(cd));
+  const plan = pricingPlan(cds, (cd) => !!knownCheck(cd));
   const priced = cds.filter((cd) => cd.state === "priced");
   const ranked = rankCds(cds, minNet);
   const worth = ranked.filter((cd) => verdict(cd, minNet) === "worth");
@@ -107,16 +115,22 @@ export default function SortScreen() {
       sortStore.updateCd(cd.id, { state: "priced", check: known, reused: true, error: undefined });
       return;
     }
-    const body = priceSuggestionBody(sortKeywords(cd), cd.barcode);
+    // By name only: a barcode search with few matches makes a second sold-comps call by
+    // name, so a barcode would make the "N lookups" count shown before the run wrong.
+    const body = priceSuggestionBody(sortKeywords(cd), "");
     if (!body) return;
+    // Never more than MAX_PRICE_PER_RUN paid lookups in one run, whatever is ticked.
+    if (paidThisRun.current >= MAX_PRICE_PER_RUN) return;
+    paidThisRun.current += 1;
     sortStore.updateCd(cd.id, { state: "pricing", error: undefined });
     const result = await fetchPriceSuggestion(body);
     if ("error" in result) {
       sortStore.updateCd(cd.id, { state: "error", error: result.error });
-      if (/limit|quota|used up/i.test(result.error)) stop.current = true;
+      if (result.soldLimitReached) stop.current = true;
       return;
     }
     // Used up mid-run: no sold prices came back, so stop before spending more calls on listings-only checks.
+    // (The cache doesn't keep such a check, so the CD gets real sold prices once the allowance resets.)
     if (result.soldLimitReached) stop.current = true;
     priceCache.put(keyOf(cd), result);
     sortStore.updateCd(cd.id, { state: "priced", check: result, reused: false });
@@ -124,6 +138,7 @@ export default function SortScreen() {
 
   async function runPricing() {
     stop.current = false;
+    paidThisRun.current = 0;
     setPricing(true);
     const queue = [...plan.all];
     const worker = async () => {
@@ -135,8 +150,7 @@ export default function SortScreen() {
 
   function sendToList() {
     for (const cd of toSend) {
-      const coverUrl = [...(cd.check?.soldItems ?? []), ...(cd.check?.currentItems ?? [])].find((c) => c.imageUrl)?.imageUrl ?? undefined;
-      const item = itemFromSort({ ...cd, keywords: sortKeywords(cd), coverUrl });
+      const item = itemFromSort({ ...cd, keywords: sortKeywords(cd), coverUrl: coverFromCheck(cd.check) });
       batchStore.put(item);
       sortStore.updateCd(cd.id, { sentId: item.id });
     }
@@ -244,7 +258,7 @@ export default function SortScreen() {
                 <span className="t-small text-muted">Worth it from</span>
                 {MIN_NET_CHOICES.map((n) => (
                   <button key={n} type="button" aria-pressed={minNet === n} onClick={() => setBar(n)} className="chip-toggle">
-                    {formatMoney(n, "CAD")} net
+                    {formatMoney(n, CURRENCY)} net
                   </button>
                 ))}
               </div>
@@ -288,7 +302,7 @@ function SortRow({ cd, minNet, busy }: { cd: SortCd; minNet: number; busy: boole
   const [editing, setEditing] = useState(false);
   const v = verdict(cd, minNet);
   const p = sortPrice(cd.check);
-  const cover = [...(cd.check?.soldItems ?? []), ...(cd.check?.currentItems ?? [])].find((c) => c.imageUrl)?.imageUrl ?? undefined;
+  const cover = coverFromCheck(cd.check);
   const canTick = cd.state !== "priced" && cd.state !== "pricing";
 
   return (
@@ -318,7 +332,7 @@ function SortRow({ cd, minNet, busy }: { cd: SortCd; minNet: number; busy: boole
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1 text-right">
           {cd.state === "pricing" && <Spinner className="text-brand-ink" />}
-          {p && <span className="t-title">{formatMoney(p.price, "CAD")}</span>}
+          {p && <span className="t-title">{formatMoney(p.price, CURRENCY)}</span>}
           {v && <VerdictChip verdict={v} net={p?.net} />}
           {cd.state !== "priced" && cd.state !== "pricing" && (
             <button type="button" className="link t-small px-1 py-1" disabled={busy} onClick={() => setEditing((e) => !e)}>
@@ -357,9 +371,9 @@ function SortRow({ cd, minNet, busy }: { cd: SortCd; minNet: number; busy: boole
   );
 }
 
-function VerdictChip({ verdict: v, net }: { verdict: "worth" | "low" | "none"; net?: number }) {
+function VerdictChip({ verdict: v, net }: { verdict: SortVerdict; net?: number }) {
   if (v === "none") return <span className="chip bg-surface-2 text-muted">No data</span>;
-  const label = `${formatMoney(net ?? 0, "CAD")} net`;
+  const label = `${formatMoney(net ?? 0, CURRENCY)} net`;
   return v === "worth" ? (
     <span className="chip bg-ok-soft text-ok-ink">
       <Icon name="check" size={12} strokeWidth={2.6} />
@@ -377,7 +391,7 @@ function FeeNote() {
       <Icon name="alert" size={16} className="mt-0.5" />
       <span>
         Net is the price minus eBay&apos;s {f.finalValuePercent}% fee and the {f.promotedPercent}% promoted fee (both on price plus{" "}
-        {formatMoney(f.shippingCharged, "CAD")} shipping), the order fee and {formatMoney(f.packaging, "CAD")} for the mailer. The
+        {formatMoney(f.shippingCharged, CURRENCY)} shipping), the order fee and {formatMoney(f.packaging, CURRENCY)} for the mailer. The
         shipping the buyer pays is taken to cover the label. Prices are for a used copy in any condition.
       </span>
     </p>

@@ -10,7 +10,7 @@ import type { LookupResponse } from "../lookup";
 import { conditionComplete, GRADES, type Grade, type SellerCondition } from "../listing/condition";
 import { discogsEvidence, discogsPriceFor, type DiscogsReference } from "../pricing/discogs";
 import type { GeneratedListing } from "../listing/types";
-import type { PriceCheck } from "../../app/listing/priceRequest";
+import type { PriceCheck } from "../pricing/priceCheck";
 
 /** eBay.ca Music > CDs, used when the category search came back empty. */
 export const CD_CATEGORY_ID = "176984";
