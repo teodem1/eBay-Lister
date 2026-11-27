@@ -10,7 +10,8 @@ import { cdKeywords } from "../pricing/version";
 import { cdTitle, conditionSummary } from "./condition";
 import { TITLE_MAX, type GeneratedListing, type ItemInput } from "./types";
 
-export const MODEL = "claude-opus-5-5";
+// Sonnet 5.5 costs half of Opus 5.5 and follows the listing rules as well for this structured task.
+export const MODEL = "claude-sonnet-5-5";
 
 // Kept free of length limits: structured outputs don't enforce them, so we enforce in code below.
 const ClaudeListingSchema = z.object({
@@ -246,7 +247,9 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { effort: "medium", format: betaZodOutputFormat(ClaudeListingSchema) },
-    system: SYSTEM,
+    // The listing rules are the same on every call (about 2,000 tokens): cache them, so a batch such as
+    // Update live listings pays full price for them once, then a twentieth of it.
+    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: photos.length ? [{ type: "text", text: userText }, ...photos] : userText }],
   });
 

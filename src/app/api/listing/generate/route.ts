@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getEbayConfig } from "@/lib/ebay/config";
 import { EbaySellClient } from "@/lib/ebay/sell";
+import { claudeErrorMessage, claudeErrorStatus } from "@/lib/claude/errors";
 import { generateListing } from "@/lib/listing/generate";
 import { ItemInputSchema } from "@/lib/listing/types";
 import { albumByBarcode } from "@/lib/music/musicbrainz";
@@ -23,11 +24,8 @@ export async function POST(request: Request) {
     });
     return Response.json(result);
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) {
-      return Response.json({ error: "Claude API key missing or invalid (ANTHROPIC_API_KEY)." }, { status: 500 });
-    }
-    if (err instanceof Anthropic.RateLimitError) {
-      return Response.json({ error: "Claude is rate limited. Try again in a minute." }, { status: 429 });
+    if (err instanceof Anthropic.APIError) {
+      return Response.json({ error: claudeErrorMessage(err) }, { status: claudeErrorStatus(err) });
     }
     return Response.json({ error: (err as Error).message }, { status: 502 });
   }

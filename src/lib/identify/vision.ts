@@ -56,7 +56,8 @@ type ImageSource = { type: "base64"; media_type: ImageMediaType; data: string } 
 
 async function identify(source: ImageSource, client: Anthropic): Promise<PhotoIdentification> {
   const response = await client.beta.messages.parse({
-    model: "claude-opus-5-5",
+    // Reading the album off one cover is easy work: Sonnet does it at half the price of Opus.
+    model: "claude-sonnet-5-5",
     max_tokens: 16000,
     // Retry on another model if this one declines the request.
     betas: ["server-side-fallback-2026-07-01"],
