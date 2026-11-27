@@ -27,6 +27,26 @@ The phone needs the server on the internet over HTTPS. Vercel is the simplest:
 3. Download the `ebay-lister-debug-apk` artifact, unzip, copy `app-debug.apk`
    to the phone and open it (allow "install unknown apps" once).
 
+**Updating in place.** Android only installs a new APK over the old one when
+both are signed with the same key and the new one has a higher version.
+The workflow uses the run number (+100) as the version, and signs with the
+key in the repository secret `ANDROID_KEYSTORE_BASE64` (a base64 PKCS12
+keystore, alias `ebaylister`, password `ebaylister` unless the optional secret
+`ANDROID_KEYSTORE_PASSWORD` says otherwise). Keep a copy of that key: an APK
+signed with any other key will not update the app, and the phone would need
+an uninstall (which wipes the phone-only Collection, so back it up first).
+To make a new key:
+
+```bash
+keytool -genkeypair -keystore ebaylister.keystore -storetype PKCS12 \
+  -alias ebaylister -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass ebaylister -keypass ebaylister -dname "CN=eBay Lister"
+base64 -w0 ebaylister.keystore   # paste the output into the secret
+```
+
+Without the secret the run still builds, with a warning, but that APK gets a
+one-off key and will not install over the app.
+
 ### Option B: on your computer
 
 Needs Android Studio (it brings the Android SDK) and JDK 21.
