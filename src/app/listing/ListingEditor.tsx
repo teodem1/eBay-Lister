@@ -1,5 +1,6 @@
 "use client";
 
+import { canadianSoldForMore } from "@/lib/pricing/canadian";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/conditions";
@@ -235,6 +236,7 @@ export default function ListingEditor({
           notes: notes || undefined,
           suggestedPrice: price,
           sellerCondition: condReady ? cond : undefined,
+          canadianVersion: canadianSoldForMore(priceCheck?.soldItems) || undefined,
         }),
       });
       const data = await res.json();

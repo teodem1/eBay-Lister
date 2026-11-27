@@ -219,6 +219,7 @@ export async function previewRefresh(
   client: EbaySellClient,
   sku: string,
   deps: Omit<GenerateDeps, "ebay">,
+  opts: { canadianVersion?: boolean } = {},
 ): Promise<RefreshPreview> {
   const item = await client.getInventoryItemRaw(sku);
   if (!item) throw new Error("eBay has no inventory item for this SKU.");
@@ -242,6 +243,7 @@ export async function previewRefresh(
       notes: before.title
         ? `My current eBay title: "${before.title}". Keep any edition words it has (rare, Canadian, promo, limited...), written without caps or asterisks.`
         : undefined,
+      canadianVersion: opts.canadianVersion,
       categoryId: typeof offer.categoryId === "string" ? offer.categoryId : undefined,
     },
     { ...deps, ebay: client },

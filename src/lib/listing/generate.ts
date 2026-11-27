@@ -215,6 +215,9 @@ export async function generateListing(input: ItemInput, deps: GenerateDeps): Pro
     categories[0] ? `eBay category: ${categories[0].path} (ID ${categories[0].categoryId})` : null,
     album ? `Release facts (MusicBrainz, for this barcode; certain):\n${releaseFactsText(album)}` : null,
     aspectHints.length ? `Item specifics for this category:\n${aspectHints.map(aspectLine).join("\n")}` : null,
+    input.canadianVersion
+      ? 'Canadian version: the seller bought this copy in Canada, and sold copies titled "Canadian" sold for more than the others. Make "Canadian Version" the edition phrase, the first title extra (forms "Canadian Version||Canadian||Canada", with "Rare " in front only when another fact says rare), and name it in the description summary. Do not set Country/Region of Manufacture from this.'
+      : null,
     input.priceEvidence ? `Price evidence:\n${input.priceEvidence}` : null,
     categories[0] && conditionsByCategory[categories[0].categoryId]
       ? `Allowed conditions for this category: ${conditionsByCategory[categories[0].categoryId].join(", ")}`
