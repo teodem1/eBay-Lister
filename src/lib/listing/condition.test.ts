@@ -43,6 +43,10 @@ describe("conditionTitleSuffix", () => {
     const long = cdTitle("Some Artist With A Long Name The Very Long Album Title Deluxe", sc);
     expect(long.length).toBeLessThanOrEqual(80);
     expect(long.endsWith(" CD (Disc: Near Mint / Inlay: Near Mint)")).toBe(true);
+    const mint = { condition: "LIKE_NEW" as const, disc: "Mint" as const, booklet: "Mint" as const };
+    expect(cdTitle("The Alan Parsons Project Tales of Mystery and Imagination: Edgar Allan Poe", mint)).toBe(
+      "The Alan Parsons Project Tales of Mystery CD (Disc: Mint / Inlay: Mint)",
+    );
   });
 
   it("fills the 80 characters with search terms that fit, never cutting the grades", () => {
@@ -50,6 +54,9 @@ describe("conditionTitleSuffix", () => {
     const t = cdTitle("Genesis Wind & Wuthering", sc, 80, ["1977", "Atlantic Records Remastered Edition", "Canada", "CD", "Genesis"]);
     expect(t).toBe("Genesis Wind & Wuthering 1977 Canada CD (Disc: Near Mint / Inlay: Near Mint)");
     expect(t.length).toBeLessThanOrEqual(80);
+    expect(cdTitle("Sting Bring On the Night", sc, 80, ["2CD", "1986", "A&M"])).toBe(
+      "Sting Bring On the Night 1986 A&M 2CD (Disc: Near Mint / Inlay: Near Mint)",
+    );
     expect(cdTitle("Genesis Wind & Wuthering", { condition: "NEW" }, 80, ["(1977)", "Prog Rock"])).toBe(
       "Genesis Wind & Wuthering 1977 Prog Rock CD (Sealed)",
     );

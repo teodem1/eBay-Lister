@@ -36,8 +36,10 @@ export interface RefreshPreview {
   imageUrl?: string;
   before: ListingContent;
   after: ListingContent;
-  /** Item specifics Claude added or changed, by name. */
+  /** Item specifics Claude added, by name. */
   changedAspects: string[];
+  /** Values the listing has that Claude thinks are wrong (left unchanged). */
+  conflicts: string[];
   /** Open questions from Claude (values it could not confirm). */
   checks: string[];
 }
@@ -168,28 +170,48 @@ function barcodeOf(item: Raw): string | undefined {
   return first("upc") ?? first("ean") ?? first("isbn") ?? (/^BC-(\d{8,14})-/i.exec(String(item.sku ?? ""))?.[1] || undefined);
 }
 
+/** Aspect names that mean the same field, spelled differently. */
+function aspectKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/catalogue/g, "catalog")
+    .replace(/country\/region of manufacture|country of manufacture/g, "country of origin")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Aspects Claude may fill but that don't help a CD buyer. */
+const SKIP = /^(brand|mpn|unit quantity|unit type)$/i;
+
 /**
- * Keeps every item specific the listing has, and lays Claude's certain values on top.
- * Nothing is dropped, so a value eBay already matched on is never lost.
+ * Adds the item specifics a live listing is missing, from Claude's certain values.
+ * A value the listing already has is never changed (it may be the seller's own fix);
+ * when Claude disagrees with it, that goes to `conflicts` for the seller to look at.
  */
 export function mergeAspects(
   before: Record<string, string[]>,
   fresh: { name: string; value: string; guessed?: boolean }[],
-): { aspects: Record<string, string[]>; changed: string[] } {
+): { aspects: Record<string, string[]>; changed: string[]; conflicts: string[] } {
   const aspects: Record<string, string[]> = { ...before };
   const changed: string[] = [];
+  const conflicts: string[] = [];
   for (const a of fresh) {
     const name = a.name.trim();
     const values = a.value.split("|").map((v) => v.trim()).filter(Boolean);
-    // A live listing gets no guessed value (it goes to the open questions instead), and Brand/MPN stay as listed.
-    if (!name || values.length === 0 || a.guessed || /^(brand|mpn)$/i.test(name)) continue;
-    const key = Object.keys(aspects).find((k) => k.trim().toLowerCase() === name.toLowerCase()) ?? name;
-    const old = aspects[key];
-    if (old && old.join("|").toLowerCase() === values.join("|").toLowerCase()) continue;
-    aspects[key] = values.map((v) => v.slice(0, 65)); // eBay's limit per value
-    changed.push(key);
+    // A live listing gets no guessed value (it goes to the open questions instead).
+    if (!name || values.length === 0 || a.guessed || SKIP.test(name)) continue;
+    const key = Object.keys(aspects).find((k) => aspectKey(k) === aspectKey(name));
+    if (key) {
+      const old = aspects[key].map((v) => v.toLowerCase());
+      const differs = values.some((v) => !old.some((o) => o.includes(v.toLowerCase()) || v.toLowerCase().includes(o)));
+      if (differs && /^(release year|record label|release title|artist|number of discs|country)/i.test(key)) {
+        conflicts.push(`${key}: listing says ${aspects[key].join(", ")}, Claude says ${values.join(", ")}`);
+      }
+      continue;
+    }
+    aspects[name] = values.map((v) => v.slice(0, 65)); // eBay's limit per value
+    changed.push(name);
   }
-  return { aspects, changed };
+  return { aspects, changed, conflicts };
 }
 
 /** Claude rewrites one live listing with the current rules. Reads eBay, writes nothing. */
@@ -220,7 +242,7 @@ export async function previewRefresh(
     },
     { ...deps, ebay: client },
   );
-  const { aspects, changed } = mergeAspects(before.aspects, generated.draft.aspects);
+  const { aspects, changed, conflicts } = mergeAspects(before.aspects, generated.draft.aspects);
   return {
     sku,
     listingId: listingIdOf(offer),
@@ -228,6 +250,7 @@ export async function previewRefresh(
     before,
     after: { title: generated.draft.title, aspects, descriptionHtml: generated.draft.descriptionHtml },
     changedAspects: changed,
+    conflicts,
     checks: generated.checks,
   };
 }

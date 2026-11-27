@@ -240,7 +240,7 @@ function PreviewCard({ row, onToggle }: { row: Row; onToggle: () => void }) {
           <img src={row.listing.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-lg border border-line bg-surface-2 object-cover" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="t-caption text-muted line-through">{row.listing.title}</p>
+          <p className="t-caption text-muted line-through">{p?.before.title || row.listing.title}</p>
           {p && (
             <p className="mt-1 font-semibold leading-snug">
               {p.after.title} <span className="t-caption font-normal text-muted">({p.after.title.length}/80)</span>
@@ -252,7 +252,12 @@ function PreviewCard({ row, onToggle }: { row: Row; onToggle: () => void }) {
       {row.previewError && <p className="notice notice-warn t-small">{row.previewError}</p>}
       {p && p.changedAspects.length > 0 && (
         <p className="t-small">
-          <b>Item specifics added or changed:</b> {p.changedAspects.map((n) => `${n}: ${p.after.aspects[n]?.join(", ")}`).join(" · ")}
+          <b>Item specifics added:</b> {p.changedAspects.map((n) => `${n}: ${p.after.aspects[n]?.join(", ")}`).join(" · ")}
+        </p>
+      )}
+      {p && (p.conflicts?.length ?? 0) > 0 && (
+        <p className="t-small">
+          <b>Left as is, but Claude disagrees:</b> {p.conflicts.join(" · ")}
         </p>
       )}
       {p && p.checks.length > 0 && (

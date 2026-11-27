@@ -80,17 +80,33 @@ describe("queryFromListing", () => {
 });
 
 describe("mergeAspects", () => {
-  it("keeps every old value, adds certain ones, skips guesses and Brand/MPN", () => {
-    const { aspects, changed } = mergeAspects({ Artist: ["Genesis"], Format: ["CD"] }, [
-      { name: "artist", value: "Genesis", guessed: false },
-      { name: "Record Label", value: "Atlantic", guessed: false },
-      { name: "Genre", value: "Rock | Prog Rock", guessed: false },
-      { name: "Catalog Number", value: "SD 36-144", guessed: true },
-      { name: "Brand", value: "Atlantic", guessed: false },
-      { name: "Edition", value: "", guessed: true },
-    ]);
-    expect(aspects).toEqual({ Artist: ["Genesis"], Format: ["CD"], "Record Label": ["Atlantic"], Genre: ["Rock", "Prog Rock"] });
+  it("only adds missing certain values; never changes old ones, flags disagreements", () => {
+    const { aspects, changed, conflicts } = mergeAspects(
+      { Artist: ["Genesis"], Format: ["CD"], Style: ["Pop Rock"], "Release Year": ["1983"], "Catalogue Number": ["SD 36-144"] },
+      [
+        { name: "artist", value: "Genesis", guessed: false },
+        { name: "Record Label", value: "Atlantic", guessed: false },
+        { name: "Genre", value: "Rock | Prog Rock", guessed: false },
+        { name: "Style", value: "1980s", guessed: false },
+        { name: "Release Year", value: "1977", guessed: false },
+        { name: "Catalog Number", value: "SD 36-144", guessed: false },
+        { name: "Edition", value: "Remastered", guessed: true },
+        { name: "Brand", value: "Atlantic", guessed: false },
+        { name: "Unit Type", value: "Unit", guessed: false },
+        { name: "Language", value: "", guessed: true },
+      ],
+    );
+    expect(aspects).toEqual({
+      Artist: ["Genesis"],
+      Format: ["CD"],
+      Style: ["Pop Rock"],
+      "Release Year": ["1983"],
+      "Catalogue Number": ["SD 36-144"],
+      "Record Label": ["Atlantic"],
+      Genre: ["Rock", "Prog Rock"],
+    });
     expect(changed).toEqual(["Record Label", "Genre"]);
+    expect(conflicts).toEqual(["Release Year: listing says 1983, Claude says 1977"]);
   });
 });
 
