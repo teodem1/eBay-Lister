@@ -65,21 +65,23 @@ export default function StackScan({
     }
     const firstId = retrying.current;
     setRetry(null);
-    const result = store.add(gtin);
-    const scanned = "duplicate" in result ? result.duplicate : result.added;
-    let isNew = "added" in result;
     if (firstId) {
-      const outcome = retryScan(store.get(firstId), scanned);
-      if (outcome.action === "move") store.put(outcome.item);
-      if (outcome.action !== "keep") {
-        store.remove(firstId);
-        setCount((n) => Math.max(0, n - 1));
-      }
-      // The rescan found the CD scanned first: it is still the one just added.
-      if (scanned.id === firstId) isNew = true;
+      // The CD scanned first keeps its photos and grades (`retryScan`); it was already counted.
+      const before = store.all();
+      const retried = retryScan(before, firstId, gtin);
+      store.replace(retried.items);
+      // It landed on a CD already in the pile and the first one is gone: one fewer this stack.
+      if (!retried.isNew && retried.items.length < before.length) setCount((n) => Math.max(0, n - 1));
+      setLast({ id: retried.id, duplicate: !retried.isNew });
+      return;
     }
-    setLast({ id: scanned.id, duplicate: !isNew });
-    if (isNew && scanned.id !== firstId) setCount((n) => n + 1);
+    const result = store.add(gtin);
+    if ("duplicate" in result) {
+      setLast({ id: result.duplicate.id, duplicate: true });
+    } else {
+      setLast({ id: result.added.id, duplicate: false });
+      setCount((n) => n + 1);
+    }
   }
 
   /** The scanner closed with no barcode during a retry: show the CD scanned first again. */
@@ -106,8 +108,8 @@ export default function StackScan({
   }
 
   /**
-   * Scans the CD again. The CD scanned first (if it was new) is replaced once
-   * the new barcode is in, and its photos and grades move to it (`retryScan`).
+   * Scans the CD again. The CD scanned first (if it was new) stays until the
+   * new barcode is in, then takes it with its photos and grades (`retryScan`).
    */
   function tryAgain() {
     if (last && "id" in last) setRetry(last.duplicate ? null : last.id);
