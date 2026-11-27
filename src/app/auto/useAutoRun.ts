@@ -1,6 +1,7 @@
 "use client";
 
 import { canadianSoldForMore } from "@/lib/pricing/canadian";
+import { editionPrice } from "@/lib/pricing/edition";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyCoverName,
@@ -8,6 +9,7 @@ import {
   autoState,
   discogsCad,
   finalAutoPrice,
+  withEditionPrice,
   interruptedToWaiting,
   needsCoverName,
   noCopiesMessage,
@@ -126,7 +128,10 @@ async function listOne(id: string): Promise<void> {
         imageUrls: start.barcode ? undefined : photos.slice(0, 3),
         priceEvidence: priceEvidence(check, 15, discogs ? { ref: discogs, grade } : undefined),
       });
-      const picked = finalAutoPrice(check, generated.claudePrice, discogsPrice)!;
+      const picked = withEditionPrice(
+        finalAutoPrice(check, generated.claudePrice, discogsPrice)!,
+        editionPrice(check.soldItems, generated.edition),
+      );
       draft = autoDraft(generated, picked.price, photos);
       patchAuto(id, { draft, price: picked.price, priceBasis: picked.basis });
     } else {

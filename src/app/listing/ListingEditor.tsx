@@ -1,6 +1,7 @@
 "use client";
 
 import { canadianSoldForMore } from "@/lib/pricing/canadian";
+import { editionPrice, type EditionPrice } from "@/lib/pricing/edition";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppBar, Icon, Spinner, StepHeading } from "@/components/ui";
 import { CONDITIONS, nearestAllowedCondition } from "@/lib/ebay/conditions";
@@ -116,6 +117,7 @@ export default function ListingEditor({
   const initialCondition = initial.condition?.condition;
   const [priceError, setPriceError] = useState<string | null>(null);
   // Once the user picks or types a price, a (re)loaded suggestion no longer overwrites it.
+  const [editionNote, setEditionNote] = useState<(EditionPrice & { applied: boolean }) | null>(null);
   const priceChosen = useRef(initial.price !== undefined || !!saved?.priceChosen);
   const priceRequestId = useRef(0);
 
@@ -245,8 +247,13 @@ export default function ListingEditor({
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       const g = data as GeneratedListing;
       setGenerated(g);
+      // A special edition that sold for more sets the price, unless the seller picked one.
+      const ep = editionPrice(priceCheck?.soldItems, g.edition);
+      const editionWins = !!ep && !priceChosen.current && ep.price > (price ?? 0);
+      if (editionWins) setPrice(ep.price);
+      setEditionNote(ep && ep.price > (price ?? 0) ? { ...ep, applied: editionWins } : null);
       // Keep the price chosen on this screen even if it changed while Claude was writing.
-      setDraft({ ...g.draft, price: price ?? g.draft.price });
+      setDraft({ ...g.draft, price: editionWins ? ep.price : (price ?? g.draft.price) });
       setGuessed(new Set(g.guessedFields));
       setMoreOpen(g.guessedFields.includes("package"));
     } catch (e) {
@@ -399,6 +406,28 @@ export default function ListingEditor({
           onPick={choosePrice}
           onRefresh={refreshSuggestion}
         />
+
+        {editionNote && (
+          <div className="notice notice-ok t-small fade-in flex items-center gap-3">
+            <p className="flex-1">
+              {editionNote.applied ? "Priced as a special edition: " : "Special edition: "}
+              {editionNote.reason}
+              {editionNote.applied ? `, so the price is ${formatMoney(editionNote.price, "CAD")}.` : "."}
+            </p>
+            {!editionNote.applied && (
+              <button
+                type="button"
+                className="btn btn-secondary min-h-10 px-3 text-sm"
+                onClick={() => {
+                  choosePrice(editionNote.price);
+                  setEditionNote({ ...editionNote, applied: true });
+                }}
+              >
+                Use {formatMoney(editionNote.price, "CAD")}
+              </button>
+            )}
+          </div>
+        )}
 
         {editCond || !condReady ? (
           <ConditionPicker n={3} value={cond} onChange={changeCondition} />

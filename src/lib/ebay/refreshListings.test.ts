@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { getEbayConfig } from "./config";
@@ -182,6 +183,19 @@ describe("applyRefresh", () => {
     expect(putItem.product).toEqual({ ...item.product, title: after.title, description: "<p>new</p>", aspects: after.aspects });
     const putOffer = vi.mocked(client.putOfferRaw).mock.calls[0][0];
     expect(putOffer).toEqual({ ...offer, listingDescription: "<p>new</p>" });
+  });
+
+  it("raises the price for a special edition, keeping Best Offer at the same share, never lowering it", async () => {
+    const client = fakeClient();
+    await applyRefresh(client, item.sku, item.product.title, after, { price: 22, bestOfferMinPercent: 70, currency: "CAD" });
+    const putOffer = vi.mocked(client.putOfferRaw).mock.calls[0][0] as Record<string, any>;
+    expect(putOffer.pricingSummary.price).toEqual({ value: "22.00", currency: "CAD" });
+    expect(putOffer.listingPolicies.bestOfferTerms.autoDeclinePrice.value).toBe("15.40");
+    expect(putOffer.listingPolicies.fulfillmentPolicyId).toBe("F");
+
+    const lower = fakeClient();
+    await applyRefresh(lower, item.sku, item.product.title, after, { price: 9, currency: "CAD" });
+    expect(vi.mocked(lower.putOfferRaw).mock.calls[0][0]).toEqual({ ...offer, listingDescription: "<p>new</p>" });
   });
 
   it("skips a listing that changed since the preview or is no longer live", async () => {

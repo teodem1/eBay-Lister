@@ -8,6 +8,7 @@ import type { ApplyResult, LiveListing, RefreshPreview } from "@/lib/ebay/refres
 import { autoStore, batchStore } from "@/lib/batch/store";
 import { collectionStore } from "@/lib/collection/store";
 import { canadianSoldForMore } from "@/lib/pricing/canadian";
+import { editionPrice, type EditionPrice } from "@/lib/pricing/edition";
 
 const KEY = "ebay-lister:refresh:v1";
 const noop = () => () => {};
@@ -17,6 +18,8 @@ interface Row {
   preview?: RefreshPreview;
   previewError?: string;
   include: boolean;
+  /** A special edition that sold for more than the listing's price: the price to raise it to. */
+  raise?: EditionPrice;
   result?: ApplyResult | { status: "failed"; reason: string };
 }
 
@@ -129,9 +132,13 @@ export default function UpdateListingsScreen() {
       async (r) => {
         try {
           // Every CD was bought in Canada: say so when copies titled Canadian sold for more.
-          const canadianVersion = canadianSoldForMore(savedCheck(r.listing.sku)?.soldItems) || undefined;
+          const check = savedCheck(r.listing.sku);
+          const canadianVersion = canadianSoldForMore(check?.soldItems) || undefined;
           const preview = await call<RefreshPreview>("/api/listing/refresh/preview", { sku: r.listing.sku, canadianVersion });
-          patch(r.listing.sku, { preview, previewError: undefined });
+          // A special edition that sold for more than this listing's price raises it.
+          const ep = editionPrice(check?.soldItems, preview.edition);
+          const raise = ep && r.listing.price !== undefined && ep.price > r.listing.price ? ep : undefined;
+          patch(r.listing.sku, { preview, previewError: undefined, raise });
         } catch (err) {
           patch(r.listing.sku, { previewError: (err as Error).message, include: false });
         }
@@ -154,6 +161,7 @@ export default function UpdateListingsScreen() {
             sku: r.listing.sku,
             expectedTitle: r.preview!.before.title,
             after: r.preview!.after,
+            price: r.raise?.price,
           });
           patch(r.listing.sku, { result });
         } catch (err) {
@@ -178,8 +186,9 @@ export default function UpdateListingsScreen() {
           <h1 className="t-display">Update live listings</h1>
           <p className="t-small mt-1 text-muted">
             Claude rewrites the title, item specifics and description of each live listing with the current listing rules.
-            Price, Best Offer, shipping, promotion, photos and condition stay as they are. Nothing changes on eBay until you
-            tap Update.
+            The price only goes up when your CD is a special edition (no barcode, Canadian...) whose copies sold for more,
+            using the sold prices saved on this phone. Shipping, promotion, photos and condition stay as they are. Nothing
+            changes on eBay until you tap Update.
           </p>
         </header>
 
@@ -270,7 +279,15 @@ function PreviewCard({ row, onToggle }: { row: Row; onToggle: () => void }) {
               {p.after.title} <span className="t-caption font-normal text-muted">({p.after.title.length}/80)</span>
             </p>
           )}
-          {row.listing.price !== undefined && <p className="t-caption mt-1 text-muted">{formatMoney(row.listing.price, "CAD")}, unchanged</p>}
+          {row.listing.price !== undefined &&
+            (row.raise ? (
+              <p className="t-small mt-1">
+                <span className="text-muted line-through">{formatMoney(row.listing.price, "CAD")}</span>{" "}
+                <b>{formatMoney(row.raise.price, "CAD")}</b> <span className="text-muted">({row.raise.reason})</span>
+              </p>
+            ) : (
+              <p className="t-caption mt-1 text-muted">{formatMoney(row.listing.price, "CAD")}, unchanged</p>
+            ))}
         </div>
       </div>
       {row.previewError && <p className="notice notice-warn t-small">{row.previewError}</p>}

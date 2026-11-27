@@ -13,7 +13,8 @@ import { GRADES, type Grade } from "../listing/condition";
 import type { SellerCondition } from "../listing/conditionSchema";
 import { generateListing, type GenerateDeps } from "../listing/generate";
 import { TITLE_MAX } from "../listing/limits";
-import { CONDITIONS, type Condition, type EbaySellClient } from "./sell";
+import type { Edition } from "../pricing/edition";
+import { bestOfferTerms, CONDITIONS, type Condition, type EbaySellClient } from "./sell";
 
 export interface LiveListing {
   sku: string;
@@ -42,6 +43,8 @@ export interface RefreshPreview {
   conflicts: string[];
   /** Open questions from Claude (values it could not confirm). */
   checks: string[];
+  /** The copy's special edition, when Claude found one (prices it from that edition's sales on the phone). */
+  edition?: Exclude<Edition, "none">;
 }
 
 export type ApplyResult =
@@ -260,6 +263,7 @@ export async function previewRefresh(
     changedAspects: changed,
     conflicts,
     checks: generated.checks,
+    edition: generated.edition,
   };
 }
 
@@ -272,6 +276,8 @@ export async function applyRefresh(
   sku: string,
   expectedTitle: string,
   after: ListingContent,
+  /** A higher price for a special edition that sold for more (never lowers the price). */
+  raise?: { price: number; bestOfferMinPercent?: number; currency: string },
 ): Promise<ApplyResult> {
   if (!after.title.trim() || after.title.length > TITLE_MAX) return { status: "skipped", sku, reason: "The new title is empty or too long." };
   if (!after.descriptionHtml.trim()) return { status: "skipped", sku, reason: "The new description is empty." };
@@ -286,6 +292,20 @@ export async function applyRefresh(
     ...item,
     product: { ...product(item), title: after.title, description: after.descriptionHtml, aspects: after.aspects },
   });
-  await client.putOfferRaw({ ...offer, listingDescription: after.descriptionHtml });
+  const oldPrice = Number((offer.pricingSummary as { price?: { value?: string } } | undefined)?.price?.value);
+  let priced: Raw = {};
+  if (raise && raise.price > 0 && Number.isFinite(oldPrice) && raise.price > oldPrice + 0.004) {
+    const policies = { ...((offer.listingPolicies as Raw) ?? {}) };
+    if ((policies.bestOfferTerms as { bestOfferEnabled?: boolean } | undefined)?.bestOfferEnabled) {
+      // Keep the auto-decline at the same share of the new price.
+      policies.bestOfferTerms = bestOfferTerms(raise.price, raise.bestOfferMinPercent, raise.currency) ?? policies.bestOfferTerms;
+    }
+    const currency = (offer.pricingSummary as { price?: { currency?: string } } | undefined)?.price?.currency ?? raise.currency;
+    priced = {
+      listingPolicies: policies,
+      pricingSummary: { ...(offer.pricingSummary as object), price: { value: raise.price.toFixed(2), currency } },
+    };
+  }
+  await client.putOfferRaw({ ...offer, listingDescription: after.descriptionHtml, ...priced });
   return { status: "updated", sku, listingId: listingIdOf(offer) };
 }

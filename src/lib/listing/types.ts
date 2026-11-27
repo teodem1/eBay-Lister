@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { CONDITIONS, type Condition } from "../ebay/sell";
 import { SellerConditionSchema } from "./conditionSchema";
+import type { Edition } from "../pricing/edition";
 
 export { TITLE_MAX } from "./limits";
 import { TITLE_MAX } from "./limits";
@@ -77,4 +78,6 @@ export interface GeneratedListing {
   warnings: string[];
   /** Claude's price pick, only when price evidence was sent. */
   claudePrice?: { price: number; reason: string };
+  /** The copy's special edition (no barcode, Canadian...), when Claude found one; prices it from that edition's sales. */
+  edition?: Exclude<Edition, "none">;
 }
