@@ -171,6 +171,14 @@ describe("weight per disc", () => {
     expect(discCount(1, "Box set 3 discs")).toBe(3);
     expect(discCount(1, "Pink Floyd Meddle CD")).toBe(1);
     expect(discCount(1, "Greatest Hits of 1999 CD")).toBe(1);
+    // A number in the album name is not a disc count (titles always end "CD (Disc: ...)").
+    expect(discCount(1, "Adele 19 Adele 19 CD (Disc: Near Mint / Inlay: Near Mint)")).toBe(1);
+    expect(discCount(undefined, "Blur 13 CD (Disc: Very Good / Inlay: Good)")).toBe(1);
+    expect(discCount(1, "Chicago 17 1984 Full Moon Canada CD (Disc: Near Mint / Inlay: Near Mint)")).toBe(1);
+    expect(discCount(undefined, "Beatles Anthology 2 CDs")).toBe(2);
+    expect(discCount(undefined, "Clash London Calling 2-CD")).toBe(2);
+    expect(discCount(undefined, "Prince Hits 2 CD set")).toBe(2);
+    expect(discCount(undefined, "Box 4-disc")).toBe(4);
   });
   it("adds a bare disc per extra CD, or a disc and a case in a double jewel case", () => {
     expect(packageWeightKg(1)).toBe(0.115);

@@ -57,8 +57,10 @@ export function discCount(claude: number | undefined, text: string): number {
   if (claude !== undefined && Number.isInteger(claude) && claude >= 1 && claude <= 20) {
     if (claude > 1) return claude;
   }
+  // Every graded title ends "... CD (Disc: ...)", so a bare "19 CD" is album 19 (Adele), not 19 discs:
+  // "2CD", "2 x CD", "2-CD", "2 CDs", "3 discs", "2 CD set" count; "N CD" alone does not.
   const t = text.toLowerCase();
-  const m = /\b(\d{1,2})\s*(?:x\s*)?[- ]?(?:cds?|discs?|disques?)\b/.exec(t) ?? /\b(\d{1,2})cd\b/.exec(t);
+  const m = /\b(\d{1,2})(?:\s*x\s*cds?\b|-cds?\b|cds?\b|\s+cds\b|\s*-?\s*(?:discs?|disques?)\b|\s+cd\s+(?:set|box)\b)/.exec(t);
   const n = m ? Number(m[1]) : NaN;
   if (n >= 2 && n <= 20) return n;
   if (/\b(double|2-disc|deux disques)\b/.test(t)) return 2;

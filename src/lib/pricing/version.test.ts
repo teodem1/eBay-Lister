@@ -78,6 +78,34 @@ describe("CD-only search", () => {
     ).map((i) => i.title);
     expect(titles).toEqual(["GENESIS - Wind & Wuthering 82690-2 ATCO CD"]);
   });
+  it("doesn't read format words in the album name as the seller asking for vinyl or tapes", async () => {
+    const { cdKeywords, onlyCds } = await import("./version");
+    expect(cdKeywords("Electric Light Orchestra A New World Record", { exclude: true })).toBe(
+      "Electric Light Orchestra A New World Record CD -vinyl -lp -cassette -tape",
+    );
+    expect(cdKeywords("Bob Dylan The Basement Tapes", { exclude: true })).toBe(
+      "Bob Dylan The Basement Tapes CD -vinyl -lp -cassette -record",
+    );
+    const elo = onlyCds(
+      [
+        c("ELO A New World Record LP Vinyl 1976 Jet", "US"),
+        c("Electric Light Orchestra - A New World Record CD Epic Canada", "CA"),
+        c("ELO A New World Record Cassette", "US"),
+      ],
+      "Electric Light Orchestra A New World Record",
+    ).map((i) => i.title);
+    expect(elo).toEqual(["Electric Light Orchestra - A New World Record CD Epic Canada"]);
+    const dylan = onlyCds(
+      [c("Bob Dylan The Basement Tapes 2 Cassette Tapes", "US"), c("Bob Dylan & The Band The Basement Tapes CD", "CA")],
+      "Bob Dylan The Basement Tapes",
+    ).map((i) => i.title);
+    expect(dylan).toEqual(["Bob Dylan & The Band The Basement Tapes CD"]);
+    const purple = onlyCds(
+      [c("Deep Purple Made in Japan CD", "CA"), c("Deep Purple Made in Japan Japanese SHM-CD OBI", "JP")],
+      "Deep Purple Made in Japan",
+    ).map((i) => i.title);
+    expect(purple).toEqual(["Deep Purple Made in Japan CD"]);
+  });
 });
 
 describe("sameCondition", () => {

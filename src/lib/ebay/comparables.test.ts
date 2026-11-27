@@ -243,5 +243,17 @@ describe("findBothComparables", () => {
       expect(res.current?.items).toHaveLength(5);
       expect(res.current?.matchedBy).toBe("keywords");
     });
+
+    it("spends no second sold-comps call when the only name is the barcode itself", async () => {
+      const soldCompsFetch = vi.fn<(url: string) => Promise<Response>>(async () => json(200, { items: [sale("1")] }));
+      const res = await findBothComparables(
+        new EbayClient(config, ebayFetch(0)),
+        { keywords: "075678269028", gtin: "0075678269028" },
+        { soldCompsApiKey: "sc_test", soldCompsFetch },
+      );
+      expect(soldCompsFetch).toHaveBeenCalledTimes(1);
+      expect(res.sold?.matchedBy).toBe("barcode");
+      expect(res.current?.matchedBy).toBe("barcode");
+    });
   });
 });

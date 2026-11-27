@@ -17,7 +17,15 @@ export interface CollectionEdit {
 }
 
 export type EditResult =
-  | { status: "updated"; sku: string; listingId?: string; changed: string[] }
+  | {
+      status: "updated";
+      sku: string;
+      listingId?: string;
+      changed: string[];
+      /** The live title and item specifics after the edit, when they were changed (the phone's saved drafts follow them). */
+      title?: string;
+      aspects?: Record<string, string[]>;
+    }
   | { status: "unchanged"; sku: string; listingId?: string }
   | { status: "not_found"; reason: string };
 
@@ -87,6 +95,7 @@ export async function applyCollectionEdit(
   const { sku, offer } = found;
   const listingId = (offer.listing as { listingId?: string } | undefined)?.listingId;
   const changed: string[] = [];
+  let live: { title?: string; aspects?: Record<string, string[]> } = {};
 
   const { before, after } = edit;
   const textChanged = before.title !== after.title || before.artist !== after.artist || before.year !== after.year;
@@ -103,6 +112,7 @@ export async function applyCollectionEdit(
     product.aspects = aspects;
     product.title = newTitle;
     await client.putInventoryItemRaw(sku, { ...item, product });
+    live = { title: newTitle, aspects };
     if (newTitle !== oldTitle) changed.push("title");
     changed.push("item specifics");
   }
@@ -129,5 +139,5 @@ export async function applyCollectionEdit(
     changed.push("price");
   }
 
-  return changed.length ? { status: "updated", sku, listingId, changed } : { status: "unchanged", sku, listingId };
+  return changed.length ? { status: "updated", sku, listingId, changed, ...live } : { status: "unchanged", sku, listingId };
 }
