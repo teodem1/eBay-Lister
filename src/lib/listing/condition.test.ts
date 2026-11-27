@@ -47,6 +47,10 @@ describe("conditionTitleSuffix", () => {
     expect(cdTitle("The Alan Parsons Project Tales of Mystery and Imagination: Edgar Allan Poe", mint)).toBe(
       "The Alan Parsons Project Tales of Mystery CD (Disc: Mint / Inlay: Mint)",
     );
+    expect(cdTitle("Creedence Clearwater Revival The Best of Creedence Clearwater Revival", mint, 80, ["Canada", "2CD"])).toBe(
+      "The Best of Creedence Clearwater Revival Canada 2CD (Disc: Mint / Inlay: Mint)",
+    );
+    expect(cdTitle("U2 War", mint)).toBe("U2 War CD (Disc: Mint / Inlay: Mint)");
   });
 
   it("fills the 80 characters with search terms that fit, never cutting the grades", () => {
