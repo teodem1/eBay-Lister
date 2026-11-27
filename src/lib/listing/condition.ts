@@ -101,9 +101,9 @@ export function cdTitle(album: string, sc: SellerCondition, max = 80, extras: st
  */
 function withoutRepeatedArtist(name: string): string {
   const words = name.split(" ");
-  for (let n = Math.floor(words.length / 2); n >= 1; n--) {
+  // Two words at least: "Tears for Fears Tears Roll Down" must keep its artist.
+  for (let n = Math.floor(words.length / 2); n >= 2; n--) {
     const head = words.slice(0, n).join(" ").toLowerCase();
-    if (head.length < 4) continue;
     if (` ${words.slice(n).join(" ").toLowerCase()} `.includes(` ${head} `)) return words.slice(n).join(" ");
   }
   return name;

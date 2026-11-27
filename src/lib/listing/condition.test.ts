@@ -60,6 +60,9 @@ describe("conditionTitleSuffix", () => {
     expect(cdTitle("Rush Moving Pictures", mint, 80, ["Rare Canadian Press||Rare Canada", "1981"])).toBe(
       "Rush Moving Pictures Rare Canadian Press 1981 CD (Disc: Mint / Inlay: Mint)",
     );
+    expect(cdTitle("Tears for Fears Tears Roll Down (Greatest Hits 82–92)", mint, 80, ["Rare No Barcode||No Barcode"])).toBe(
+      "Tears for Fears Tears Roll Down Rare No Barcode CD (Disc: Mint / Inlay: Mint)",
+    );
     expect(cdTitle("U2 War", mint)).toBe("U2 War CD (Disc: Mint / Inlay: Mint)");
   });
 
