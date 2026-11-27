@@ -203,6 +203,11 @@ Server code:
   (`withBrandAndMpn`). On eBay error 25002 (BrandMPN) it re-sends the item the other way once and publishes again.
 - `src/app/api/lookup/{barcode,photo}`, `src/app/api/price-suggestion` and `src/app/api/listing/{generate,publish}` — server routes.
 
+Access: with `APP_ACCESS_KEY` set, `src/proxy.ts` (Next 16's renamed middleware) locks every page and API route:
+API calls without the `el_access` cookie get 401, pages redirect to `/unlock` (`src/app/unlock/page.tsx` →
+`/api/unlock`), which sets an httpOnly cookie holding a SHA-256 of the key for a year (`src/lib/auth/access.ts`).
+Unset, the app stays open.
+
 Env: see `.env.example`. Camera access on a phone needs HTTPS (localhost is fine).
 
 ## Conventions
