@@ -237,6 +237,8 @@ export default function ListingEditor({
           suggestedPrice: price,
           sellerCondition: condReady ? cond : undefined,
           canadianVersion: canadianSoldForMore(priceCheck?.soldItems) || undefined,
+          // No barcode: Claude checks the photos taken so far for a no-barcode pressing.
+          imageUrls: barcode ? undefined : imageText.split(/\s+/).filter((u) => u.startsWith("https://")).slice(0, 3),
         }),
       });
       const data = await res.json();

@@ -244,6 +244,8 @@ export async function previewRefresh(
         ? `My current eBay title: "${before.title}". Keep any edition words it has (rare, Canadian, promo, limited...), written without caps or asterisks.`
         : undefined,
       canadianVersion: opts.canadianVersion,
+      // Without a barcode, Claude looks at the photos for a no-barcode pressing.
+      imageUrls: ((p.imageUrls as string[] | undefined) ?? []).slice(0, 3),
       categoryId: typeof offer.categoryId === "string" ? offer.categoryId : undefined,
     },
     { ...deps, ebay: client },

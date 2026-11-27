@@ -221,6 +221,26 @@ describe("listing rules from the eBay listing skill", () => {
     expect(system).toContain("What's included");
   });
 
+  it("shows Claude the photos only when no barcode was scanned", async () => {
+    const { client, parse } = fakeAnthropic(claudeOut);
+    await generateListing(
+      { query: "U2 War", imageUrls: ["https://i.ebayimg.com/front.jpg", "https://i.ebayimg.com/back.jpg"] },
+      { anthropic: client, config },
+    );
+    const content = parse.mock.calls[0][0].messages[0].content;
+    expect(content).toHaveLength(3);
+    expect(content[0].text).toContain("No barcode was scanned");
+    expect(content[2]).toEqual({ type: "image", source: { type: "url", url: "https://i.ebayimg.com/back.jpg" } });
+    expect(JSON.stringify(parse.mock.calls[0][0].system)).toContain("Rare No Barcode");
+
+    const withBarcode = fakeAnthropic(claudeOut);
+    await generateListing(
+      { query: "U2 War", barcode: "042281127528", imageUrls: ["https://i.ebayimg.com/front.jpg"] },
+      { anthropic: withBarcode.client, config },
+    );
+    expect(typeof withBarcode.parse.mock.calls[0][0].messages[0].content).toBe("string");
+  });
+
   it("keeps listing when the MusicBrainz lookup fails", async () => {
     const { client } = fakeAnthropic(claudeOut);
     const albumFacts = vi.fn().mockRejectedValue(new Error("timeout"));
