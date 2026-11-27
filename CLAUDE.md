@@ -150,8 +150,10 @@ Look and feel: design tokens (light + dark) and component classes (`.page`, `.ca
 (`AppBar`, `Spinner`, `StepHeading`, `Logo`, `Icon`, `TabBar`) in `src/components/ui.tsx`. Text uses the type
 scale classes `.t-display/.t-title/.t-headline/.t-small/.t-caption` (12px floor, no ad hoc sizes). Selected
 states use `.choice` / `.chip-toggle` with `aria-pressed` (tinted + outline + check), never the solid
-primary colour, which is kept for the one main action. Icons come from `Icon` only. Design rationale and
-before/after screenshots: `docs/redesign/`. Use the token colours
+primary colour, which is kept for the one main action. Icons come from `Icon` only. Since the Sleek redesign
+(2026-11-27): sand `brand` for the main action only, tan `accent` for selected/focus outlines, 12px radius, no shadows;
+tab screens use `AppBar` without `back` (large title + `subtitle`); grade groups are `.grader` cards, yes/no options
+`.switch` rows, the Auto pile a `.rail`. Design rationale and before/after screenshots: `docs/redesign/`. Use the token colours
 (`bg-surface`, `text-muted`, `border-line`, `bg-brand`...) rather than raw Tailwind palette colours.
 
 Server code:

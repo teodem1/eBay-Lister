@@ -21,25 +21,42 @@ export function Logo({ size = 32 }: { size?: number }) {
 }
 
 /**
- * Sticky top bar. With `back`, shows a back arrow to that page instead of the
- * logo. Pads for the status bar when the app draws edge to edge.
+ * Top of a screen. A tab screen (no `back`) gets a large title with an
+ * optional one-line `subtitle`; a pushed screen (`back`) gets a sticky bar
+ * with a back arrow. Pads for the status bar when the app draws edge to edge.
  */
-export function AppBar({ title, back, action }: { title: string; back?: { href: string; label: string }; action?: ReactNode }) {
+export function AppBar({
+  title,
+  subtitle,
+  back,
+  action,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  back?: { href: string; label: string };
+  action?: ReactNode;
+}) {
+  if (!back) {
+    return (
+      <header className="bg-background pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex w-full max-w-lg items-start gap-3 px-4 pb-1 pt-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="t-display">{title}</h1>
+            {subtitle && <p className="t-caption mt-1 text-muted">{subtitle}</p>}
+          </div>
+          {action}
+        </div>
+        <SoldLimitBanner />
+      </header>
+    );
+  }
   return (
-    <header className="sticky top-0 z-30 border-b border-line/70 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-      <div className="mx-auto flex h-14 w-full max-w-lg items-center gap-3 px-4">
-        {back ? (
-          <Link
-            href={back.href}
-            aria-label={back.label}
-            className="icon-btn -ml-3 text-foreground"
-          >
-            <Icon name="back" size={24} />
-          </Link>
-        ) : (
-          <Logo size={30} />
-        )}
-        <span className="t-headline flex-1 truncate">{title}</span>
+    <header className="sticky top-0 z-30 border-b border-line bg-background pt-[env(safe-area-inset-top)]">
+      <div className="mx-auto flex h-14 w-full max-w-lg items-center gap-2 px-4">
+        <Link href={back.href} aria-label={back.label} className="icon-btn -ml-3 text-foreground">
+          <Icon name="back" size={24} />
+        </Link>
+        <span className="t-title flex-1 truncate">{title}</span>
         {action}
       </div>
       <SoldLimitBanner />
@@ -52,18 +69,16 @@ export function Spinner({ className = "" }: { className?: string }) {
 }
 
 /**
- * Numbered section heading used on the listing screen. Sits above its card,
- * with an optional action (e.g. Refresh) on the right.
+ * Section heading used on the listing screen. Sits above its card, with an
+ * optional action (e.g. Refresh) on the right. `n` is the step's place in the
+ * flow; the steps read top to bottom, so it isn't drawn.
  */
-export function StepHeading({ n, title, hint, action }: { n: number; title: string; hint?: string; action?: ReactNode }) {
+export function StepHeading({ title, hint, action }: { n: number; title: string; hint?: string; action?: ReactNode }) {
   return (
-    <div className="flex items-start gap-3 px-1">
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line-strong text-xs font-semibold text-foreground">
-        {n}
-      </span>
+    <div className="flex items-end gap-3">
       <div className="min-w-0 flex-1">
-        <h2 className="t-headline">{title}</h2>
-        {hint && <p className="t-small text-muted">{hint}</p>}
+        <h2 className="t-title">{title}</h2>
+        {hint && <p className="t-caption mt-0.5 text-muted">{hint}</p>}
       </div>
       {action}
     </div>
@@ -114,6 +129,28 @@ const ICONS = {
   edit: <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />,
   bolt: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />,
   external: <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
+  list: <path d="M5 7h14M5 12h14M5 17h9" />,
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8" />
+    </>
+  ),
+  layers: <path d="m12 4 9 4.5-9 4.5-9-4.5zM3 12.5l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  hourglass: <path d="M7 4h10M7 20h10M8 4c0 4 8 4 8 8s-8 4-8 8M16 4c0 4-8 4-8 8s8 4 8 8" />,
+  pause: <path d="M9 6v12M15 6v12" />,
 } as const;
 
 export type IconName = keyof typeof ICONS;
@@ -142,17 +179,17 @@ export function Icon({ name, size = 20, className = "", strokeWidth = 2 }: { nam
 export function TabBar({ active }: { active: "scan" | "tolist" | "auto" | "review" | "collection" }) {
   const tabs = [
     { key: "scan", href: "/", label: "Scan", icon: "scan" },
-    { key: "tolist", href: "/to-list", label: "To list", icon: "stack" },
-    { key: "auto", href: "/auto", label: "Auto", icon: "bolt" },
-    { key: "review", href: "/review", label: "Review", icon: "edit" },
+    { key: "tolist", href: "/to-list", label: "To list", icon: "list" },
+    { key: "auto", href: "/auto", label: "Auto", icon: "stack" },
+    { key: "review", href: "/review", label: "Review", icon: "eye" },
     { key: "collection", href: "/collection", label: "Collection", icon: "disc" },
   ] as const;
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="mx-auto grid h-20 max-w-lg grid-cols-5">
+      <ul className="mx-auto grid h-[4.5rem] max-w-lg grid-cols-5">
         {tabs.map((t) => {
           const on = t.key === active;
           return (
@@ -160,10 +197,12 @@ export function TabBar({ active }: { active: "scan" | "tolist" | "auto" | "revie
               <Link
                 href={t.href}
                 aria-current={on ? "page" : undefined}
-                className={`flex h-full flex-col items-center justify-center gap-1 text-xs ${on ? "font-bold text-brand-ink" : "font-medium text-muted"}`}
+                className={`flex h-full flex-col items-center justify-center gap-1 text-xs ${on ? "font-semibold text-foreground" : "font-medium text-muted"}`}
               >
-                <span className={`relative flex h-8 w-14 items-center justify-center rounded-full transition-colors ${on ? "bg-brand-soft" : ""}`}>
-                  <Icon name={t.icon} size={22} strokeWidth={on ? 2.2 : 1.8} />
+                <span
+                  className={`relative flex h-8 w-14 items-center justify-center rounded-full border transition-colors ${on ? "border-accent bg-brand" : "border-transparent"}`}
+                >
+                  <Icon name={t.icon} size={22} strokeWidth={on ? 2 : 1.7} />
                   {t.key === "tolist" && <ToListCount />}
                 </span>
                 {t.label}

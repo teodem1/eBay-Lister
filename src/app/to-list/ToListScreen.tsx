@@ -79,12 +79,8 @@ export default function ToListScreen() {
 
   return (
     <>
-      <AppBar title="To list" />
-      <main className="page page-tabs">
-        <header className="pt-1">
-          <h1 className="t-display">To list</h1>
-          <p className="mt-1 text-muted">CDs you scanned but haven&apos;t listed yet. They stay saved on this phone.</p>
-        </header>
+      <AppBar title="To list" subtitle="CDs you scanned but haven't listed yet, saved on this phone." />
+      <main className="page page-tabs pt-3">
 
         <section className="flex flex-col gap-3" aria-label="Add CDs">
           <StackScan store={batchStore} items={items} autoStart={autoScan} />

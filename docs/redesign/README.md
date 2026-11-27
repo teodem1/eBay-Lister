@@ -78,3 +78,23 @@ Guillaume asked for "more sober" colours, a style in line with current UI standa
 | brand-ink (selected, focus) / brand-soft | #6d5530 / #f1e9da | #e3d2b2 / #2b261e |
 
 All text pairs are 4.5:1 or better. Screenshots: `beige-*.png` (top row teal, bottom row beige).
+
+## Sleek redesign (2026-11-27)
+
+Designed in Sleek (sleek.design, project "eBay Lister") from one brief covering Scan, Listing and Auto, then built
+into the app's tokens and components so every screen picks it up. Screenshots: `sleek-light.png`, `sleek-dark.png`.
+
+- Palette: warm off-white page `#f6f2ea`, ivory cards `#fcfaf5` with hairline borders `#e4dccd`, espresso text
+  `#2a1f18`. Sand `#e2cfae` (brand) is only for the one main action, with dark text and a `#cdb894` edge. Tan
+  `--accent` `#a9824f` outlines selected chips and focus; `brand-ink` `#7a5a2e` is the tan used for text and links.
+- Cards and buttons: 12px radius, no shadows. Tab screens open with a large title (`AppBar` without `back`, optional
+  `subtitle`); pushed screens keep the sticky bar with a back arrow. Section headings on the listing screen are plain
+  titles (no step numbers).
+- Bottom navigation: icons scan / list / stack / eye / disc, the active tab is a sand pill with a tan edge.
+- Grades: each group is a `.grader` card with its name on a `.grader-tab`; Sealed and Tested are `.switch` rows.
+- Scan: full-width "Scan barcode", then "Take photo" and "Type barcode" (opens the barcode field), then "Scan a stack"
+  and "Sort a pile" as quiet links. The CD card shows cover, album, artist, year and EAN.
+- Listing: the item is a summary card (name, EAN, grades) with "Edit" and "Change grades"; the sticky bar is
+  "Add to Collection" and "Publish · $price", side by side.
+- Auto: the Pause / Resume bar sits under "Scan a stack" instead of over the tabs; the pile is a `.rail` of cards,
+  each with a status dot (icon + word, never colour alone).

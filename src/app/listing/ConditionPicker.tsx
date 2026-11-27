@@ -41,7 +41,7 @@ export default function ConditionPicker({
   };
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-4">
       {n !== undefined ? (
         <StepHeading n={n} title="Your CD's condition" hint={hint} />
       ) : (
@@ -50,100 +50,86 @@ export default function ConditionPicker({
           {hint && <p className="t-small text-muted">{hint}</p>}
         </div>
       )}
-      <div className="card space-y-5">
-        <button
-          type="button"
-          aria-pressed={sealed}
-          className="chip-toggle"
-          onClick={() =>
-            onChange(
-              sealed
-                ? { notes: value.notes }
-                : { condition: "NEW", notes: value.notes },
-            )
-          }
-        >
-          {sealed && <Icon name="check" size={16} strokeWidth={2.6} />}
-          New, still sealed
-        </button>
-
-        {!sealed && (
-          <>
+      {!sealed && (
+        <>
+          <GradeRow label="Disc" value={value.disc} onPick={(g) => setGrades({ disc: g as Grade })} />
+          <GradeRow
+            label="Inlay"
+            value={value.booklet}
+            withMissing
+            onPick={(g) => setGrades({ booklet: g as Grade | "Missing" })}
+          />
+          {!compact && (
             <GradeRow
-              label="Disc condition"
-              value={value.disc}
-              onPick={(g) => setGrades({ disc: g as Grade })}
-            />
-            <GradeRow
-              label="Inlay condition"
-              value={value.booklet}
+              label="Case"
+              optional
+              value={value.case}
               withMissing
-              onPick={(g) => setGrades({ booklet: g as Grade | "Missing" })}
+              onPick={(g) => onChange({ ...value, case: g as Grade | "Missing" | undefined })}
             />
-            {!compact && (
-              <>
-                <GradeRow
-                  label="Case"
-                  optional
-                  value={value.case}
-                  withMissing
-                  onPick={(g) =>
-                    onChange({
-                      ...value,
-                      case: g as Grade | "Missing" | undefined,
-                    })
-                  }
-                />
-                <button
-                  type="button"
-                  aria-pressed={!!value.tested}
-                  className="chip-toggle"
-                  onClick={() => onChange({ ...value, tested: !value.tested })}
-                >
-                  {value.tested && (
-                    <Icon name="check" size={16} strokeWidth={2.6} />
-                  )}
-                  Tested, plays without skips
-                </button>
-              </>
-            )}
-          </>
-        )}
+          )}
+        </>
+      )}
 
-        {!compact && (
-          <label className="block">
-            <span className="label">
-              Defects or details{" "}
-              <span className="font-normal text-muted">(optional)</span>
-            </span>
-            <textarea
-              className="field"
-              rows={2}
-              maxLength={600}
-              value={value.notes ?? ""}
-              onChange={(e) =>
-                onChange({ ...value, notes: e.target.value || undefined })
-              }
-              placeholder="e.g. light scuffs on disc, cracked hinge, obi strip included"
-            />
-          </label>
+      <div className="card flex flex-col gap-1 py-1">
+        <SwitchRow
+          label="New, still sealed"
+          on={sealed}
+          onToggle={() => onChange(sealed ? { notes: value.notes } : { condition: "NEW", notes: value.notes })}
+        />
+        {!compact && !sealed && (
+          <SwitchRow
+            label="Tested, plays without skips"
+            on={!!value.tested}
+            onToggle={() => onChange({ ...value, tested: !value.tested })}
+          />
         )}
-
       </div>
+
+      {!compact && (
+        <label className="card block">
+          <span className="label">
+            Defects or details <span className="font-normal text-muted">(optional)</span>
+          </span>
+          <textarea
+            className="field"
+            rows={2}
+            maxLength={600}
+            value={value.notes ?? ""}
+            onChange={(e) => onChange({ ...value, notes: e.target.value || undefined })}
+            placeholder="e.g. light scuffs on disc, cracked hinge, obi strip included"
+          />
+        </label>
+      )}
     </section>
   );
 }
 
+/** A yes/no line with a switch, e.g. "New, still sealed". */
+function SwitchRow({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      className="flex min-h-12 w-full items-center justify-between gap-3 text-left font-medium"
+    >
+      {label}
+      <span className="switch" aria-hidden />
+    </button>
+  );
+}
+
+/** One grade group: its name on the card's tab, then a chip per grade. */
 function GradeRow({
   label,
-  hint,
   optional = false,
   withMissing = false,
   value,
   onPick,
 }: {
   label: string;
-  hint?: string;
   optional?: boolean;
   withMissing?: boolean;
   value: string | undefined;
@@ -151,11 +137,10 @@ function GradeRow({
 }) {
   const options: string[] = withMissing ? [...GRADES, "Missing"] : [...GRADES];
   return (
-    <fieldset>
-      <legend className="label">
-        {label}{" "}
-        {optional && <span className="font-normal text-muted">(optional)</span>}
-        {hint && <span className="block font-normal text-muted">{hint}</span>}
+    <fieldset className="grader">
+      <legend className="grader-tab">
+        {label}
+        {optional && <span className="ml-1 font-normal text-muted">(optional)</span>}
       </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((g) => (
@@ -163,11 +148,12 @@ function GradeRow({
             key={g}
             type="button"
             aria-pressed={value === g}
+            aria-label={`${label}: ${g}`}
             className="chip-toggle"
             // Tapping the chosen grade again clears an optional one.
             onClick={() => onPick(value === g && optional ? undefined : g)}
           >
-            {value === g && <Icon name="check" size={16} strokeWidth={2.6} />}
+            {value === g && <Icon name="check" size={16} strokeWidth={2.4} />}
             {g}
           </button>
         ))}

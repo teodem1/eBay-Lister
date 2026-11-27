@@ -30,6 +30,7 @@ export default function ItemLookup() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [typing, setTyping] = useState(false);
   // Small copy of the last photo, used as the cover when nothing better is found.
   const [thumb, setThumb] = useState<string | undefined>();
 
@@ -118,37 +119,34 @@ export default function ItemLookup() {
 
   return (
     <>
-      <AppBar title="eBay Lister" />
-      <main className="page page-tabs">
-        <header className="pt-1">
-          <h1 className="t-display">What are you selling?</h1>
-          <p className="mt-1 text-muted">Scan or snap it. We find it on eBay and check what it sells for.</p>
-        </header>
-
+      <AppBar title="Scan" subtitle="Scan or snap a CD. We find it and check what it sells for." />
+      <main className="page page-tabs pt-3">
         <section className="flex flex-col gap-3" aria-label="Find the item">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={startScan}
-            className="flex min-h-24 items-center gap-4 rounded-2xl bg-brand p-4 text-left text-brand-fg shadow-lift transition-transform active:scale-[0.98] disabled:opacity-50"
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-fg/10">
-              <Icon name="scan" size={26} strokeWidth={1.8} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="t-title block">Scan barcode</span>
-              <span className="t-small block opacity-70">Fastest for CDs, games and boxed items</span>
-            </span>
-            <Icon name="arrow" size={20} className="opacity-60" />
+          <button type="button" disabled={busy} onClick={startScan} className="btn btn-primary btn-lg w-full">
+            <Icon name="scan" size={24} strokeWidth={1.8} />
+            Scan barcode
           </button>
 
-          <div className="grid grid-cols-[auto_1fr] gap-3">
-            <button type="button" disabled={busy} onClick={startPhoto} className="btn btn-secondary h-14 px-5">
-              <Icon name="camera" size={22} strokeWidth={1.8} />
-              Photo
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" disabled={busy} onClick={startPhoto} className="btn btn-secondary px-3">
+              <Icon name="camera" size={20} strokeWidth={1.8} />
+              Take photo
             </button>
+            <button
+              type="button"
+              disabled={busy}
+              aria-expanded={typing}
+              onClick={() => setTyping((t) => !t)}
+              className="btn btn-secondary px-3"
+            >
+              <Icon name="keyboard" size={20} strokeWidth={1.8} />
+              Type barcode
+            </button>
+          </div>
+
+          {typing && (
             <form
-              className="relative"
+              className="relative fade-in"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (manualValid) lookupBarcode(manualCode);
@@ -161,6 +159,7 @@ export default function ItemLookup() {
                 id="manual-code"
                 inputMode="numeric"
                 autoComplete="off"
+                autoFocus
                 placeholder="Type a barcode"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
@@ -175,19 +174,19 @@ export default function ItemLookup() {
                 <Icon name="search" size={20} />
               </button>
             </form>
+          )}
+
+          <div className="-my-1 flex flex-wrap justify-center gap-x-4">
+            <Link href="/to-list?scan=1" className="btn-link">
+              <Icon name="list" size={16} />
+              Scan a stack
+            </Link>
+            <Link href="/sort" className="btn-link">
+              <Icon name="layers" size={16} />
+              Sort a pile
+            </Link>
           </div>
-
-          <Link href="/to-list?scan=1" className="btn btn-secondary h-12 w-full">
-            <Icon name="stack" size={20} strokeWidth={1.8} />
-            Scan a stack of CDs
-          </Link>
-          <Link href="/sort" className="btn btn-secondary h-12 w-full">
-            <Icon name="camera" size={20} strokeWidth={1.8} />
-            Which CDs are worth selling? (one photo)
-          </Link>
         </section>
-
-        {status.kind === "idle" && <HowItWorks />}
 
         {status.kind === "loading" && <LoadingResults label={status.label} preview={status.preview} />}
 
@@ -222,24 +221,6 @@ async function thumbnailDataUrl(file: File): Promise<string | undefined> {
   }
 }
 
-/** Compact how-it-works strip: three steps on one line. */
-function HowItWorks() {
-  const steps = ["Identify", "Price", "List"];
-  return (
-    <ol className="flex items-center gap-2 px-1 text-muted fade-in" aria-label="How it works">
-      {steps.map((title, i) => (
-        <li key={title} className="flex items-center gap-2">
-          {i > 0 && <span className="h-px w-5 bg-line-strong" aria-hidden />}
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-foreground">
-            {i + 1}
-          </span>
-          <span className="t-small font-medium">{title}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function LoadingResults({ label, preview }: { label: string; preview?: string }) {
   return (
     <section className="flex flex-col gap-3 fade-in" aria-busy>
@@ -253,7 +234,7 @@ function LoadingResults({ label, preview }: { label: string; preview?: string })
         </div>
       </div>
       {[0, 1, 2].map((i) => (
-        <div key={i} className="flex gap-3 rounded-2xl border border-line bg-surface p-3">
+        <div key={i} className="flex gap-3 rounded-xl border border-line bg-surface p-3">
           <div className="skeleton h-16 w-16 shrink-0" />
           <div className="flex flex-1 flex-col gap-2 pt-1">
             <div className="skeleton h-3.5 w-11/12" />
@@ -290,53 +271,50 @@ function Results({ data, preview, thumb }: { data: LookupResponse; preview?: str
   // Best name we have: the album, Claude's identification, else the top eBay match.
   const heading = album?.title ?? id?.title ?? data.results.items[0]?.title ?? `Barcode ${data.gtin}`;
   const sub = album
-    ? [album.artist, album.year].filter(Boolean).join(" · ")
+    ? album.artist
     : id
       ? [id.brand, id.model].filter(Boolean).join(" · ")
       : undefined;
 
   return (
     <section className="flex flex-col gap-4 fade-in">
-      <div className="card">
+      <article className="card">
         <div className="flex gap-4">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={cover} alt="" className="h-24 w-24 shrink-0 rounded-xl border border-line bg-surface-2 object-cover" />
+            <img src={cover} alt="" className="h-28 w-28 shrink-0 rounded-md border border-line bg-surface-2 object-cover" />
           ) : (
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-subtle">
+            <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-md bg-surface-2 text-subtle">
               <Icon name="disc" size={36} strokeWidth={1.5} />
             </div>
           )}
-          <div className="min-w-0 flex-1">
-            <p className="eyebrow">{id ? "We think it's" : album ? "Album found" : "Barcode match"}</p>
-            <h2 className="t-title mt-0.5 line-clamp-3">{heading || "Unknown item"}</h2>
-            {sub && <p className="t-small mt-0.5 text-muted">{sub}</p>}
+          <div className="min-w-0 flex-1 pt-1">
+            {id && <p className="t-caption text-muted">We think it&apos;s</p>}
+            <h2 className="t-title line-clamp-3">{heading || "Unknown item"}</h2>
+            {sub && <p className="mt-1">{sub}</p>}
+            {album?.year && <p className="t-small mt-0.5 tabular-nums text-muted">{album.year}</p>}
+            {id?.category && <p className="t-small mt-0.5 text-muted">{id.category}</p>}
+            {data.gtin && <p className="t-caption mt-2 tabular-nums text-muted">EAN {data.gtin}</p>}
             {id && <ConfidenceBadge level={id.confidence} />}
           </div>
         </div>
-        <dl className="t-small mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-line pt-3">
-          {id?.category && <Row label="Category" value={id.category} />}
-          {id?.conditionNotes && <Row label="Condition" value={id.conditionNotes} />}
-          {album?.genres?.length ? <Row label="Genre" value={album.genres.slice(0, 3).join(", ")} /> : null}
-          {data.gtin && <Row label="Barcode" value={data.gtin} />}
-          {data.query && <Row label="Searched" value={`“${data.query}”`} />}
-        </dl>
+        {id?.conditionNotes && <p className="t-small mt-3 border-t border-line pt-3 text-muted">{id.conditionNotes}</p>}
         {data.notes.map((n) => (
           <p key={n} className="notice notice-warn mt-3">
             {n}
           </p>
         ))}
-      </div>
+      </article>
 
       <ConditionPicker
         compact
-        hint="Grade it now so the suggested price matches copies in the same condition."
+        hint="Grade it now so the price check matches copies in the same condition."
         value={cond}
         onChange={setCond}
       />
       <button type="button" onClick={handOff} className="btn btn-primary btn-lg w-full">
+        <Icon name="edit" size={20} strokeWidth={1.8} />
         Create listing
-        <Icon name="arrow" />
       </button>
 
       {/* Similar eBay listings are shown on the listing screen's price step, not here. */}
@@ -356,15 +334,6 @@ function ConfidenceBadge({ level }: { level: "high" | "medium" | "low" }) {
       <Icon name={level === "high" ? "check" : "alert"} size={14} strokeWidth={2.4} />
       {text}
     </span>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <>
-      <dt className="text-muted">{label}</dt>
-      <dd className="min-w-0 break-words font-medium">{value}</dd>
-    </>
   );
 }
 

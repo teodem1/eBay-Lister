@@ -92,16 +92,15 @@ export default function AutoScreen() {
 
   return (
     <>
-      <AppBar title="Auto" />
-      <main className={`page page-tabs ${running || paused ? "pb-40" : ""}`}>
-        <header className="pt-1">
-          <h1 className="t-display">Auto list</h1>
-          <p className="mt-1 text-muted">
-            Scan each CD, take the front and back cover (and any extra) photos and grade it. While you scan the next
-            one, Claude writes the listing, picks the price from sold copies and publishes it. Check and edit the
-            results in Review.
-          </p>
-        </header>
+      <AppBar
+        title="Auto"
+        subtitle={
+          hydrated && (pending.length || summary.published)
+            ? `${pending.length} in the pile · ${summary.published} published`
+            : "Scan, photograph and grade each CD. Claude prices, writes and publishes it."
+        }
+      />
+      <main className="page page-tabs pt-3">
 
         <StackScan
           store={autoStore}
@@ -112,17 +111,48 @@ export default function AutoScreen() {
           notFoundHint="If the number is right, take the cover photos anyway: Claude reads the album off the front cover."
         />
 
+        {hydrated && (running || (paused && readyNow > 0)) && (
+          <div className="card flex items-center gap-3 py-3 fade-in" role="status">
+            {running ? (
+              <>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line text-brand-ink">
+                  <Spinner className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Listing in background</p>
+                  <p className="t-caption text-muted">
+                    {left} to go · {summary.published} published. Keep the app open.
+                  </p>
+                </div>
+                <button type="button" className="btn btn-secondary min-h-11 px-4" onClick={run.pause}>
+                  Pause
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line text-muted">
+                  <Icon name="pause" size={16} />
+                </span>
+                <p className="min-w-0 flex-1 font-medium">Paused · {readyNow} ready to list</p>
+                <button type="button" className="btn btn-primary min-h-11 px-4" onClick={() => start()}>
+                  Resume
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {!hydrated ? (
           <div className="skeleton h-32" />
         ) : (
           <>
             {pending.length > 0 && (
               <section className="flex flex-col gap-2" aria-label="To auto list">
-                <div className="flex items-baseline justify-between px-1">
-                  <h2 className="t-headline">{pending.length} to list</h2>
+                <div className="flex items-baseline justify-between">
+                  <h2 className="t-title">Pile</h2>
                   <span className="t-small text-muted">{summary.ready} ready</span>
                 </div>
-                <ul className="card divide-y divide-line overflow-hidden p-0">
+                <ul className="rail flex flex-col gap-3">
                   {pending.map((item) => (
                     <AutoRow
                       key={item.id}
@@ -146,8 +176,8 @@ export default function AutoScreen() {
                     {rescanError}
                   </p>
                 )}
-                <p className="t-small flex gap-2 px-1 text-muted">
-                  <Icon name="alert" size={16} className="mt-0.5" />
+                <p className="t-caption flex gap-2 px-1 text-muted">
+                  <Icon name="alert" size={14} className="mt-0.5" />
                   <span>
                     Each CD uses one sold-price check (of 100 a month), even if it has to be tried again. A CD whose
                     barcode names no album is named from its front cover and checked once more by name. Shipping, Best
@@ -181,31 +211,6 @@ export default function AutoScreen() {
         )}
       </main>
 
-      {hydrated && (running || (paused && readyNow > 0)) && (
-        <div className="fixed inset-x-0 bottom-20 z-20 border-t border-line/70 bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-          <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-3">
-            {running ? (
-              <>
-                <Spinner className="text-brand-ink" />
-                <div className="min-w-0 flex-1">
-                  <p className="t-small font-semibold">Listing in the background · {left} to go</p>
-                  <p className="t-caption text-muted">Keep the app open. {summary.published} published so far.</p>
-                </div>
-                <button type="button" className="btn btn-secondary min-h-10 px-3 text-sm" onClick={run.pause}>
-                  Pause
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="t-small min-w-0 flex-1 font-medium">Paused · {readyNow} ready to list</p>
-                <button type="button" className="btn btn-primary min-h-10 px-4 text-sm" onClick={() => start()}>
-                  <Icon name="bolt" size={18} /> Resume
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
       {rescanId && (
         <BarcodeScanner onDetected={(code) => applyRescan(rescanId, code)} onClose={() => setRescanId(null)} />
       )}
@@ -232,10 +237,15 @@ function AutoRow({ item, open, onToggle, onRetry }: { item: BatchItem; open: boo
     : a.stage === "failed"
       ? "Not listed"
       : (missing ?? "Ready");
-  const tone = a.stage === "failed" ? "text-bad-ink" : missing ? "text-muted" : "text-ok-ink";
+  const tone = a.stage === "failed" ? "text-bad-ink" : busy ? "text-warn-ink" : missing ? "text-muted" : "text-ok-ink";
+  const dot = a.stage === "failed" ? "alert" : busy ? (a.stage === "writing" ? "edit" : "clock") : missing ? "hourglass" : "check";
 
   return (
-    <li ref={rowRef} className="scroll-mt-20">
+    <li ref={rowRef} className="relative scroll-mt-20">
+      <span className={`rail-dot ${tone}`} aria-hidden>
+        <Icon name={dot} size={13} strokeWidth={2} />
+      </span>
+      <div className="card overflow-hidden p-0">
       <button
         type="button"
         onClick={onToggle}
@@ -246,10 +256,10 @@ function AutoRow({ item, open, onToggle, onRetry }: { item: BatchItem; open: boo
         <CdCover item={item} src={a.photos[0] ?? item.coverUrl} />
         <div className="flex min-w-0 flex-1 flex-col">
           <p className="truncate font-semibold">{loading && !item.title ? "Finding the album…" : batchItemName(item)}</p>
-          <p className="t-small truncate text-muted">
-            {conditionComplete(cond) ? conditionTitleSuffix(cond).replace(/^\(|\)$/g, "") : item.artist || item.barcode}
+          <p className="t-caption truncate text-muted">
+            {conditionComplete(cond) ? conditionTitleSuffix(cond).replace(/^\(|\)$/g, "").replace(" / ", " · ") : item.artist || item.barcode}
           </p>
-          <p className={`t-small font-medium ${tone}`}>{status}</p>
+          <p className={`t-caption mt-0.5 font-semibold ${tone}`}>{status}</p>
         </div>
         {loading || busy ? (
           <Spinner className="text-brand-ink" />
@@ -259,21 +269,21 @@ function AutoRow({ item, open, onToggle, onRetry }: { item: BatchItem; open: boo
       </button>
 
       {a.stage === "failed" && (
-        <div className="flex flex-col gap-2 px-3 pb-3">
-          <p className="notice notice-bad t-small">{a.error ?? "Something went wrong."}</p>
+        <div className="flex flex-col gap-1 px-3 pb-2">
+          <p className="t-small text-muted">{a.error ?? "Something went wrong."}</p>
           {a.sameAgain && a.failedAt && (
             <p className="t-caption px-1 text-muted">
               Checked again at {new Date(a.failedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
               {a.tries ? ` (${a.tries} tries)` : ""}: same result.
             </p>
           )}
-          <div className="flex gap-2">
-            <button type="button" className="btn btn-secondary flex-1" onClick={onRetry}>
+          <div className="flex gap-4">
+            <button type="button" className="btn-link px-0" onClick={onRetry}>
               Try again
             </button>
             <button
               type="button"
-              className="btn btn-secondary flex-1"
+              className="btn-link px-0"
               onClick={() => {
                 batchStore.put(toListEntry(item));
                 autoStore.remove(item.id);
@@ -302,6 +312,7 @@ function AutoRow({ item, open, onToggle, onRetry }: { item: BatchItem; open: boo
           </button>
         </div>
       )}
+      </div>
     </li>
   );
 }
