@@ -233,27 +233,69 @@ export function hasScanWork(item: BatchItem): boolean {
   return (item.auto?.photos.length ?? 0) > 0 || Object.values(item.condition ?? {}).some((v) => v !== undefined && v !== "");
 }
 
+/** The same CD with a new barcode: the album is looked up again; photos, grades and the Auto run's photos stay. */
+export function withNewBarcode(item: BatchItem, gtin: string): BatchItem {
+  const same = gtin === item.barcode;
+  return {
+    ...item,
+    barcode: gtin,
+    lookup: "queued",
+    error: undefined,
+    title: undefined,
+    artist: undefined,
+    year: undefined,
+    coverUrl: undefined,
+    query: undefined,
+    scanned: undefined,
+    priceCheck: same ? item.priceCheck : undefined,
+    ...(item.auto
+      ? {
+          auto: {
+            ...item.auto,
+            stage: "waiting" as const,
+            coverChecked: undefined,
+            priceCheck: same ? item.auto.priceCheck : undefined,
+            discogs: same ? item.auto.discogs : undefined,
+            discogsNote: same ? item.auto.discogsNote : undefined,
+          },
+        }
+      : {}),
+  };
+}
+
 /**
- * "Try again" on the scan card, once the new barcode is in: what to do with the
- * CD scanned first. Photos and grades taken after the first scan move to the
- * CD scanned again, so a misread barcode never costs the seller their photos.
- * - `keep`: the rescan found the same CD, or both CDs already have work (nothing lost).
- * - `remove`: the first CD had no work, drop it as before.
- * - `move`: put `item` (the rescanned CD with the first one's photos and grades) in place, then drop the first.
+ * "Try again" on the scan card, once the new barcode is in. The CD scanned
+ * first never loses the photos and grades taken after it:
+ * - with photos or grades, it takes the new barcode in place (same entry, so a
+ *   photo still uploading lands on it too), unless the new barcode is another CD
+ *   already in the pile: then the work moves there if that CD has none, else both stay;
+ * - with nothing on it, it is dropped and the new barcode added as usual.
+ * Returns the new list, the CD to show, and whether it counts as newly added.
  */
 export function retryScan(
-  first: BatchItem | undefined,
-  rescanned: BatchItem,
-): { action: "keep" } | { action: "remove" } | { action: "move"; item: BatchItem } {
-  if (!first || first.id === rescanned.id) return { action: "keep" };
-  if (!hasScanWork(first)) return { action: "remove" };
-  if (hasScanWork(rescanned)) return { action: "keep" };
-  return {
-    action: "move",
-    item: {
-      ...rescanned,
+  items: BatchItem[],
+  firstId: string,
+  gtin: string,
+  now = new Date(),
+): { items: BatchItem[]; id: string; isNew: boolean } {
+  const first = items.find((x) => x.id === firstId);
+  if (first && first.barcode === gtin) return { items, id: first.id, isNew: true };
+  const other = items.find((x) => x.id !== firstId && x.barcode === gtin && x.status === "pending");
+  if (first && hasScanWork(first)) {
+    if (!other) {
+      return { items: items.map((x) => (x.id === firstId ? withNewBarcode(x, gtin) : x)), id: firstId, isNew: true };
+    }
+    if (hasScanWork(other)) return { items, id: other.id, isNew: false };
+    const moved: BatchItem = {
+      ...other,
       condition: first.condition,
-      ...(first.auto ? { auto: { ...(rescanned.auto ?? { stage: "waiting" as const }), photos: first.auto.photos } } : {}),
-    },
-  };
+      ...(first.auto ? { auto: { ...(other.auto ?? { stage: "waiting" as const }), photos: first.auto.photos } } : {}),
+    };
+    return { items: items.filter((x) => x.id !== firstId).map((x) => (x.id === other.id ? moved : x)), id: other.id, isNew: false };
+  }
+  const rest = items.filter((x) => x.id !== firstId);
+  const result = addCode(rest, gtin, now);
+  return "added" in result
+    ? { items: result.items, id: result.added.id, isNew: true }
+    : { items: rest, id: result.duplicate.id, isNew: false };
 }

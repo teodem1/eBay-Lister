@@ -93,8 +93,8 @@ Screens (phone first):
   shipping, order fee, $1 mailer) against a $3 / $5 / $10 bar. "Add N worth selling to To list" makes To list entries
   (`itemFromSort`) carrying the price check (`BatchItem.priceCheck`), which the listing screen reuses (`initial.priceCheck`).
 - Stack scans (To list and Auto) use `src/components/StackScan.tsx`: one barcode at a time, then a card with the CD found,
-  "Next CD", "Try again" (rescans; photos and grades already taken move to the CD scanned again, `retryScan` in
-  `src/lib/batch/queue.ts`, and closing the scanner keeps the first scan) and "Done scanning".
+  "Next CD", "Try again" (rescans; a CD with photos or grades keeps them and just takes the new barcode, same entry so
+  uploads in flight land on it, `retryScan`/`withNewBarcode` in `src/lib/batch/queue.ts`; closing the scanner keeps the first scan) and "Done scanning".
 - `/auto` — `src/app/auto/AutoScreen.tsx` ("Auto" tab, listing with no review screen; the other tabs are unchanged):
   after each barcode the camera asks for the front cover, then the back cover (`AutoCdSteps.tsx`, `CdCamera prompt`),
   then extra photos (disc, spine, defects; up to `AUTO_MAX_PHOTOS` = 12), then the disc/inlay grade. Listing runs in the

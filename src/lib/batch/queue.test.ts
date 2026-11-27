@@ -127,29 +127,41 @@ describe("retryScan", () => {
     return { ...item, condition: { disc: "Near mint" }, auto: { stage: "waiting", photos } };
   }
 
-  it("moves the photos and grades taken after a misread scan to the CD scanned again", () => {
-    const [first, again] = queue("111", "222");
-    const outcome = retryScan(withWork(first), again);
-    expect(outcome.action).toBe("move");
-    if (outcome.action !== "move") return;
-    expect(outcome.item.id).toBe(again.id);
-    expect(outcome.item.barcode).toBe("222");
-    expect(outcome.item.auto?.photos).toEqual(photos);
-    expect(outcome.item.condition).toEqual({ disc: "Near mint" });
+  it("keeps the photos and grades taken after a misread scan, on the same CD with the new barcode", () => {
+    const first = withWork({ ...queue("111")[0], lookup: "error", error: "Not found" });
+    const out = retryScan([first], first.id, "222", now);
+    expect(out).toMatchObject({ id: first.id, isNew: true });
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0]).toMatchObject({ id: first.id, barcode: "222", lookup: "queued", condition: { disc: "Near mint" } });
+    expect(out.items[0].error).toBeUndefined();
+    expect(out.items[0].auto?.photos).toEqual(photos);
   });
 
-  it("keeps the CD when the rescan reads the same barcode", () => {
+  it("keeps the CD as it is when the rescan reads the same barcode", () => {
+    const first = withWork(queue("111")[0]);
+    expect(retryScan([first], first.id, "111", now)).toEqual({ items: [first], id: first.id, isNew: true });
+  });
+
+  it("drops a first scan with no photos or grades and adds the new barcode, as before", () => {
     const [first] = queue("111");
-    expect(retryScan(withWork(first), withWork(first))).toEqual({ action: "keep" });
+    const out = retryScan([first], first.id, "222", now);
+    expect(out.items.map((x) => x.barcode)).toEqual(["222"]);
+    expect(out.isNew).toBe(true);
   });
 
-  it("drops a first scan with no photos or grades, as before", () => {
-    const [first, again] = queue("111", "222");
-    expect(retryScan(first, again)).toEqual({ action: "remove" });
+  it("moves the work to a CD already in the pile with that barcode", () => {
+    const [other, plain] = queue("222", "111");
+    const first = withWork(plain);
+    const out = retryScan([other, first], first.id, "222", now);
+    expect(out).toMatchObject({ id: other.id, isNew: false });
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0].auto?.photos).toEqual(photos);
   });
 
   it("never overwrites a CD that already has its own photos", () => {
-    const [first, other] = queue("111", "222");
-    expect(retryScan(withWork(first), withWork(other))).toEqual({ action: "keep" });
+    const [a, b] = queue("222", "111").map(withWork);
+    const out = retryScan([a, b], b.id, "222", now);
+    expect(out.items).toEqual([a, b]);
+    expect(out.id).toBe(a.id);
   });
 });
