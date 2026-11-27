@@ -1,6 +1,9 @@
 # Builds a debug APK you can install on your phone.
 # Run it from the Actions tab ("Build Android APK" > Run workflow), then
 # download the "ebay-lister-debug-apk" artifact from the run page.
+# Every APK is signed with the same key (secret ANDROID_KEYSTORE_BASE64, see
+# docs/android.md) and gets a higher version number (the run number), so a new
+# APK installs over the old one as an update and the app's data is kept.
 # Set the repository variable CAP_SERVER_URL (Settings > Secrets and variables
 # > Actions > Variables) to your hosted server, e.g. https://ebay-lister.vercel.app
 name: Build Android APK
@@ -35,9 +38,25 @@ jobs:
           java-version: 21
       - run: npm ci
       - run: npm run cap:sync
+      - name: Write the signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 is not set. This APK gets a one-off key and will NOT install over the app on your phone. See docs/android.md."
+          else
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ebaylister.keystore"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/ebaylister.keystore" >> "$GITHUB_ENV"
+          fi
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          # Run number + 100 keeps the code above any APK built before this numbering.
+          export APP_VERSION_CODE=$((GITHUB_RUN_NUMBER + 100))
+          echo "versionCode $APP_VERSION_CODE"
+          ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: ebay-lister-debug-apk

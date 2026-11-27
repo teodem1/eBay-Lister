@@ -7,8 +7,10 @@ android {
         applicationId "com.teodem1.ebaylister"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI passes the run number so every new APK has a higher version
+        // and Android installs it as an update over the old one.
+        versionCode((System.getenv("APP_VERSION_CODE") ?: "1").toInteger())
+        versionName "1.0." + (System.getenv("APP_VERSION_CODE") ?: "1")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,7 +18,30 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One fixed signing key for every APK, so a new APK can update the
+    // installed app. CI writes the key from the ANDROID_KEYSTORE_BASE64
+    // secret and sets ANDROID_KEYSTORE_FILE. Without it, Gradle's own
+    // per-machine debug key is used (fine on one computer, but each CI run
+    // would get a different key and Android would refuse the update).
+    def keystorePath = System.getenv("ANDROID_KEYSTORE_FILE")
+    def keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "ebaylister"
+    def hasStableKey = keystorePath && file(keystorePath).exists()
+    signingConfigs {
+        if (hasStableKey) {
+            stable {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "ebaylister"
+                keyPassword keystorePassword
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (hasStableKey) {
+                signingConfig signingConfigs.stable
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
