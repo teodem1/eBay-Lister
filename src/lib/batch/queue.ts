@@ -227,3 +227,33 @@ function newId(): string {
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Whether the seller already did work on this CD on the scan card (photos or grades). */
+export function hasScanWork(item: BatchItem): boolean {
+  return (item.auto?.photos.length ?? 0) > 0 || Object.values(item.condition ?? {}).some((v) => v !== undefined && v !== "");
+}
+
+/**
+ * "Try again" on the scan card, once the new barcode is in: what to do with the
+ * CD scanned first. Photos and grades taken after the first scan move to the
+ * CD scanned again, so a misread barcode never costs the seller their photos.
+ * - `keep`: the rescan found the same CD, or both CDs already have work (nothing lost).
+ * - `remove`: the first CD had no work, drop it as before.
+ * - `move`: put `item` (the rescanned CD with the first one's photos and grades) in place, then drop the first.
+ */
+export function retryScan(
+  first: BatchItem | undefined,
+  rescanned: BatchItem,
+): { action: "keep" } | { action: "remove" } | { action: "move"; item: BatchItem } {
+  if (!first || first.id === rescanned.id) return { action: "keep" };
+  if (!hasScanWork(first)) return { action: "remove" };
+  if (hasScanWork(rescanned)) return { action: "keep" };
+  return {
+    action: "move",
+    item: {
+      ...rescanned,
+      condition: first.condition,
+      ...(first.auto ? { auto: { ...(rescanned.auto ?? { stage: "waiting" as const }), photos: first.auto.photos } } : {}),
+    },
+  };
+}

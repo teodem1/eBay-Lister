@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { normalizeGtin } from "@/lib/identify/barcode";
 import { scanBarcode } from "@/lib/native/barcode";
 import { isNativeApp } from "@/lib/native/platform";
-import { batchItemName, type BatchItem } from "@/lib/batch/queue";
+import { batchItemName, retryScan, type BatchItem } from "@/lib/batch/queue";
 import type { BatchStore } from "@/lib/batch/store";
 import CdCover from "./CdCover";
 import { Icon, Spinner } from "./ui";
@@ -46,21 +46,47 @@ export default function StackScan({
   const [count, setCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  // "Try again": the CD scanned first, kept (with its photos and grades) until the new barcode is in.
+  const retrying = useRef<string | null>(null);
+  // The same id as state, so the Auto tab keeps holding that CD back while the scanner is open.
+  const [retryId, setRetryIdState] = useState<string | null>(null);
+  function setRetry(id: string | null) {
+    retrying.current = id;
+    setRetryIdState(id);
+  }
 
   function handle(raw: string) {
     setScanning(false);
     const gtin = normalizeGtin(raw);
     if (!gtin) {
+      // Not a barcode: a retry stays open, so the next Try again still replaces the CD scanned first.
       setLast({ invalid: raw });
       return;
     }
+    const firstId = retrying.current;
+    setRetry(null);
     const result = store.add(gtin);
-    if ("duplicate" in result) {
-      setLast({ id: result.duplicate.id, duplicate: true });
-    } else {
-      setLast({ id: result.added.id, duplicate: false });
-      setCount((n) => n + 1);
+    const scanned = "duplicate" in result ? result.duplicate : result.added;
+    let isNew = "added" in result;
+    if (firstId) {
+      const outcome = retryScan(store.get(firstId), scanned);
+      if (outcome.action === "move") store.put(outcome.item);
+      if (outcome.action !== "keep") {
+        store.remove(firstId);
+        setCount((n) => Math.max(0, n - 1));
+      }
+      // The rescan found the CD scanned first: it is still the one just added.
+      if (scanned.id === firstId) isNew = true;
     }
+    setLast({ id: scanned.id, duplicate: !isNew });
+    if (isNew && scanned.id !== firstId) setCount((n) => n + 1);
+  }
+
+  /** The scanner closed with no barcode during a retry: show the CD scanned first again. */
+  function cancelRetry() {
+    const firstId = retrying.current;
+    setRetry(null);
+    if (firstId && store.get(firstId)) setLast({ id: firstId, duplicate: false });
   }
 
   async function scanOnce() {
@@ -72,17 +98,19 @@ export default function StackScan({
     try {
       const code = await scanBarcode();
       if (code) handle(code);
+      else cancelRetry();
     } catch (err) {
+      cancelRetry();
       setError(`Scanner error: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  /** Drops the CD just scanned (if it was new) and opens the scanner again. */
+  /**
+   * Scans the CD again. The CD scanned first (if it was new) is replaced once
+   * the new barcode is in, and its photos and grades move to it (`retryScan`).
+   */
   function tryAgain() {
-    if (last && "id" in last && !last.duplicate) {
-      store.remove(last.id);
-      setCount((n) => Math.max(0, n - 1));
-    }
+    if (last && "id" in last) setRetry(last.duplicate ? null : last.id);
     setLast(null);
     scanOnce();
   }
@@ -97,7 +125,7 @@ export default function StackScan({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
-  const currentId = last && "id" in last ? last.id : null;
+  const currentId = last && "id" in last ? last.id : retryId;
   useEffect(() => {
     onCurrent?.(currentId);
   }, [currentId, onCurrent]);
@@ -114,7 +142,7 @@ export default function StackScan({
   return (
     <>
       {!last && (
-        <button type="button" onClick={() => { setCount(0); scanOnce(); }} className="btn btn-primary btn-lg w-full">
+        <button type="button" onClick={() => { setRetry(null); setCount(0); scanOnce(); }} className="btn btn-primary btn-lg w-full">
           <Icon name="stack" size={22} strokeWidth={1.8} />
           Scan a stack
         </button>
@@ -164,18 +192,18 @@ export default function StackScan({
             <button type="button" className={`btn btn-lg ${notFound ? "btn-primary" : "btn-secondary"}`} onClick={tryAgain}>
               Try again
             </button>
-            <button type="button" className={`btn btn-lg ${notFound ? "btn-secondary" : "btn-primary"}`} onClick={() => { setLast(null); scanOnce(); }}>
+            <button type="button" className={`btn btn-lg ${notFound ? "btn-secondary" : "btn-primary"}`} onClick={() => { setRetry(null); setLast(null); scanOnce(); }}>
               Next CD
               <Icon name="arrow" />
             </button>
           </div>
-          <button type="button" className="link t-small self-center px-2 py-1" onClick={() => setLast(null)}>
+          <button type="button" className="link t-small self-center px-2 py-1" onClick={() => { setRetry(null); setLast(null); }}>
             Done scanning
           </button>
         </div>
       )}
 
-      {scanning && <BarcodeScanner onDetected={handle} onClose={() => setScanning(false)} />}
+      {scanning && <BarcodeScanner onDetected={handle} onClose={() => { setScanning(false); cancelRetry(); }} />}
     </>
   );
 }
