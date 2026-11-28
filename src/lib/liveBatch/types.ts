@@ -12,6 +12,8 @@ export interface IndexEntry {
   runId?: string;
   /** When the status last changed (ISO). */
   updatedAt: string;
+  /** While reserved: the entry before the run took it, restored if the run gives it back. */
+  before?: { status: EntryStatus; updatedAt: string };
 }
 
 /** By SKU. */
