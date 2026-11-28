@@ -17,7 +17,9 @@ import { getEbayClient } from "@/lib/ebay";
 import { findBothComparables } from "@/lib/ebay/comparables";
 import { SOLD_LIMIT_NOTE, soldLookbackDays } from "@/lib/ebay/soldComps";
 import type { ComparableQuery, ComparableResult } from "@/lib/ebay/types";
-import { suggestPrice } from "@/lib/pricing/suggestPrice";
+import { suggestPrice, type LearnedPosition } from "@/lib/pricing/suggestPrice";
+import { engagementLevel, learnedPosition } from "@/lib/learning/outcomes";
+import { readOutcomes } from "@/lib/learning/store";
 import { onlyCds, sameCondition, searchName } from "@/lib/pricing/version";
 import type { Condition } from "@/lib/ebay/sell";
 
@@ -71,7 +73,22 @@ export async function POST(request: Request) {
     // With the seller's grades, only copies in that condition count (sealed vs used, same grade).
     const cdsOnly = (r: ComparableResult | null) =>
       r && { ...r, items: sameCondition(onlyCds(r.items, query.keywords), sellerCondition) };
-    const suggest = (raw: ComparableResult | null, unit: string, r = cdsOnly(raw)) =>
+    // The seller's own sales teach where CDs with this much interest sell (src/lib/learning): the typical
+    // sold price is taken there. Needs both sides to read the interest; any failure keeps the median.
+    let learned: LearnedPosition | undefined;
+    const soldCds = cdsOnly(both.sold);
+    const listedCds = cdsOnly(both.current);
+    const learningStore = soldCds && listedCds ? blobBackend() : null;
+    if (learningStore && soldCds && listedCds) {
+      try {
+        const level = engagementLevel(soldCds.items, new Date().toISOString(), listedCds.items.length);
+        const position = learnedPosition(await readOutcomes(learningStore), level);
+        if (position) learned = { ...position, level };
+      } catch (err) {
+        console.error("reading sale records failed", err);
+      }
+    }
+    const suggest = (raw: ComparableResult | null, unit: string, r = cdsOnly(raw), learnedAt?: LearnedPosition) =>
       r
         ? {
             suggestion: suggestPrice(r, {
@@ -81,13 +98,14 @@ export async function POST(request: Request) {
               homeCountry: query.destinationCountry,
               keywords: query.keywords,
               unit,
+              learned: learnedAt,
             }),
             comparables: r,
           }
         : null;
     return Response.json({
       current: suggest(both.current, "listings"),
-      sold: suggest(both.sold, "sales"),
+      sold: suggest(both.sold, "sales", soldCds, learned),
       unavailable: both.unavailable,
       soldLimitReached: both.soldLimitReached,
       soldRemaining: both.soldRemaining,

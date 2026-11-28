@@ -23,7 +23,7 @@ function regradeSide(
   const source: ComparableSource = suggestion.source;
   const fresh = suggestPrice(
     { source, marketplaceId: `EBAY_${homeCountry}`, items: kept, notes: [], matchedBy: "keywords" },
-    { activeListingDiscount: 0, homeCountry, keywords, unit },
+    { activeListingDiscount: 0, homeCountry, keywords, unit, learned: suggestion.learned },
   );
   return { items: kept, suggestion: fresh ?? suggestion };
 }

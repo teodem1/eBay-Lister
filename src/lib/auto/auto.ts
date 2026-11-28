@@ -128,6 +128,11 @@ export function priceEvidence(
       const cond = c.condition ? `, ${c.condition}` : "";
       lines.push(`- ${money(c.price.value)}${ship}${when}${cond}: ${c.title}`);
     }
+    if (s.learned) {
+      lines.push(
+        `Typical uses your own sales: CDs with ${s.learned.level} interest sold around the ${s.learned.percentile}th percentile (${s.learned.n} sales).`,
+      );
+    }
   };
   block("Sold copies", check.sold, check.soldItems);
   block("Listed now (asking prices)", check.current, check.currentItems);

@@ -35,6 +35,25 @@ describe("removeOutliers", () => {
   });
 });
 
+describe("suggestPrice with a learned position", () => {
+  const items = [20, 22, 24, 26, 28, 30, 32, 34, 36, 38].map((p) => comp(p, 0));
+  const r: ComparableResult = { source: "marketplace_insights", marketplaceId: "EBAY_CA", notes: [], items };
+
+  it("prices the typical copy at the percentile the seller's own sales reached", () => {
+    const plain = suggestPrice(r, { now })!;
+    const learned = suggestPrice(r, { now, learned: { percentile: 80, n: 6, level: "high" } })!;
+    expect(learned.itemPrice.recommended).toBeGreaterThan(plain.itemPrice.recommended);
+    expect(learned.itemPrice.high).toBeGreaterThanOrEqual(learned.itemPrice.recommended);
+    expect(learned.learned).toEqual({ percentile: 80, n: 6, level: "high" });
+    expect(plain.learned).toBeUndefined();
+  });
+
+  it("keeps quick sale at or under a low learned price", () => {
+    const s = suggestPrice(r, { now, learned: { percentile: 10, n: 5, level: "low" } })!;
+    expect(s.itemPrice.quickSale).toBeLessThanOrEqual(s.itemPrice.recommended);
+  });
+});
+
 describe("suggestPrice", () => {
   const sold: ComparableResult = {
     source: "marketplace_insights",

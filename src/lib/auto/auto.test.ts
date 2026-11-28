@@ -139,6 +139,12 @@ describe("Claude's price pick", () => {
     expect(text).toContain("Allowed range: 13.60 to 28.75.");
   });
 
+  it("tells Claude when the typical price comes from the seller's own sales", () => {
+    const text = priceEvidence({ ...c, sold: { ...c.sold!, learned: { percentile: 70, n: 6, level: "high" } } });
+    expect(text).toContain("Typical uses your own sales: CDs with high interest sold around the 70th percentile (6 sales).");
+    expect(priceEvidence(c)).not.toContain("your own sales");
+  });
+
   it("keeps Claude's price inside the range, else falls back", () => {
     expect(priceBounds(c)).toEqual({ min: 13.6, max: 28.75 });
     expect(finalAutoPrice(c, { price: 22, reason: "Recent sales" })).toEqual({ price: 22, basis: "Claude: Recent sales" });

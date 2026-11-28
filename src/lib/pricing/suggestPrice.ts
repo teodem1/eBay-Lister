@@ -34,6 +34,17 @@ export interface PriceOptions {
   homeCountry?: string;
   /** What a comparable is called in notes ("sales", "listings"). */
   unit?: string;
+  /**
+   * Where the seller's own sales of CDs with this interest level landed (src/lib/learning): the typical
+   * price is taken at that percentile instead of the median.
+   */
+  learned?: LearnedPosition;
+}
+
+export interface LearnedPosition {
+  percentile: number;
+  n: number;
+  level: "high" | "normal" | "low";
 }
 
 export interface Stats {
@@ -77,6 +88,8 @@ export interface PriceSuggestion {
   notes: string[];
   /** Which comparables the prices use: other versions left out, home-country copies only. */
   version: { otherVersionsLeftOut: number; homeCountry: string | null };
+  /** Set when the typical price comes from the seller's own sales at this interest level. */
+  learned?: LearnedPosition;
 }
 
 const DAY_MS = 86_400_000;
@@ -226,14 +239,16 @@ export function suggestPrice(
   if (result.source === "browse_active" && confidence === "high") confidence = "medium";
   if (kept.length < 5) notes.push("Few comparables found, treat the suggestion as a rough guide.");
 
+  const learned = opts.learned;
+  const recommended = itemFor(weightedPercentile(weighted, learned ? learned.percentile / 100 : 0.5));
   return {
     currency,
     source: result.source,
     confidence,
     itemPrice: {
-      quickSale: itemFor(weightedPercentile(weighted, 0.25)),
-      recommended: itemFor(weightedPercentile(weighted, 0.5)),
-      high: itemFor(weightedPercentile(weighted, 0.75)),
+      quickSale: Math.min(recommended, itemFor(weightedPercentile(weighted, 0.25))),
+      recommended,
+      high: Math.max(recommended, itemFor(weightedPercentile(weighted, 0.75))),
     },
     assumedShipping,
     totals,
@@ -245,5 +260,6 @@ export function suggestPrice(
     otherCurrencySkipped,
     notes,
     version: { otherVersionsLeftOut: version.otherVersionsLeftOut, homeCountry: version.homeCountry },
+    ...(learned && { learned }),
   };
 }
