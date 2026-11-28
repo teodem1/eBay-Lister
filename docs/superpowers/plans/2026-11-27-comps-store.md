@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A, deployed to production. Next: Task 0, then Tasks 1-10.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Task 1. Next: Task 2.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -60,8 +60,8 @@
 
 ### Task 0: Thread access gate (seller sets it up). Stop if it fails.
 
-- [ ] **Step 1:** At claude.ai/code, create an environment used only for this work. Edit it → **Network secrets** → **Add secret**: allowed website `e-bay-lister-nu.vercel.app`; custom header name `x-elister-key`, prefix empty, value = the access key. Add the variable `ELISTER_URL=https://e-bay-lister-nu.vercel.app` (not secret). The key is never typed in chat or stored as a variable. Then start a session on this repository, branch `comps-store`, in that environment.
-- [ ] **Step 2:** In that session, run (reads nothing and changes nothing: a GET on a POST-only route):
+- [x] **Step 1:** At claude.ai/code, create an environment used only for this work. Edit it → **Network secrets** → **Add secret**: allowed website `e-bay-lister-nu.vercel.app`; custom header name `x-elister-key`, prefix empty, value = the access key. Add the variable `ELISTER_URL=https://e-bay-lister-nu.vercel.app` (not secret). The key is never typed in chat or stored as a variable. Then start a session on this repository, branch `comps-store`, in that environment.
+- [x] **Step 2:** In that session, run (reads nothing and changes nothing: a GET on a POST-only route):
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' "$ELISTER_URL/api/price-suggestion"
@@ -69,7 +69,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "$ELISTER_URL/api/price-suggestion"
 
 Expected: `405` (let through). `401`: secret not attached. Anything else: stop and revisit.
 
-- [ ] **Step 3:** Confirm the session lists the project skill `/optimise-listing` and the project agents `source-collector`, `listing-writer` and `collector-appraiser`, all without an `ebay-cd-optimiser:` prefix (prefixed ones are the older account plugin, which the seller should turn off). Use a normal session, not a thread in a Claude Code project, which does not load them. If any is missing, stop and fix the loading before Task 1.
+- [x] **Step 3:** Confirm the session lists the project skill `/optimise-listing` and the project agents `source-collector`, `listing-writer` and `collector-appraiser`, all without an `ebay-cd-optimiser:` prefix (prefixed ones are the older account plugin, which the seller should turn off). Use a normal session, not a thread in a Claude Code project, which does not load them. If any is missing, stop and fix the loading before Task 1.
 
 ### Task 1: Lookup record and keys (app)
 
@@ -83,15 +83,15 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - `lookupKeys(q: { barcode?: string; name?: string }): string[]`
 - `filterLookup(queries: SoldQuery[], name?: string, condition?: Condition): Filtered`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
   - `lookupKeys({barcode:"0075678154323", name:"Genesis Wind & Wuthering"})` equals `["comps/upc/075678154323.json","comps/name/genesis-wind-wuthering.json"]`
   - `"Amélie  Poulain!"` gives `comps/name/amelie-poulain.json`
   - `{name:"???"}` and `{barcode:"123"}` give `[]`
   - `filterLookup` uses the **last** query's items (the set the app prices from); drops a vinyl title; with `LIKE_NEW` and 3 like-new sales keeps only those; lists a "Canadian" title under `detail.canadian`
-- [ ] **Step 2:** `npx vitest run src/lib/comps` — FAIL, module missing.
-- [ ] **Step 3: Implement.** Barcode: 8–14 digits through `barcodeKeyword`. Name: NFKD, strip marks, lowercase, non letter/number runs to `-`, trim, max 120. Filtering: `onlyCds` then `sameCondition`.
-- [ ] **Step 4:** Tests PASS.
-- [ ] **Step 5:** Commit `feat: stored sold lookup record`.
+- [x] **Step 2:** `npx vitest run src/lib/comps` — FAIL, module missing.
+- [x] **Step 3: Implement.** Barcode: 8–14 digits through `barcodeKeyword`. Name: NFKD, strip marks, lowercase, non letter/number runs to `-`, trim, max 120. Filtering: `onlyCds` then `sameCondition`.
+- [x] **Step 4:** Tests PASS.
+- [x] **Step 5:** Commit `feat: stored sold lookup record`.
 
 ### Task 2: Blob store (app)
 
