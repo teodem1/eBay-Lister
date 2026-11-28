@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-7. Next: Task 8. SKILL.md and README still describe the old C$40 gate until Task 9.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-8. Next: Task 9. SKILL.md and README still describe the old C$40 gate until Task 9.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -194,11 +194,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - `apply(app, snapshot, proposal, accept_pending=False) -> {"sku","text": "updated"|"unchanged"|"skipped"|"failed","price": same set,"reason"}`
 - CLI `changes.py check|apply`; `apply` takes `approved` and `accept_pending` SKU lists
 
-- [ ] **Step 1: Failing tests:** problems for title over 80; a word of the old title (outside the grade suffix) missing; grades changed (short form of the same grades allowed); an added specific that already exists in any letter case. Apply: SKU not in `approved` sends nothing; title or price differing from the snapshot on re-read skips both; text goes to `/api/listing/refresh/apply` as old specifics plus additions and old description plus `append_html`, **without** `price`; price goes to `/api/listing/update-details` with `sku` only (no barcode), `before`/`after` = `{"title":"-","artist":"-","price":...}`; pending price used only when accepted; text ok and price error → `"updated"` / `"failed"`; text skipped → no price call.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement;** `apply` runs `check` first and refuses on any problem.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: approved listing changes`.
+- [x] **Step 1: Failing tests:** problems for title over 80; a word of the old title (outside the grade suffix) missing; grades changed (short form of the same grades allowed); an added specific that already exists in any letter case. Apply: SKU not in `approved` sends nothing; title or price differing from the snapshot on re-read skips both; text goes to `/api/listing/refresh/apply` as old specifics plus additions and old description plus `append_html`, **without** `price`; price goes to `/api/listing/update-details` with `sku` only (no barcode), `before`/`after` = `{"title":"-","artist":"-","price":...}`; pending price used only when accepted; text ok and price error → `"updated"` / `"failed"`; text skipped → no price call.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement;** `apply` runs `check` first and refuses on any problem.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: approved listing changes`.
 
 ### Task 9: Skill and agents
 
