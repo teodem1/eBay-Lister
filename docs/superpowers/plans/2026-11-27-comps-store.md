@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-4. Next: Task 5.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-5 (app part done). Next: Task 6 (plugin).
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -142,11 +142,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 
 **Interfaces — Produces:** `GET /api/listing/refresh/read?sku=` → `{sku, listingId?, title, price?, currency?, barcode?, query, aspects, descriptionHtml, conditionDescription?, sellerCondition?, imageUrls}`; 404 when not live. `readListing(client, sku): Promise<LiveDetail | null>`
 
-- [ ] **Step 1: Failing tests** using the file's `fakeClient`: values for the fixture (`price 17.5`, `currency "CAD"`, `barcode "075678154323"`, `query "Genesis Wind & Wuthering"`); `null` without a published offer; no `put*` call.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement** with the existing private helpers.
-- [ ] **Step 4:** `npm test && npm run lint && npm run build` — all pass.
-- [ ] **Step 5:** Commit `feat: read one live listing`.
+- [x] **Step 1: Failing tests** using the file's `fakeClient`: values for the fixture (`price 17.5`, `currency "CAD"`, `barcode "075678154323"`, `query "Genesis Wind & Wuthering"`); `null` without a published offer; no `put*` call.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement** with the existing private helpers.
+- [x] **Step 4:** `npm test && npm run lint && npm run build` — all pass.
+- [x] **Step 5:** Commit `feat: read one live listing`.
 
 ### Task 6: Cache-first client (plugin)
 
