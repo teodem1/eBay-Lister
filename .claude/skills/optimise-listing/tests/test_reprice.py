@@ -106,6 +106,12 @@ class KeepIfLowerTest(unittest.TestCase):
         self.assertEqual((r["base"], r["proposed"], r["over_50"]), (5, 12.99, False))
         self.assertIn("short name", r["reason"])
 
+    def test_the_lower_price_is_offered_separately(self):
+        r = reprice(12.99, plain(4, 5, 6), [], keep_if_lower=True)
+        self.assertEqual(r["lower"], {"price": 5, "over_50": True})
+        self.assertIsNone(reprice(8, plain(10, 12, 14), [], keep_if_lower=True)["lower"])
+        self.assertIsNone(reprice(12.99, plain(4, 5, 6), [])["lower"])
+
     def test_short_name_sales_may_still_raise_it(self):
         self.assertEqual(reprice(8, plain(10, 12, 14), [], keep_if_lower=True)["proposed"], 12)
 

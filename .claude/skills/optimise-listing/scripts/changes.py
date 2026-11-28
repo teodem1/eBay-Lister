@@ -2,11 +2,11 @@
 
     changes.py check   stdin {"items": [{"snapshot" | "snapshot_file", "proposal"}]}
                        -> [{"sku", "problems"}]
-    changes.py apply   stdin {"items": [...], "approved": [sku], "accept_pending": [sku]}
+    changes.py apply   stdin {"items": [...], "approved": [sku], "accept_pending": [sku], "accept_lower": [sku]}
                        -> [{"sku", "text", "price", "reason"}]
 
 A snapshot is the listing as `listings.py read` saved it. A proposal is
-{"sku", "title", "add_aspects", "append_html", "price", "pending_price"}: nothing in it
+{"sku", "title", "add_aspects", "append_html", "price", "pending_price", "lower_price"}: nothing in it
 removes anything. Title, item specifics and description go to /api/listing/refresh/apply
 (old specifics plus the additions, old description plus `append_html`, no price);
 the price goes alone to /api/listing/update-details by SKU. A listing whose title or
@@ -97,9 +97,12 @@ def check(snapshot, proposal):
             problems.append(f"Item specific {name} needs one or more values.")
     if not isinstance(proposal.get("append_html") or "", str):
         problems.append("append_html must be text.")
-    for key in ("price", "pending_price"):
+    for key in ("price", "pending_price", "lower_price"):
         if proposal.get(key) is not None and not _positive(proposal.get(key)):
             problems.append(f"{key} must be a positive number.")
+    lower, price = proposal.get("lower_price"), proposal.get("price")
+    if _positive(lower) and _positive(price) and lower >= price:
+        problems.append("lower_price must be below price.")
     return problems
 
 
@@ -107,7 +110,8 @@ def _same_price(a, b):
     return a is not None and b is not None and abs(float(a) - float(b)) < 0.005
 
 
-def apply(app, snapshot, proposal, accept_pending=False):
+def apply(app, snapshot, proposal, accept_pending=False, accept_lower=False):
+    """A pending (higher) or lower price is sent only when the seller accepted it for this SKU."""
     sku = snapshot.get("sku")
     out = {"sku": sku, "text": "skipped", "price": "skipped", "reason": ""}
     problems = check(snapshot, proposal)
@@ -158,8 +162,18 @@ def apply(app, snapshot, proposal, accept_pending=False):
         reasons.append("The listing has no price, so no price was sent.")
         out["reason"] = " ".join(reasons)
         return out
-    pending = proposal.get("pending_price")
-    target = pending if accept_pending and pending is not None else proposal.get("price")
+    pending, lower = proposal.get("pending_price"), proposal.get("lower_price")
+    if accept_pending and pending is not None and accept_lower and lower is not None:
+        out["price"] = "skipped"
+        reasons.append("Both the pending (higher) and the lower price were accepted; accept one, then apply again.")
+        out["reason"] = " ".join(reasons)
+        return out
+    if accept_lower and lower is not None:
+        target = lower
+    elif accept_pending and pending is not None:
+        target = pending
+    else:
+        target = proposal.get("price")
     if target is None or _same_price(target, live.get("price")):
         out["price"] = "unchanged"
     else:
@@ -178,7 +192,7 @@ def apply(app, snapshot, proposal, accept_pending=False):
     return out
 
 
-def apply_batch(app, items, approved, accept_pending):
+def apply_batch(app, items, approved, accept_pending, accept_lower=()):
     results = []
     for item in items:
         snapshot, proposal = item["snapshot"], item["proposal"]
@@ -186,7 +200,9 @@ def apply_batch(app, items, approved, accept_pending):
             results.append({"sku": snapshot.get("sku"), "text": "skipped", "price": "skipped",
                             "reason": "Not approved."})
             continue
-        results.append(apply(app, snapshot, proposal, accept_pending=snapshot.get("sku") in accept_pending))
+        sku = snapshot.get("sku")
+        results.append(apply(app, snapshot, proposal, accept_pending=sku in accept_pending,
+                             accept_lower=sku in accept_lower))
     return results
 
 
@@ -209,7 +225,8 @@ if __name__ == "__main__":
             result = [{"sku": i["snapshot"].get("sku"), "problems": check(i["snapshot"], i["proposal"])} for i in items]
         else:
             app = App(os.environ.get("ELISTER_URL"), os.environ.get("ELISTER_ACCESS_KEY"))
-            result = apply_batch(app, items, set(data.get("approved") or []), set(data.get("accept_pending") or []))
+            result = apply_batch(app, items, set(data.get("approved") or []), set(data.get("accept_pending") or []),
+                                 set(data.get("accept_lower") or []))
         print(json.dumps(result))
     except AppUnavailable as err:
         print(f"changes.py: {err}", file=sys.stderr)

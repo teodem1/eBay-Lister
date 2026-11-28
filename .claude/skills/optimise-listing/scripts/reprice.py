@@ -76,9 +76,12 @@ def reprice(current, items, details, keep_if_lower=False):
                   f"(all {len(values)} sales: {_money(base)}).")
     else:
         proposed, reason = base, f"{len(values)} sales in this grade, median {_money(base)}."
+    lower = None
     if keep_if_lower and current is not None and proposed is not None and proposed < current:
-        reason = (f"{reason} Those sales came from a short name search and went lower, "
-                  f"so the price stays at {_money(float(current))} (buyers search the full name).")
+        reason = (f"{reason} Those sales came from a short name search and went lower, so the price stays at "
+                  f"{_money(float(current))} (buyers search the full name); {_money(proposed)} is offered "
+                  f"as `lower`, sent only if the seller accepts it.")
+        lower = {"price": proposed, "over_50": abs(proposed - current) / current > FLAG_CHANGE}
         proposed, applied = round(float(current), 2), None
     if pending and (proposed is None or pending[1] <= proposed):
         pending = None
@@ -86,6 +89,7 @@ def reprice(current, items, details, keep_if_lower=False):
     return {"base": base, "count": len(values), "proposed": proposed,
             "applied_detail": applied[0] if applied else None,
             "pending": {"detail": pending[0], "price": pending[1]} if pending else None,
+            "lower": lower,
             "over_50": over_50, "reason": reason}
 
 
