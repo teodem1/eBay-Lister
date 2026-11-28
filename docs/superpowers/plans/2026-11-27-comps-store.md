@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-9 and the whole-branch review (findings fixed 2026-11-28). Next: Task 10 (each step needs the seller's approval).
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-9 and the whole-branch review (findings fixed 2026-11-28). Task 10 step 1 done. Next: Task 10 step 2 (each step needs the seller's approval).
 - Seller's decisions after the review (2026-11-28): a CD with a usable barcode is stored and read under its barcode only (`lookupKeys` returns one key: barcode, else name), so another pressing's by-name result is never used. Job B (one unlisted CD) stays not cache-first for now.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
@@ -213,7 +213,7 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 
 ### Task 10: Release (each step needs the seller's approval)
 
-- [ ] Create a private Blob store and connect it to `e-bay-lister` (Production).
+- [x] Create a private Blob store and connect it to `e-bay-lister` (Production). Done 2026-11-28: `e-bay-lister-comps`, private, iad1; `BLOB_READ_WRITE_TOKEN` added for Production, Preview and Development.
 - [ ] Merge `comps-store`, deploy, confirm the locked message still appears without the key.
 - [ ] In a new session on `main`, confirm the new `/optimise-listing` loads; `listings.py check` → reachable and authorised.
 - [ ] Import the backup (expected: 68 of its 74 checks carry sales; 6 are skipped).
