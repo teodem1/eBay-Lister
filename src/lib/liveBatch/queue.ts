@@ -99,5 +99,11 @@ export function expireRuns(runs: BatchRun[], index: BatchIndex, now: Date): { ru
     next = release(next, mine);
     return { ...r, status: "no_answer" as const, finishedAt: now.toISOString(), reason: "No answer after 2 hours." };
   });
+  // Listings held by a run with no record (its start failed half-way) come back after the same 2 hours.
+  const started = new Set(out.filter((r) => r.status === "started").map((r) => r.id));
+  const orphans = Object.entries(next)
+    .filter(([, e]) => e.status === "in_progress" && !started.has(e.runId ?? "") && now.getTime() - time(e.updatedAt) >= RUN_TIMEOUT_MS)
+    .map(([sku]) => sku);
+  if (orphans.length) next = release(next, orphans);
   return { runs: out, index: next };
 }

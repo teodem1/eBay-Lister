@@ -4,12 +4,16 @@ import type { BatchIndex, BatchRun, Proposal } from "../../../lib/liveBatch/type
 
 let files: Record<string, string> = {};
 let failReads = false;
+let failWrites: (path: string, body: string) => boolean = () => false;
 const backend: Backend = {
   read: async (p) => {
     if (failReads) throw new Error("blob down");
     return files[p] ?? null;
   },
-  write: async (p, b) => void (files[p] = b),
+  write: async (p, b) => {
+    if (failWrites(p, b)) throw new Error("blob write failed");
+    files[p] = b;
+  },
 };
 const fireRoutine = vi.fn();
 const listLiveListings = vi.fn();
@@ -61,6 +65,7 @@ beforeEach(() => {
   vi.stubEnv("ROUTINE_FIRE_TOKEN", "test-token");
   files = {};
   failReads = false;
+  failWrites = () => false;
   fireRoutine.mockReset().mockResolvedValue({ sessionId: "s1", sessionUrl: "https://claude.ai/code/session_1" });
   listLiveListings.mockReset().mockResolvedValue(live(30));
   applyProposal.mockReset();
@@ -111,6 +116,31 @@ describe("POST /api/batch/run", () => {
     failReads = true;
     expect((await run()).status).toBe(502);
     expect(fireRoutine).not.toHaveBeenCalled();
+  });
+
+  it("reserves nothing when the run record cannot be saved", async () => {
+    failWrites = (p) => p === "batch/runs.json";
+    expect((await run()).status).toBe(502);
+    expect(files["batch/index.json"]).toBeUndefined();
+    expect(fireRoutine).not.toHaveBeenCalled();
+  });
+
+  it("keeps proposals a running batch saved while this run was listing eBay", async () => {
+    const first = ((await (await run()).json()) as { run: BatchRun }).run;
+    listLiveListings.mockImplementation(async () => {
+      await postProposals(req("/api/batch/proposals", json({ runId: first.id, proposals: [proposal(first.skus[0], first.id)] })));
+      return live(30);
+    });
+    await run();
+    expect(index()[first.skus[0]].status).toBe("open");
+  });
+
+  it("keeps the reservation when the run started but its record could not be updated", async () => {
+    let saves = 0;
+    failWrites = (p) => p === "batch/runs.json" && ++saves === 2;
+    const res = await run();
+    expect(res.status).toBe(200);
+    expect(Object.values(index()).filter((e) => e.status === "in_progress")).toHaveLength(20);
   });
 
   it("says when nothing is due", async () => {
@@ -197,6 +227,31 @@ describe("POST /api/batch/apply and dismiss", () => {
     await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(r.skus[0], r.id)] })));
     expect((await postDismiss(req("/api/batch/dismiss", json({ skus: [r.skus[0]] })))).status).toBe(200);
     expect(index()[r.skus[0]].status).toBe("dismissed");
+  });
+
+  it("keeps proposals a session saved while another was being applied", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a, b] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(a, r.id)] })));
+    applyProposal.mockImplementation(async () => {
+      await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(b, r.id)] })));
+      return { status: "applied", result: { text: "updated", price: "updated", reason: "" } };
+    });
+    await postApply(req("/api/batch/apply", json({ skus: [a], acceptPending: [] })));
+    expect(read<Record<string, Proposal>>("batch/proposals.json")[b]?.status).toBe("open");
+    expect(index()[b].status).toBe("open");
+    expect(index()[a].status).toBe("applied");
+  });
+
+  it("refuses the key header itself on the phone-only routes", async () => {
+    const withKey = (body: unknown) => ({ ...json(body), headers: { "x-elister-key": "anything" } });
+    for (const res of [
+      await postApply(req("/api/batch/apply", withKey({ skus: ["S0"], acceptPending: [] }))),
+      await postDismiss(req("/api/batch/dismiss", withKey({ skus: ["S0"] }))),
+      await postRun(req("/api/batch/run", withKey({ fiveHour: 10, weekly: 10 }))),
+    ]) expect(res.status).toBe(401);
+    expect(applyProposal).not.toHaveBeenCalled();
+    expect(fireRoutine).not.toHaveBeenCalled();
   });
 
   it("never applies a proposal that is not open", async () => {

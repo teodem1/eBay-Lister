@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { AppBar, Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
 import type { BatchRun, Proposal } from "@/lib/listing/types";
-import { priceChange, proposalRows, runLabel } from "./batchView";
+import { priceChange, proposalRows, request as call, runLabel, toSend } from "./batchView";
 
 /**
  * Update live listings: starts a batch in a Claude Code cloud session (the optimise-listing
@@ -20,12 +20,6 @@ interface BatchState {
 
 const USAGE_KEY = "ebay-lister:batch-usage:v1";
 const POLL_MS = 20_000;
-
-async function call<T>(url: string, body?: unknown): Promise<{ ok: boolean; status: number; data: T }> {
-  const res = await fetch(url, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const data = (await res.json().catch(() => ({}))) as T;
-  return { ok: res.ok, status: res.status, data };
-}
 
 const noop = () => () => {};
 
@@ -69,7 +63,8 @@ export default function UpdateListingsScreen() {
   const [error, setError] = useState("");
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [pendingOk, setPendingOk] = useState<Set<string>>(new Set());
-  const [confirming, setConfirming] = useState(false);
+  /** The SKUs on screen when Update was tapped: only these can be sent, so nothing arrives unseen. */
+  const [confirming, setConfirming] = useState<string[] | null>(null);
 
   const show = useCallback((res: { ok: boolean; status: number; data: BatchState & { error?: string } }) => {
     if (res.ok) {
@@ -89,12 +84,13 @@ export default function UpdateListingsScreen() {
 
   const running = state?.runs.some((r) => r.status === "started") ?? false;
   useEffect(() => {
-    if (!running) return;
+    // No refresh while confirming: the list stays as the seller saw it.
+    if (!running || confirming) return;
     const timer = setInterval(() => {
       call<BatchState & { error?: string }>("/api/batch").then(show);
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [running, show]);
+  }, [running, confirming, show]);
 
   const { open, recent } = proposalRows(state?.proposals ?? []);
   const chosen = open.filter((p) => !skipped.has(p.sku));
@@ -125,9 +121,10 @@ export default function UpdateListingsScreen() {
   }
 
   async function update() {
-    setConfirming(false);
+    const skus = toSend(confirming ?? [], open, skipped);
+    setConfirming(null);
+    if (!skus.length) return;
     setBusy("updating");
-    const skus = chosen.map((p) => p.sku);
     const res = await call<{ error?: string }>("/api/batch/apply", { skus, acceptPending: skus.filter((s) => pendingOk.has(s)) });
     if (!res.ok) setError(res.data.error ?? `Error ${res.status}`);
     await refresh();
@@ -238,15 +235,15 @@ export default function UpdateListingsScreen() {
           <div className="mx-auto flex max-w-lg gap-2">
             {confirming ? (
               <>
-                <button type="button" className="btn btn-secondary flex-1" onClick={() => setConfirming(false)}>
+                <button type="button" className="btn btn-secondary flex-1" onClick={() => setConfirming(null)}>
                   Cancel
                 </button>
                 <button type="button" className="btn btn-primary flex-[2]" onClick={update}>
-                  Yes, update {chosen.length} on eBay
+                  Yes, update {toSend(confirming, open, skipped).length} on eBay
                 </button>
               </>
             ) : (
-              <button type="button" className="btn btn-primary w-full" disabled={!!busy} onClick={() => setConfirming(true)}>
+              <button type="button" className="btn btn-primary w-full" disabled={!!busy} onClick={() => setConfirming(chosen.map((p) => p.sku))}>
                 {busy === "updating" ? <Spinner /> : null} Update {chosen.length} listing{chosen.length === 1 ? "" : "s"} on eBay
               </button>
             )}

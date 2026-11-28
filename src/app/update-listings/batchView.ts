@@ -33,3 +33,20 @@ export function priceChange(p: Proposal): { from: number | null; to: number | nu
   const change = (to - from) / from;
   return Math.abs(change) > 0.5 ? { from, to, flag: `${change > 0 ? "+" : "-"}${Math.round(Math.abs(change) * 100)}%` } : { from, to };
 }
+
+/** A JSON request that never throws: a dropped connection comes back as an error answer, so the screen never stays busy. */
+export async function request<T>(url: string, body?: unknown): Promise<{ ok: boolean; status: number; data: T }> {
+  try {
+    const res = await fetch(url, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = (await res.json().catch(() => ({}))) as T;
+    return { ok: res.ok, status: res.status, data };
+  } catch {
+    return { ok: false, status: 0, data: { error: "No connection to the app. Check the phone's connection and try again." } as T };
+  }
+}
+
+/** What "Yes, update" sends: only the proposals shown when Update was tapped, still open and still ticked. */
+export function toSend(shown: string[], open: Proposal[], skipped: Set<string>): string[] {
+  const stillOpen = new Set(open.map((p) => p.sku));
+  return shown.filter((sku) => stillOpen.has(sku) && !skipped.has(sku));
+}

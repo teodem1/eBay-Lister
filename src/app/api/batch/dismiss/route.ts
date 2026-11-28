@@ -1,11 +1,13 @@
 /** POST /api/batch/dismiss {skus} (phone only): marks open proposals dismissed; later runs skip them for 60 days. */
 import { z } from "zod";
 import { readIndex, readProposals, writeIndex, writeProposals } from "@/lib/liveBatch/store";
-import { batchStore, storageError } from "../shared";
+import { batchStore, storageError, refuseKeyHeader } from "../shared";
 
 const Body = z.object({ skus: z.array(z.string().min(1).max(100)).min(1).max(50) });
 
 export async function POST(request: Request) {
+  const refused = refuseKeyHeader(request);
+  if (refused) return refused;
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Choose the proposals to dismiss." }, { status: 400 });
   const b = batchStore();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BatchRun, Proposal } from "@/lib/listing/types";
-import { priceChange, proposalRows, runLabel } from "./batchView";
+import { priceChange, proposalRows, request, runLabel, toSend } from "./batchView";
+import { vi } from "vitest";
 
 const NOW = new Date("2026-11-28T12:00:00.000Z");
 const run = (over: Partial<BatchRun>): BatchRun => ({
@@ -52,5 +53,22 @@ describe("priceChange", () => {
     expect(priceChange(p({ snapshot: { title: "T", price: 10 }, price: 4 }))).toEqual({ from: 10, to: 4, flag: "-60%" });
     expect(priceChange(p({ snapshot: { title: "T", price: 10 }, price: 12 }))).toEqual({ from: 10, to: 12 });
     expect(priceChange(p({ snapshot: { title: "T", price: null }, price: 12 }))).toEqual({ from: null, to: 12 });
+  });
+});
+
+describe("toSend", () => {
+  it("sends only what was on screen when Update was tapped, still open and ticked", () => {
+    const open = [p({ sku: "A" }), p({ sku: "B" }), p({ sku: "NEW" })];
+    expect(toSend(["A", "B"], open, new Set(["B"]))).toEqual(["A"]);
+  });
+});
+
+describe("request", () => {
+  it("turns a dropped connection into an error answer instead of throwing", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    const res = await request("/api/batch");
+    expect(res.ok).toBe(false);
+    expect((res.data as { error: string }).error).toMatch(/connection/i);
+    vi.unstubAllGlobals();
   });
 });

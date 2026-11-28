@@ -1,4 +1,5 @@
 /** Shared by the batch routes: the Blob store or a 503, and the batch state read once per request. */
+import { KEY_HEADER } from "@/lib/auth/access";
 import { blobBackend, type Backend } from "@/lib/comps/store";
 import { expireRuns } from "@/lib/liveBatch/queue";
 import { readIndex, readRuns, saveRun, writeIndex } from "@/lib/liveBatch/store";
@@ -18,9 +19,14 @@ export async function readState(b: Backend, now: Date): Promise<{ index: BatchIn
   const [index, runs] = await Promise.all([readIndex(b), readRuns(b)]);
   const out = expireRuns(runs, index, now);
   const expired = out.runs.filter((r, i) => r !== runs[i]);
-  if (expired.length) {
-    await writeIndex(b, out.index);
-    for (const r of expired) await saveRun(b, r);
-  }
+  if (out.index !== index) await writeIndex(b, out.index);
+  for (const r of expired) await saveRun(b, r);
   return out;
+}
+
+/** Phone-only routes refuse any request carrying the key header (a cloud session), whatever path reached them. */
+export function refuseKeyHeader(request: Request): Response | null {
+  return request.headers.has(KEY_HEADER)
+    ? Response.json({ error: "Only the phone can start, send or dismiss batches." }, { status: 401 })
+    : null;
 }

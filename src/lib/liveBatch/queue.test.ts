@@ -84,6 +84,14 @@ describe("expireRuns", () => {
     status: "started",
   });
 
+  it("returns listings held by a run that has no record, once 2 hours old", () => {
+    const old = new Date(NOW.getTime() - 121 * 60_000);
+    const index = { ...reserve({}, ["X"], "lost", old), ...reserve({}, ["Y"], "lost", NOW) };
+    const out = expireRuns([], index, NOW);
+    expect(out.index.X).toBeUndefined();
+    expect(out.index.Y.status).toBe("in_progress");
+  });
+
   it("marks a run with no answer after 2 hours and returns only its unfinished listings", () => {
     const index = {
       ...reserve({}, ["A"], "old", NOW),

@@ -6,11 +6,13 @@ import { z } from "zod";
 import { errorResponse, sellClient } from "@/app/api/listing/refresh/shared";
 import { applyProposal } from "@/lib/liveBatch/apply";
 import { readIndex, readProposals, writeIndex, writeProposals } from "@/lib/liveBatch/store";
-import { batchStore, storageError } from "../shared";
+import { batchStore, storageError, refuseKeyHeader } from "../shared";
 
 const Body = z.object({ skus: z.array(z.string().min(1).max(100)).min(1).max(50), acceptPending: z.array(z.string().max(100)).max(50) });
 
 export async function POST(request: Request) {
+  const refused = refuseKeyHeader(request);
+  if (refused) return refused;
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Choose the proposals to send." }, { status: 400 });
   const b = batchStore();
@@ -35,9 +37,11 @@ export async function POST(request: Request) {
       } catch (err) {
         return errorResponse(err);
       }
+      // Read again after the eBay calls, so proposals a session saved meanwhile are kept.
       const now = new Date();
-      proposals[sku] = { ...p, status: outcome.status, result: outcome.result, doneAt: now.toISOString() };
-      await writeProposals(b, proposals, now);
+      const fresh = await readProposals(b);
+      fresh[sku] = { ...p, status: outcome.status, result: outcome.result, doneAt: now.toISOString() };
+      await writeProposals(b, fresh, now);
       const index = await readIndex(b);
       await writeIndex(b, { ...index, [sku]: { status: outcome.status, runId: p.runId, updatedAt: now.toISOString() } });
       results.push({ sku, status: outcome.status, result: outcome.result });

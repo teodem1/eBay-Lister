@@ -10,12 +10,14 @@ import { fireRoutine } from "@/lib/liveBatch/fire";
 import { estimateFits, nextDue, nextSkus, release, reserve } from "@/lib/liveBatch/queue";
 import { saveRun, writeIndex, writeLive } from "@/lib/liveBatch/store";
 import type { BatchRun } from "@/lib/liveBatch/types";
-import { batchStore, readState, storageError } from "../shared";
+import { batchStore, readState, storageError, refuseKeyHeader } from "../shared";
 
 const SIZE = 20;
 const Body = z.object({ fiveHour: z.number().min(0).max(100), weekly: z.number().min(0).max(100) });
 
 export async function POST(request: Request) {
+  const refused = refuseKeyHeader(request);
+  if (refused) return refused;
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Give both usage percentages, each from 0 to 100." }, { status: 400 });
   const { fiveHour, weekly } = parsed.data;
@@ -26,20 +28,7 @@ export async function POST(request: Request) {
   if (b instanceof Response) return b;
   const ebay = sellClient();
   if (ebay instanceof Response) return ebay;
-  const now = new Date();
-
-  let state;
-  try {
-    state = await readState(b, now);
-  } catch (err) {
-    return storageError(err);
-  }
-  const running = state.runs
-    .filter((r) => r.status === "started")
-    .reduce((n, r) => n + r.skus.filter((s) => state.index[s]?.status === "in_progress" && state.index[s]?.runId === r.id).length, 0);
-  const fit = estimateFits(fiveHour, weekly, running, SIZE);
-  if (fit.batch === 0) return Response.json({ warning: fit.reason }, { status: 409 });
-
+  // eBay first: listing takes tens of seconds, so the queue is read right before it is written.
   const live: string[] = [];
   try {
     for (let offset: number | undefined = 0; offset !== undefined; ) {
@@ -51,6 +40,19 @@ export async function POST(request: Request) {
     console.error("listing live listings failed", err);
     return Response.json({ error: "eBay live listings could not be read." }, { status: 502 });
   }
+
+  const now = new Date();
+  let state;
+  try {
+    state = await readState(b, now);
+  } catch (err) {
+    return storageError(err);
+  }
+  const running = state.runs
+    .filter((r) => r.status === "started")
+    .reduce((n, r) => n + r.skus.filter((s) => state.index[s]?.status === "in_progress" && state.index[s]?.runId === r.id).length, 0);
+  const fit = estimateFits(fiveHour, weekly, running, SIZE);
+  if (fit.batch === 0) return Response.json({ warning: fit.reason }, { status: 409 });
   const skus = nextSkus(live, state.index, now, fit.batch);
   if (!skus.length) {
     const due = nextDue(live, state.index, now);
@@ -60,28 +62,38 @@ export async function POST(request: Request) {
     );
   }
 
+  // The run record first: if the reservation is then written, a run that never answers releases it.
   const run: BatchRun = { id: crypto.randomUUID(), startedAt: now.toISOString(), fiveHour, weekly, skus, status: "started" };
   const reserved = reserve(state.index, skus, run.id, now);
   try {
-    await writeIndex(b, reserved);
     await saveRun(b, run);
+    await writeIndex(b, reserved);
     await writeLive(b, live);
   } catch (err) {
     return storageError(err);
   }
+
+  let fired;
   try {
-    const fired = await fireRoutine(process.env, JSON.stringify({ runId: run.id, fiveHour, weekly }));
-    const started = { ...run, sessionUrl: fired.sessionUrl };
-    await saveRun(b, started);
-    return Response.json({ run: started, note: fit.batch < SIZE ? fit.reason : undefined });
+    fired = await fireRoutine(process.env, JSON.stringify({ runId: run.id, fiveHour, weekly }));
   } catch (err) {
     const reason = err instanceof Error ? err.message : "The batch could not start.";
     try {
-      await writeIndex(b, release(reserved, skus));
+      const { index } = await readState(b, new Date());
+      await writeIndex(b, release(index, skus.filter((s) => index[s]?.runId === run.id)));
       await saveRun(b, { ...run, status: "failed", reason, finishedAt: new Date().toISOString() });
     } catch (e) {
       console.error("releasing a failed run failed", e);
     }
     return Response.json({ error: reason }, { status: 502 });
   }
+  // The session is running from here: a failed save must not release its listings.
+  const started = { ...run, sessionUrl: fired.sessionUrl };
+  try {
+    await saveRun(b, started);
+  } catch (err) {
+    console.error("saving the started run failed", err);
+    return Response.json({ run: started, note: "The run started, but its session link could not be saved." });
+  }
+  return Response.json({ run: started, note: fit.batch < SIZE ? fit.reason : undefined });
 }

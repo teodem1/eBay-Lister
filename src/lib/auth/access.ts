@@ -59,8 +59,13 @@ export const KEY_HEADER = "x-elister-key";
 export const PHONE_ONLY = ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss"];
 
 export function isPhoneOnly(pathname: string): boolean {
-  const path = pathname.replace(/\/+$/, "");
-  return PHONE_ONLY.includes(path);
+  let path = pathname;
+  try {
+    path = decodeURIComponent(pathname);
+  } catch {
+    // Malformed encoding: compare as given.
+  }
+  return PHONE_ONLY.includes(path.toLowerCase().replace(/\/+$/, ""));
 }
 
 /** True only when a key is set and the header holds exactly that key (compared as hashes). */
