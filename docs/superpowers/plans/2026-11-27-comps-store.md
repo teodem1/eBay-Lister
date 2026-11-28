@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-3. Next: Task 4.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-4. Next: Task 5.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -130,11 +130,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - `POST /api/comps/import` `{items:[{barcode?, priceCheckedAt, priceCheck:{keywords, condition?, soldItems}}]}` (≤300) → `{saved, kept, skipped}`
 - `importBackup(b: Backend, items): Promise<{saved:number; kept:number; skipped:number}>`
 
-- [ ] **Step 1: Failing tests:** each status above; import marks `partial:true`, `savedAt` = `priceCheckedAt`, one `keywords` query; empty or missing `soldItems` counts as skipped; an existing full lookup counts as kept.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.** zod validation; require `itemId`, `title`, `price.value`, `price.currency` per sale. The proxy already guards `/api/*`.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: stored lookup read and backup import`.
+- [x] **Step 1: Failing tests:** each status above; import marks `partial:true`, `savedAt` = `priceCheckedAt`, one `keywords` query; empty or missing `soldItems` counts as skipped; an existing full lookup counts as kept.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.** zod validation; require `itemId`, `title`, `price.value`, `price.currency` per sale. The proxy already guards `/api/*`.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: stored lookup read and backup import`.
 
 ### Task 5: Read one live listing (app)
 
