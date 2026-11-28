@@ -17,9 +17,15 @@ const c = (itemId: string, title: string, value: number, condition: string | nul
 });
 
 describe("lookupKeys", () => {
-  it("keys a barcode as the bare UPC and the name as a slug", () => {
+  it("keys a barcoded CD by its bare UPC only, so another pressing's by-name result is never used", () => {
     expect(lookupKeys({ barcode: "0075678154323", name: "Genesis Wind & Wuthering" })).toEqual([
       "comps/upc/075678154323.json",
+    ]);
+  });
+
+  it("keys a CD without a usable barcode by its name", () => {
+    expect(lookupKeys({ name: "Genesis Wind & Wuthering" })).toEqual(["comps/name/genesis-wind-wuthering.json"]);
+    expect(lookupKeys({ barcode: "123", name: "Genesis Wind & Wuthering" })).toEqual([
       "comps/name/genesis-wind-wuthering.json",
     ]);
   });

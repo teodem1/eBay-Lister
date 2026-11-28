@@ -46,14 +46,16 @@ function nameSlug(name: string): string {
     .replace(/-+$/, "");
 }
 
-/** Storage keys for a lookup: the barcode's, then the name's. A key that would be empty or shared is left out. */
+/**
+ * The storage key for a lookup: the barcode's when it has a usable one (that exact
+ * pressing, never another pressing's by-name result), else the name's. Empty when
+ * neither gives a key, so nothing is stored under a shared one.
+ */
 export function lookupKeys(q: { barcode?: string; name?: string }): string[] {
-  const keys: string[] = [];
   const digits = (q.barcode ?? "").replace(/\D/g, "");
-  if (digits.length >= 8 && digits.length <= 14) keys.push(`comps/upc/${barcodeKeyword(digits)}.json`);
+  if (digits.length >= 8 && digits.length <= 14) return [`comps/upc/${barcodeKeyword(digits)}.json`];
   const slug = nameSlug(q.name ?? "");
-  if (slug) keys.push(`comps/name/${slug}.json`);
-  return keys;
+  return slug ? [`comps/name/${slug}.json`] : [];
 }
 
 /**

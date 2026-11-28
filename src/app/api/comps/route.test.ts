@@ -70,10 +70,12 @@ describe("GET /api/comps", () => {
     expect(json.filtered.sameGrade).toEqual(["ln1", "ln2", "ln3"]);
   });
 
-  it("finds by name when the barcode has no file", async () => {
+  it("never answers a barcoded CD with a by-name result", async () => {
     backend = memory({ "comps/name/genesis-wind-wuthering.json": JSON.stringify(stored) });
     const json = await (await get("barcode=0075678154323&name=Genesis%20Wind%20%26%20Wuthering")).json();
-    expect(json.found).toBe(true);
+    expect(json).toEqual({ found: false });
+    const byName = await (await get("name=Genesis%20Wind%20%26%20Wuthering")).json();
+    expect(byName.found).toBe(true);
   });
 
   it("answers found:false when nothing is stored", async () => {
