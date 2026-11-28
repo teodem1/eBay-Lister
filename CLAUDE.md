@@ -151,7 +151,8 @@ Screens (phone first):
   eBay" or "Dismiss"; "Show the sales" lists its stored same-grade sales (`/api/batch/sales`, `listingSales`, no lookup;
   tap for `ComparableSheet`), and "Ask Claude" (`/api/batch/ask`, `askAboutProposal` in `src/lib/liveBatch/ask.ts`,
   `claude-haiku-5-5` on the app's API key) re-weighs the seller's note against those sales and marks the matching ones;
-  its title and price only fill the edit fields ("Use this"). Review, edit and ask are phone only too.
+  it always re-proposes the price from what the seller adds (`basis` matching or estimate, old price kept) and may
+  suggest a title, which only fills the field ("Use this title"). Review, edit and ask are phone only too.
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in

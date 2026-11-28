@@ -68,7 +68,7 @@ describe("salesText", () => {
 
 describe("askAboutProposal", () => {
   it("sends the note, the proposal and the sales to the small model, and lists the target with room for offers", async () => {
-    const { client, parse } = fakeClient({ answer: "LED copies sold higher.", matching: [2, 9], targetPrice: 55, title: null });
+    const { client, parse } = fakeClient({ answer: "LED copies sold higher.", matching: [2, 9], basis: "matching", targetPrice: 55, title: null });
     const out = await askAboutProposal(live, proposal, "My copy has the working LED spine.", sales, client);
     const req = parse.mock.calls[0][0];
     expect(req.model).toBe(ASK_MODEL);
@@ -80,26 +80,33 @@ describe("askAboutProposal", () => {
     expect(out.price).toBe(55); // a raise is proposed as is; Best Offer room only changes drops
     expect(out.answer).toBe("LED copies sold higher.");
     expect(out.matching).toEqual(["b"]); // line 2 is sale "b"; a line that does not exist is ignored
+    expect([out.basis, out.previousPrice]).toEqual(["matching", 21.95]);
   });
 
   it("lists a lower target with room for a Best Offer", async () => {
-    const { client } = fakeClient({ answer: "a", matching: [1, 2], targetPrice: 20, title: null });
+    const { client } = fakeClient({ answer: "a", matching: [1, 2], basis: "matching", targetPrice: 20, title: null });
     const out = await askAboutProposal(live, proposal, "note", sales, client);
     expect([out.target, out.price]).toEqual([20, 23.53]);
   });
 
   it("keeps a title suggestion only when it passes the sending checks", async () => {
     const good = OLD.replace("RARE CD", "RARE LED Spine CD");
-    const ok = await askAboutProposal(live, proposal, "note", sales, fakeClient({ answer: "a", matching: [2], targetPrice: null, title: good }).client);
+    const ok = await askAboutProposal(live, proposal, "note", sales, fakeClient({ answer: "a", matching: [2], basis: "estimate", targetPrice: 18.66, title: good }).client);
     expect(ok.title).toBe(good);
     const dropsWord = "Genesis Wind & Wuthering LED CD (Disc: Near Mint / Inlay: Very Good)";
-    const bad = await askAboutProposal(live, proposal, "note", sales, fakeClient({ answer: "a", matching: [2], targetPrice: null, title: dropsWord }).client);
+    const bad = await askAboutProposal(live, proposal, "note", sales, fakeClient({ answer: "a", matching: [2], basis: "estimate", targetPrice: 18.66, title: dropsWord }).client);
     expect(bad.title).toBeNull();
-    expect(bad.price).toBe(proposal.price);
   });
 
-  it("keeps the proposal's price when Claude finds no target", async () => {
-    const out = await askAboutProposal(live, proposal, "note", [], fakeClient({ answer: "No sales to compare.", matching: [], targetPrice: null, title: null }).client);
-    expect([out.target, out.price]).toEqual([null, 21.95]);
+  it("re-proposes a price as an estimate when fewer than 2 sales match", async () => {
+    const out = await askAboutProposal(live, proposal, "LED spine works", sales, fakeClient({ answer: "One LED sale at C$55.", matching: [2], basis: "estimate", targetPrice: 45, title: null }).client);
+    expect([out.basis, out.target, out.price]).toEqual(["estimate", 45, 45]);
+  });
+
+  it("keeps the proposal's price when Claude gives no usable price", async () => {
+    for (const targetPrice of [0, -3]) {
+      const out = await askAboutProposal(live, proposal, "note", [], fakeClient({ answer: "No sales to compare.", matching: [], basis: "estimate", targetPrice, title: null }).client);
+      expect([out.target, out.price]).toEqual([null, 21.95]);
+    }
   });
 });

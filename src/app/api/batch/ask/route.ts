@@ -1,7 +1,8 @@
 /**
  * POST /api/batch/ask {sku, note} (phone only): "Ask Claude" on a proposal that is open or in Review.
  * The seller's note and the listing's stored same-grade sales go to a small model (app's Claude API key);
- * the answer is saved on the proposal. No sold lookup, nothing sent to eBay, the proposal itself unchanged.
+ * the answer is saved on the proposal and its price re-proposed (old price kept in the answer). No sold lookup,
+ * nothing sent to eBay: the seller still sends it.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
@@ -53,7 +54,22 @@ export async function POST(request: Request) {
   try {
     const now = new Date();
     const fresh = await readProposals(b);
-    if (fresh[sku]) fresh[sku] = { ...fresh[sku], asked };
+    const cur = fresh[sku];
+    if (cur) {
+      // The answer re-proposes the price; the old one stays in `asked.previousPrice`. Nothing is sent to eBay.
+      const repriced = asked.target !== null && asked.price !== null;
+      const money = (n: number | null) => (n === null ? "no price" : `C$${n.toFixed(2)}`);
+      const flag = `Price re-proposed by Ask Claude (${asked.basis === "matching" ? `${asked.matching.length} matching sales` : "estimate"}): ${money(asked.price)}, was ${money(asked.previousPrice)}.`;
+      fresh[sku] = {
+        ...cur,
+        asked,
+        ...(repriced && {
+          price: asked.price,
+          target: asked.target,
+          flags: [...cur.flags.filter((f) => !f.startsWith("Price re-proposed by Ask Claude")), flag],
+        }),
+      };
+    }
     await writeProposals(b, fresh, now);
   } catch (err) {
     console.error("saving the answer failed", err);

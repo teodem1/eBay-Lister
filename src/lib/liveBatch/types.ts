@@ -41,12 +41,14 @@ export interface Proposal {
   flags: string[];
   status: EntryStatus;
   result?: { text: string; price: string; reason: string };
-  /** The last "Ask Claude" answer: the seller's note, Claude's reply, the sales it found matching (item ids)
-   * and a suggested title and price (already checked), which only fill the edit fields when the seller asks. */
+  /** The last "Ask Claude" answer: the seller's note, Claude's reply, the sales it found matching (item ids), the
+   * re-proposed price (applied to the proposal) and a suggested title (checked; fills the field only on "Use this"). */
   asked?: {
     note: string;
     answer: string;
     matching: string[];
+    basis: "matching" | "estimate";
+    previousPrice: number | null;
     target: number | null;
     price: number | null;
     title: string | null;

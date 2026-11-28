@@ -132,11 +132,14 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
       <AskClaude
         sku={p.sku}
         asked={asked}
-        onAnswer={setAsked}
+        onAnswer={(a) => {
+          setAsked(a);
+          if (a.price !== null) setPrice(a.price.toFixed(2));
+          setMessage(a.price !== null && a.price !== a.previousPrice ? "Price re-proposed from your details. Check it, then send." : "");
+        }}
         onUse={(a) => {
           if (a.title) setTitle(a.title);
-          if (a.price !== null) setPrice(a.price.toFixed(2));
-          setMessage("Filled in from Claude's answer. Save or send when you're happy with it.");
+          setMessage("Title filled in from Claude's answer. Save or send when you're happy with it.");
         }}
       />
       {message && <p className="notice t-small">{message}</p>}

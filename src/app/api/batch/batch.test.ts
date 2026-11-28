@@ -324,12 +324,15 @@ describe("POST /api/batch/apply and dismiss", () => {
       queries: [{ by: "barcode", items: [sold("x", 19), sold("y", 55)] }],
       filtered: { cdOnly: ["x", "y"], sameGrade: ["y"], detail: {} },
     });
-    askAboutProposal.mockResolvedValue({ note: "LED spine", answer: "ok", matching: ["y"], target: 55, price: 55, title: null, at: "2026-11-28T00:00:00.000Z" });
+    askAboutProposal.mockResolvedValue({ note: "LED spine", answer: "ok", matching: ["y"], basis: "matching", target: 55, price: 55, previousPrice: 11, title: null, at: "2026-11-28T00:00:00.000Z" });
     const res = await postAsk(req("/api/batch/ask", json({ sku: a, note: "LED spine" })));
     expect(res.status).toBe(200);
     const [, p, note, sales] = askAboutProposal.mock.calls[0];
     expect([p.sku, note, sales.map((x: { itemId: string }) => x.itemId)]).toEqual([a, "LED spine", ["y"]]);
-    expect((read<Record<string, Proposal>>("batch/proposals.json")[a] as Proposal & { asked?: { answer: string } }).asked?.answer).toBe("ok");
+    const after = read<Record<string, Proposal>>("batch/proposals.json")[a];
+    expect(after.asked?.answer).toBe("ok");
+    expect([after.price, after.target, after.status]).toEqual([55, 55, "review"]);
+    expect(after.flags.join(" ")).toMatch(/Ask Claude/);
     expect(applyProposal).not.toHaveBeenCalled();
   });
 
