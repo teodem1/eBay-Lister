@@ -1,0 +1,156 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Icon, Spinner } from "@/components/ui";
+import { formatMoney } from "@/app/listing/priceRequest";
+import { proposalRows, request } from "@/app/update-listings/batchView";
+import type { Proposal } from "@/lib/listing/types";
+
+/**
+ * Review tab: batch proposals the seller sent here from "Update live listings". Each keeps the
+ * proposed title, price, added details and evidence; the seller can change the title and price,
+ * then send it to eBay (same checks and re-read as the batch screen) or dismiss it.
+ */
+export default function BatchReviewSection() {
+  const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    const res = await request<{ proposals?: Proposal[]; error?: string }>("/api/batch");
+    if (res.ok) setProposals(proposalRows(res.data.proposals ?? []).review);
+    else setError(res.data.error ?? `Error ${res.status}`);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    request<{ proposals?: Proposal[]; error?: string }>("/api/batch").then((res) => {
+      if (!alive) return;
+      if (res.ok) setProposals(proposalRows(res.data.proposals ?? []).review);
+      else if (res.status !== 503) setError(res.data.error ?? `Error ${res.status}`);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!proposals?.length && !error) return null;
+  return (
+    <section className="flex flex-col gap-2" aria-label="Proposals from Update live listings">
+      <h2 className="t-headline px-1">From Update live listings ({proposals?.length ?? 0})</h2>
+      {error && <p className="notice notice-warn t-small">{error}</p>}
+      <ul className="flex flex-col gap-3">
+        {proposals?.map((p) => (
+          <ReviewProposalCard key={p.sku} p={p} onChanged={load} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Promise<void> }) {
+  const [title, setTitle] = useState(p.title);
+  const [price, setPrice] = useState(p.price === null ? "" : p.price.toFixed(2));
+  const [busy, setBusy] = useState<"" | "saving" | "sending" | "dismissing">("");
+  const [confirming, setConfirming] = useState(false);
+  const [message, setMessage] = useState("");
+  const edited = title !== p.title || price !== (p.price === null ? "" : p.price.toFixed(2));
+  const money = (n: number | null | undefined) => (n == null ? "no price" : formatMoney(n, "CAD"));
+
+  async function save(): Promise<boolean> {
+    const value = Number(price);
+    if (!title.trim() || !Number.isFinite(value) || value <= 0) {
+      setMessage("Give a title and a price above 0.");
+      return false;
+    }
+    setBusy("saving");
+    const res = await request<{ error?: string }>("/api/batch/edit", { sku: p.sku, title: title.trim(), price: value });
+    setBusy("");
+    if (!res.ok) {
+      setMessage(res.data.error ?? `Error ${res.status}`);
+      return false;
+    }
+    setMessage("Saved.");
+    return true;
+  }
+
+  async function send() {
+    setConfirming(false);
+    if (edited && !(await save())) return;
+    setBusy("sending");
+    const res = await request<{ results?: { status: string; result?: { text: string; price: string; reason: string } }[]; error?: string }>(
+      "/api/batch/apply",
+      { skus: [p.sku], acceptPending: [] },
+    );
+    setBusy("");
+    const r = res.data.results?.[0];
+    setMessage(!res.ok ? (res.data.error ?? `Error ${res.status}`) : r?.status === "applied" ? "Updated on eBay." : (r?.result?.reason ?? "Not sent."));
+    await onChanged();
+  }
+
+  async function dismiss() {
+    setBusy("dismissing");
+    const res = await request<{ error?: string }>("/api/batch/dismiss", { skus: [p.sku] });
+    setBusy("");
+    if (!res.ok) setMessage(res.data.error ?? `Error ${res.status}`);
+    await onChanged();
+  }
+
+  return (
+    <li className="card flex flex-col gap-2 p-3">
+      <p className="t-caption text-muted">Live now: {p.snapshot.title} · {money(p.snapshot.price)}</p>
+      <label className="flex flex-col gap-1">
+        <span className="t-caption text-muted">Title ({title.length}/80)</span>
+        <input className="field" value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="t-caption text-muted">
+          Price (CAD){p.target != null && p.target !== p.price ? ` · sales support ${money(p.target)}` : ""}
+        </span>
+        <input className="field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+      </label>
+      <p className="t-small text-muted">
+        <b>Engagement {p.engagement.level}:</b> {p.engagement.reason}
+      </p>
+      {Object.keys(p.addAspects).length > 0 && (
+        <p className="t-small">
+          <b>Item specifics added:</b> {Object.entries(p.addAspects).map(([n, v]) => `${n}: ${v.join(", ")}`).join(" · ")}
+        </p>
+      )}
+      {p.evidence && <p className="t-small text-muted">{p.evidence}</p>}
+      {p.flags.length > 0 && (
+        <ul className="t-small flex flex-col gap-1">
+          {p.flags.map((f) => (
+            <li key={f} className="notice notice-warn">
+              {f}
+            </li>
+          ))}
+        </ul>
+      )}
+      {message && <p className="notice t-small">{message}</p>}
+      {confirming ? (
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-secondary flex-1" onClick={() => setConfirming(false)}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary flex-[2]" onClick={send}>
+            Yes, update on eBay
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setConfirming(true)}>
+            {busy === "sending" ? <Spinner /> : <Icon name="check" size={18} />} Send to eBay
+          </button>
+          {edited && (
+            <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={save}>
+              {busy === "saving" ? <Spinner /> : null} Save
+            </button>
+          )}
+          <button type="button" className="link t-small px-1 py-1" disabled={!!busy} onClick={dismiss}>
+            Dismiss
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}

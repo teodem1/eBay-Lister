@@ -40,9 +40,10 @@ describe("runLabel", () => {
 });
 
 describe("proposalRows", () => {
-  it("puts open proposals first and the rest under recent", () => {
-    const rows = proposalRows([p({ sku: "A", status: "applied" }), p({ sku: "B" }), p({ sku: "C", status: "stale" })]);
+  it("puts open proposals first, those sent to Review apart, and the rest under recent", () => {
+    const rows = proposalRows([p({ sku: "A", status: "applied" }), p({ sku: "B" }), p({ sku: "C", status: "stale" }), p({ sku: "D", status: "review" })]);
     expect(rows.open.map((x) => x.sku)).toEqual(["B"]);
+    expect(rows.review.map((x) => x.sku)).toEqual(["D"]);
     expect(rows.recent.map((x) => x.sku)).toEqual(["A", "C"]);
   });
 });

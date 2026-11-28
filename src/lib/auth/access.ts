@@ -55,8 +55,9 @@ export async function hasAccess(key: string | undefined, cookie: string | undefi
 /** Request header that carries the key itself, for API calls only. */
 export const KEY_HEADER = "x-elister-key";
 
-/** API routes only the phone (cookie) may call: starting, sending and dismissing batches. The key header never opens them. */
-export const PHONE_ONLY = ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss"];
+/** API routes only the phone (cookie) may call: starting, sending, dismissing, sending to Review and editing batch
+ * proposals. The key header never opens them. */
+export const PHONE_ONLY = ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss", "/api/batch/review", "/api/batch/edit"];
 
 export function isPhoneOnly(pathname: string): boolean {
   let path = pathname;

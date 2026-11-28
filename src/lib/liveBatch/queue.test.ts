@@ -24,6 +24,14 @@ describe("nextSkus", () => {
     expect(nextSkus(["A", "B", "C", "D", "E", "F", "G", "H", "N"], index, NOW, 20)).toEqual(["N", "D", "C", "B", "A", "E"]);
   });
 
+  it("treats a proposal sent to Review like an open one", () => {
+    const index: BatchIndex = {
+      A: { status: "review", updatedAt: daysAgo(5) },
+      B: { status: "review", updatedAt: daysAgo(61) },
+    };
+    expect(nextSkus(["A", "B"], index, NOW, 20)).toEqual(["B"]);
+  });
+
   it("never takes a listing that is no longer live (sold)", () => {
     expect(nextSkus(["A"], { Z: { status: "failed", updatedAt: daysAgo(1) } }, NOW, 20)).toEqual(["A"]);
   });

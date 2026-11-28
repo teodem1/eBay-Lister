@@ -10,8 +10,9 @@
 
 Penny sales (under C$1) and sales under a third of the median are left out as junk. Needs 3 CAD sales, else the price stays. Where the price lands in those sales follows
 demand: high = 75th percentile, normal = median, low = 25th percentile (to help it sell).
-A price may go up or down; changes over 50% either way are flagged, and nothing is sent
-without the seller's approval. A confirmed detail counts when its sales' median is above
+A price may go up or down; a lowered price is listed at target / 0.85, so a typical Best Offer
+lands on the target (`target` is the sales-based price). Changes over 50% either way are flagged,
+and nothing is sent without the seller's approval. A confirmed detail counts when its sales' median is above
 the other sales' median: 2 or more such sales set the price when higher (several details:
 the highest, never added together); exactly 1 is only `pending`, applied when the seller
 accepts it by name. No detail raises a price without 3 sales.
@@ -25,6 +26,7 @@ from pricing import EDITIONS
 
 MIN_BASE = 3
 MIN_SALE = 1.0
+OFFER_SHARE = 0.85
 HIGH_MONTHS = 3
 LOW_MONTHS = 12
 SPAN_MIN_DAYS = 30
@@ -131,6 +133,13 @@ def reprice(current, items, details, demand="normal"):
             reason += f" {applied[2]} {LABEL[applied[0]]} sales, median {_money(applied[1])}, set it higher."
         else:
             applied = None
+    # Best Offer: buyers offer below the listed price, so a lowered price leaves room for a typical
+    # 85% offer to land on the sales-based target (seller, 2026-11-28). Raises stay as they are.
+    target = proposed
+    if current is not None and proposed is not None and proposed < current:
+        proposed = min(round(float(current), 2), round(target / OFFER_SHARE, 2))
+        reason += (f" Listed at {_money(proposed)} so a typical offer ({OFFER_SHARE:.0%}) lands near the "
+                   f"{_money(target)} the sales support.")
     if left_out:
         reason += f" {left_out} sale{'s' if left_out != 1 else ''} under C$1 or under a third of the median left out."
     if pending and (proposed is None or pending[1] <= proposed):
@@ -140,6 +149,7 @@ def reprice(current, items, details, demand="normal"):
             "applied_detail": applied[0] if applied else None,
             "pending": {"detail": pending[0], "price": pending[1]} if pending else None,
             "demand": demand,
+            "target": target,
             "over_50": over_50, "reason": reason}
 
 

@@ -17,7 +17,8 @@ export const WEEKLY_PER_CD = 0.2;
 
 const time = (iso: string) => new Date(iso).getTime();
 const revisitDone = (e: IndexEntry, now: Date) =>
-  (e.status === "applied" || e.status === "dismissed" || e.status === "open") && now.getTime() - time(e.updatedAt) >= REVISIT_DAYS * DAY;
+  (e.status === "applied" || e.status === "dismissed" || e.status === "open" || e.status === "review") &&
+  now.getTime() - time(e.updatedAt) >= REVISIT_DAYS * DAY;
 const oldestFirst = (index: BatchIndex) => (a: string, b: string) => time(index[a].updatedAt) - time(index[b].updatedAt);
 
 /**
@@ -37,7 +38,7 @@ export function nextDue(live: string[], index: BatchIndex, now: Date): string | 
   if (nextSkus(live, index, now, 1).length) return null;
   const waiting = live
     .map((s) => index[s])
-    .filter((e) => e && (e.status === "applied" || e.status === "dismissed" || e.status === "open"))
+    .filter((e) => e && (e.status === "applied" || e.status === "dismissed" || e.status === "open" || e.status === "review"))
     .map((e) => time(e.updatedAt) + REVISIT_DAYS * DAY);
   return waiting.length ? new Date(Math.min(...waiting)).toISOString() : null;
 }

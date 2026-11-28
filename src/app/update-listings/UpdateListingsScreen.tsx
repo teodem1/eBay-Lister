@@ -131,6 +131,14 @@ export default function UpdateListingsScreen() {
     setBusy("");
   }
 
+  async function toReview(sku: string) {
+    setBusy("dismissing");
+    const res = await call<{ error?: string }>("/api/batch/review", { skus: [sku] });
+    if (!res.ok) setError(res.data.error ?? `Error ${res.status}`);
+    await refresh();
+    setBusy("");
+  }
+
   async function dismiss(sku: string) {
     setBusy("dismissing");
     const res = await call<{ error?: string }>("/api/batch/dismiss", { skus: [sku] });
@@ -213,6 +221,7 @@ export default function UpdateListingsScreen() {
               pendingAccepted={pendingOk.has(p.sku)}
               onPending={() => setPendingOk(toggle(pendingOk, p.sku))}
               onDismiss={() => dismiss(p.sku)}
+              onReview={() => toReview(p.sku)}
               disabled={!!busy}
             />
           ))}
@@ -261,6 +270,7 @@ function ProposalCard({
   pendingAccepted,
   onPending,
   onDismiss,
+  onReview,
   disabled,
 }: {
   p: Proposal;
@@ -269,6 +279,7 @@ function ProposalCard({
   pendingAccepted?: boolean;
   onPending?: () => void;
   onDismiss?: () => void;
+  onReview?: () => void;
   disabled?: boolean;
 }) {
   const [showText, setShowText] = useState(false);
@@ -337,6 +348,11 @@ function ProposalCard({
           {p.appendHtml && (
             <button type="button" className="link t-small px-1 py-1" onClick={() => setShowText(!showText)}>
               {showText ? "Hide added text" : "Show added text"}
+            </button>
+          )}
+          {onReview && (
+            <button type="button" className="link t-small px-1 py-1" onClick={onReview} disabled={disabled}>
+              Send to Review
             </button>
           )}
           <button type="button" className="link t-small px-1 py-1" onClick={onDismiss} disabled={disabled}>

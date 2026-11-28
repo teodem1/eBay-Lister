@@ -38,7 +38,7 @@ describe("proxy", () => {
 
   it("refuses the key header where only the phone may act (starting, sending, dismissing batches)", async () => {
     vi.stubEnv("APP_ACCESS_KEY", "s3cret-key");
-    for (const path of ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss", "/api/batch/apply/", "/api/batch/%61pply", "/api/Batch/Apply"]) {
+    for (const path of ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss", "/api/batch/apply/", "/api/batch/%61pply", "/api/Batch/Apply", "/api/batch/review", "/api/batch/edit"]) {
       const res = await call(path, { "x-elister-key": "s3cret-key" });
       expect(res.status, path).toBe(401);
     }

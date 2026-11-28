@@ -22,7 +22,8 @@ def no_barcode(*values):
 class BaseTest(unittest.TestCase):
     def test_typical_price_of_3_sales(self):
         r = reprice(18, plain(10, 12, 14), [])
-        self.assertEqual((r["base"], r["count"], r["proposed"]), (12, 3, 12))
+        self.assertEqual((r["base"], r["count"], r["target"]), (12, 3, 12))
+        self.assertEqual(r["proposed"], 14.12)  # room for an 85% offer
         self.assertIsNone(r["applied_detail"])
         self.assertIsNone(r["pending"])
 
@@ -53,7 +54,7 @@ class DetailTest(unittest.TestCase):
 
     def test_one_matching_sale_is_only_pending(self):
         r = reprice(12, plain(10, 11, 12) + canadian(30), ["canadian"])
-        self.assertEqual(r["proposed"], 11.5)
+        self.assertEqual((r["target"], r["proposed"]), (11.5, 12))
         self.assertIsNone(r["applied_detail"])
         self.assertEqual(r["pending"], {"detail": "canadian", "price": 30})
 
@@ -65,7 +66,7 @@ class DetailTest(unittest.TestCase):
     def test_matching_sales_not_higher_are_ignored(self):
         r = reprice(12, plain(10, 11, 12) + canadian(9, 10), ["canadian"])
         self.assertIsNone(r["applied_detail"])
-        self.assertEqual(r["proposed"], 10)
+        self.assertEqual((r["target"], r["proposed"]), (10, 11.76))
 
     def test_every_sale_matching_is_the_album_name_not_a_detail(self):
         r = reprice(12, canadian(10, 12, 14), ["canadian"])
@@ -103,14 +104,15 @@ class DetailTest(unittest.TestCase):
 class DemandTest(unittest.TestCase):
     def test_interest_sets_where_in_the_range_the_price_lands(self):
         sales = plain(10, 12, 14, 16)
-        self.assertEqual(reprice(13, sales, [])["proposed"], 13)  # normal: median
-        self.assertEqual(reprice(13, sales, [], demand="low")["proposed"], 11.5)
+        self.assertEqual(reprice(13, sales, [])["target"], 13)  # normal: median
+        self.assertEqual(reprice(13, sales, [], demand="low")["target"], 11.5)
+        self.assertEqual(reprice(13, sales, [], demand="high")["target"], 14.5)
         self.assertEqual(reprice(13, sales, [], demand="high")["proposed"], 14.5)
         self.assertEqual(reprice(13, sales, [], demand="high")["demand"], "high")
 
     def test_a_lower_price_is_proposed_like_any_other(self):
         r = reprice(12.99, plain(4, 5, 6), [], demand="low")
-        self.assertEqual(r["proposed"], 4.5)
+        self.assertEqual((r["target"], r["proposed"]), (4.5, 5.29))
         self.assertTrue(r["over_50"])
         self.assertNotIn("lower", r)
 
@@ -172,6 +174,25 @@ class EngagementTest(unittest.TestCase):
         self.assertIn("or more", engagement_level(sales, saved, listed=200, capped=True)["reason"])
 
 
+class BestOfferTest(unittest.TestCase):
+    def test_a_drop_leaves_room_for_an_85_percent_offer(self):
+        r = reprice(28.99, plain(10, 11.4, 12), [])
+        self.assertEqual(r["target"], 11.4)
+        self.assertEqual(r["proposed"], 13.41)
+        self.assertIn("offer", r["reason"])
+
+    def test_room_for_offers_never_goes_above_todays_price(self):
+        r = reprice(12, plain(10, 11, 12), [])
+        self.assertEqual((r["target"], r["proposed"]), (11, 12))
+
+    def test_a_raise_is_unchanged(self):
+        r = reprice(8, plain(10, 12, 14), [])
+        self.assertEqual((r["target"], r["proposed"]), (12, 12))
+
+    def test_over_50_is_judged_on_the_price_listed(self):
+        self.assertFalse(reprice(20, plain(8, 9, 10), [])["over_50"])  # 9 / 0.85 = 10.59: a 47% drop
+
+
 class CommandTest(unittest.TestCase):
     def test_reads_only_the_same_grade_sales_of_a_sold_file(self):
         items = plain(10, 12, 14) + [sale(99, "Genesis Wind & Wuthering CD Good")]
@@ -183,7 +204,7 @@ class CommandTest(unittest.TestCase):
             out = subprocess.run([sys.executable, "scripts/reprice.py"], capture_output=True, text=True,
                                  input=json.dumps({"current": 18, "data_file": path, "details": []}),
                                  env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
-        self.assertEqual(json.loads(out.stdout)["proposed"], 12)
+        self.assertEqual(json.loads(out.stdout)["target"], 12)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ const ProposalIn = z.object({
   addAspects: z.record(z.string().max(65), z.array(z.string().min(1).max(65)).max(30)),
   appendHtml: z.string().max(20_000),
   price: Money,
+  target: Money.optional(),
   pendingPrice: Money,
   evidence: z.string().max(2_000),
   engagement: z.object({

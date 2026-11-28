@@ -34,6 +34,8 @@ const { GET: getRunRoute, POST: postRunRoute } = await import("./runs/[id]/route
 const { POST: postProposals } = await import("./proposals/route");
 const { POST: postApply } = await import("./apply/route");
 const { POST: postDismiss } = await import("./dismiss/route");
+const { POST: postReview } = await import("./review/route");
+const { POST: postEdit } = await import("./edit/route");
 
 const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
 const req = (path: string, init?: RequestInit) => new Request(`http://x${path}`, init);
@@ -249,9 +251,53 @@ describe("POST /api/batch/apply and dismiss", () => {
       await postApply(req("/api/batch/apply", withKey({ skus: ["S0"], acceptPending: [] }))),
       await postDismiss(req("/api/batch/dismiss", withKey({ skus: ["S0"] }))),
       await postRun(req("/api/batch/run", withKey({ fiveHour: 10, weekly: 10 }))),
+      await postReview(req("/api/batch/review", withKey({ skus: ["S0"] }))),
+      await postEdit(req("/api/batch/edit", withKey({ sku: "S0", title: "T", price: 10 }))),
     ]) expect(res.status).toBe(401);
     expect(applyProposal).not.toHaveBeenCalled();
     expect(fireRoutine).not.toHaveBeenCalled();
+  });
+
+  it("sends proposals to Review, edits them there, and applies them from there", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [{ ...proposal(a, r.id), target: 9.5 }] })));
+    expect((await postReview(req("/api/batch/review", json({ skus: [a] })))).status).toBe(200);
+    expect(index()[a].status).toBe("review");
+    const edited = await postEdit(req("/api/batch/edit", json({ sku: a, title: "T edited", price: 12.5 })));
+    expect(edited.status).toBe(200);
+    const saved = read<Record<string, Proposal>>("batch/proposals.json")[a];
+    expect([saved.status, saved.title, saved.price, saved.target]).toEqual(["review", "T edited", 12.5, 9.5]);
+    applyProposal.mockResolvedValue({ status: "applied", result: { text: "updated", price: "updated", reason: "" } });
+    await postApply(req("/api/batch/apply", json({ skus: [a], acceptPending: [] })));
+    expect(applyProposal.mock.calls[0][1]).toMatchObject({ title: "T edited", price: 12.5 });
+    expect(index()[a].status).toBe("applied");
+  });
+
+  it("refuses an edit that is too long, not positive, or for a proposal already done", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(r.skus[0], r.id)] })));
+    expect((await postEdit(req("/api/batch/edit", json({ sku: r.skus[0], title: "x".repeat(81), price: 10 })))).status).toBe(400);
+    expect((await postEdit(req("/api/batch/edit", json({ sku: r.skus[0], title: "T", price: 0 })))).status).toBe(400);
+    expect((await postEdit(req("/api/batch/edit", json({ sku: "S0", title: "T", price: 10 })))).status).toBe(404);
+  });
+
+  it("lowers a waiting proposal made before the Best Offer rule once, keeping its target", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a, b] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(a, r.id), proposal(b, r.id)] })));
+    const all = read<Record<string, Proposal>>("batch/proposals.json");
+    for (const sku of [a, b]) delete (all[sku] as { target?: number | null }).target;
+    all[a] = { ...all[a], snapshot: { title: "T", price: 28.99 }, price: 11.4 };
+    all[b] = { ...all[b], snapshot: { title: "T", price: 10 }, price: 12 };
+    files["batch/proposals.json"] = JSON.stringify(all);
+    const body = (await (await getBatch()).json()) as { proposals: Proposal[] };
+    const got = Object.fromEntries(body.proposals.map((x) => [x.sku, x]));
+    expect([got[a].price, got[a].target]).toEqual([13.41, 11.4]);
+    expect(got[a].flags.join(" ")).toMatch(/offer/i);
+    expect([got[b].price, got[b].target]).toEqual([12, 12]);
+    await getBatch();
+    expect(read<Record<string, Proposal>>("batch/proposals.json")[a].price).toBe(13.41);
   });
 
   it("never applies a proposal that is not open", async () => {

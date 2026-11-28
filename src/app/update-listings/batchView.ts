@@ -18,10 +18,11 @@ export function runLabel(run: BatchRun, now: Date): string {
   }
 }
 
-export function proposalRows(proposals: Proposal[]): { open: Proposal[]; recent: Proposal[] } {
+export function proposalRows(proposals: Proposal[]): { open: Proposal[]; review: Proposal[]; recent: Proposal[] } {
   return {
     open: proposals.filter((p) => p.status === "open"),
-    recent: proposals.filter((p) => p.status !== "open" && p.status !== "in_progress"),
+    review: proposals.filter((p) => p.status === "review"),
+    recent: proposals.filter((p) => p.status !== "open" && p.status !== "review" && p.status !== "in_progress"),
   };
 }
 

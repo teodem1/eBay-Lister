@@ -5,7 +5,8 @@
  */
 
 /** Where a live listing stands in the batch queue. */
-export type EntryStatus = "in_progress" | "open" | "applied" | "dismissed" | "failed" | "stale";
+/** `review`: the seller sent it to the Review tab, to edit and send later. */
+export type EntryStatus = "in_progress" | "open" | "review" | "applied" | "dismissed" | "failed" | "stale";
 
 export interface IndexEntry {
   status: EntryStatus;
@@ -31,6 +32,8 @@ export interface Proposal {
   addAspects: Record<string, string[]>;
   appendHtml: string;
   price: number | null;
+  /** The sales-based price; `price` is listed higher when lowering, so a typical Best Offer lands on it. */
+  target?: number | null;
   /** A higher price backed by one matching sale, sent only when the seller accepts it. */
   pendingPrice: number | null;
   evidence: string;

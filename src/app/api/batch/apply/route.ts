@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     for (const sku of parsed.data.skus) {
       const proposals = await readProposals(b);
       const p = proposals[sku];
-      if (!p || p.status !== "open") {
+      if (!p || (p.status !== "open" && p.status !== "review")) {
         results.push({ sku, status: "skipped", result: { text: "skipped", price: "skipped", reason: "No open proposal for this listing." } });
         continue;
       }

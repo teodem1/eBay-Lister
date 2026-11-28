@@ -6,6 +6,7 @@ import { AppBar, Icon, TabBar } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
 import EditPublishedSheet from "@/app/auto/EditPublishedSheet";
 import SoldComparison from "./SoldComparison";
+import BatchReviewSection from "./BatchReviewSection";
 import { autoState, priceGrade } from "@/lib/auto/auto";
 import { batchItemName, type BatchItem } from "@/lib/batch/queue";
 import { autoStore, useAuto } from "@/lib/batch/store";
@@ -39,6 +40,8 @@ export default function ReviewScreen() {
           </span>
           <Icon name="chevron" size={18} className="text-subtle" />
         </Link>
+
+        <BatchReviewSection />
 
         {!hydrated ? (
           <div className="skeleton h-32" />
