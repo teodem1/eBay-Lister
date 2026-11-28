@@ -244,6 +244,25 @@ describe("findBothComparables", () => {
       expect(res.current?.matchedBy).toBe("keywords");
     });
 
+    it("reports each sold query, barcode then name, with every sale returned", async () => {
+      const soldCompsFetch = vi
+        .fn()
+        .mockResolvedValueOnce(json(200, { items: [sale("1")] }))
+        .mockResolvedValueOnce(
+          json(200, { items: [sale("1"), sale("2"), { ...sale("3"), title: "Genesis Wind & Wuthering Vinyl LP" }] }),
+        );
+      const onSoldQuery = vi.fn();
+      await findBothComparables(new EbayClient(config, ebayFetch(0)), q, {
+        soldCompsApiKey: "sc_test",
+        soldCompsFetch,
+        onSoldQuery,
+      });
+      expect(onSoldQuery.mock.calls.map(([by, items]) => [by, items.map((i: { itemId: string }) => i.itemId)])).toEqual([
+        ["barcode", ["1"]],
+        ["keywords", ["1", "2", "3"]],
+      ]);
+    });
+
     it("spends no second sold-comps call when the only name is the barcode itself", async () => {
       const soldCompsFetch = vi.fn<(url: string) => Promise<Response>>(async () => json(200, { items: [sale("1")] }));
       const res = await findBothComparables(

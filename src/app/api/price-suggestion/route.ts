@@ -11,6 +11,8 @@
  *            is available; `unavailable.sold` says why.
  * Runs server-side so the eBay client secret never reaches the phone.
  */
+import { blobBackend, saveLookup } from "@/lib/comps/store";
+import type { SoldQuery } from "@/lib/comps/record";
 import { getEbayClient } from "@/lib/ebay";
 import { findBothComparables } from "@/lib/ebay/comparables";
 import { SOLD_LIMIT_NOTE, soldLookbackDays } from "@/lib/ebay/soldComps";
@@ -39,10 +41,29 @@ export async function POST(request: Request) {
     // Quote shipping to the marketplace's own country unless told otherwise
     // (EBAY_CA -> CA).
     query.destinationCountry ??= ebay.config.marketplaceId.replace(/^EBAY_/, "");
+    const soldQueries: SoldQuery[] = [];
     const both = await findBothComparables(ebay, query, {
       soldCompsApiKey: process.env.SOLD_COMPS_API_KEY || undefined,
       soldLookbackDays: soldLookbackDays(process.env.SOLD_LOOKBACK_DAYS),
+      onSoldQuery: (by, items) => soldQueries.push({ by, items }),
     });
+    // Every paid sold lookup is stored (empty ones too, so they are not bought again).
+    // A failed save is logged and never fails the price check.
+    const store = both.sold && soldQueries.length ? blobBackend() : null;
+    if (store) {
+      try {
+        await saveLookup(store, {
+          savedAt: new Date().toISOString(),
+          partial: false,
+          barcode: query.gtin,
+          name: query.keywords,
+          condition: sellerCondition,
+          queries: soldQueries,
+        });
+      } catch (err) {
+        console.error("saving sold lookup failed", err);
+      }
+    }
     // The current price is shown as what similar items are listed at, so no
     // asking-to-sold discount is applied to it.
     // The seller lists CDs: cassettes, vinyl, lots and signed copies never reach the screen.

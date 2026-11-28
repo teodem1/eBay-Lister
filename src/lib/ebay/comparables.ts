@@ -262,6 +262,8 @@ export interface BothOptions {
   soldLookbackDays?: number;
   /** Lookups left on sold-comps.com, when its answer says. */
   onSoldRemaining?: (left: number) => void;
+  /** Each sold-comps.com query as it returns, with every sale it gave (before CD or grade filters). */
+  onSoldQuery?: (by: "barcode" | "keywords", items: Comparable[]) => void;
 }
 
 /** Sold comparables: Marketplace Insights, else sold-comps.com whenever Insights fails and a key is set. */
@@ -292,17 +294,22 @@ async function searchSoldAny(
   // A barcode finds that exact pressing (the Canadian CD, not the vinyl or the
   // Japanese issue), like scanning in eBay's app. Only when it finds too few
   // sales is a second, by-name search spent (sold-comps.com quota is small).
+  const query = async (by: "barcode" | "keywords") => {
+    const found = await searchSoldComps(q, { ...sc, by });
+    opts.onSoldQuery?.(by, found);
+    return found;
+  };
   if (q.gtin) {
-    items = await searchSoldComps(q, { ...sc, by: "barcode" });
+    items = await query("barcode");
     if (items.length >= MIN_BARCODE_MATCHES || !hasName(q)) {
       matchedBy = "barcode";
       notes.push(`Sales of this exact barcode (${q.gtin}), so the same pressing.`);
     } else {
       notes.push(`Only ${items.length} sales carry this barcode, so sales were found by name.`);
-      items = await searchSoldComps(q, { ...sc, by: "keywords" });
+      items = await query("keywords");
     }
   } else {
-    items = await searchSoldComps(q, sc);
+    items = await query("keywords");
   }
   const oldest = items.map((i) => i.soldDate).filter(Boolean).sort()[0];
   if (oldest) notes.push(`Oldest sale found: ${oldest}.`);
