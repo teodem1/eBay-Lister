@@ -120,7 +120,7 @@ describe("applyProposal", () => {
     expect(sentItem.product.title).toBe(NEW_TITLE);
     expect(sentItem.product.aspects["Record Label"]).toEqual(["Atlantic"]);
     expect(sentItem.product.aspects.Artist).toEqual(["Genesis"]);
-    const offers = client.putOfferRaw.mock.calls.map(([o]) => o.pricingSummary.price.value);
+    const offers = client.putOfferRaw.mock.calls.map(([o]: any[]) => o.pricingSummary.price.value);
     expect(offers).toEqual(["17.50", "21.00"]);
     expect(client.putOfferRaw.mock.calls[0][0].listingDescription).toBe("<p>old</p><p>Made in Canada.</p>");
   });
