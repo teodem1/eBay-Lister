@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-8. Next: Task 9. SKILL.md and README still describe the old C$40 gate until Task 9.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-9. Next: the whole-branch review, then Task 10 (each step needs the seller's approval).
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -204,11 +204,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 
 **Files:** Modify `SKILL.md`, `agents/*.md`, `README.md`, `tests/test_package.py`.
 
-- [ ] **Step 1: Failing tests:** SKILL.md contains `C$20`, `every 5 CDs`, `batches of 5`, `Nothing is sent without approval`, `once per artist`, `only when evidence conflicts`, and each new script name; no `not worth deeper research`.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Write.** Live-listing batch flow: usage gate → `list` → per CD `read`, `sold` → research if `research_needed` → write → `reprice` → `check` → approval table (old/new title, added information, old/new price, pending, evidence, date, over-50% flag) → `apply`. Only verified facts; list disagreements and unknowns. Titles are built with `title.py` as artist and album, then edition, year, label, genre; the writer reads the stored sold titles for words that go with higher sales and uses one only if true of this copy. Keep the single unlisted-CD flow, minus the C$40 gate, still publishing nothing (builder's call).
-- [ ] **Step 4:** Tests PASS.
-- [ ] **Step 5:** Commit `feat: live listing batch flow`.
+- [x] **Step 1: Failing tests:** SKILL.md contains `C$20`, `every 5 CDs`, `batches of 5`, `Nothing is sent without approval`, `once per artist`, `only when evidence conflicts`, and each new script name; no `not worth deeper research`.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Write.** Live-listing batch flow: usage gate → `list` → per CD `read`, `sold` → research if `research_needed` → write → `reprice` → `check` → approval table (old/new title, added information, old/new price, pending, evidence, date, over-50% flag) → `apply`. Only verified facts; list disagreements and unknowns. Titles are built with `title.py` as artist and album, then edition, year, label, genre; the writer reads the stored sold titles for words that go with higher sales and uses one only if true of this copy. Keep the single unlisted-CD flow, minus the C$40 gate, still publishing nothing (builder's call).
+- [x] **Step 4:** Tests PASS.
+- [x] **Step 5:** Commit `feat: live listing batch flow`.
 
 ### Task 10: Release (each step needs the seller's approval)
 
