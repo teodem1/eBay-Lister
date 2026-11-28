@@ -61,6 +61,16 @@ class PackageTest(unittest.TestCase):
         self.assertIn("demand", (AGENTS / "listing-writer.md").read_text())
         self.assertIn("demand", (SKILL / "README.md").read_text())
 
+    def test_headless_batch_job(self):
+        text = (SKILL / "SKILL.md").read_text()
+        for phrase in ("H. Headless batch", "batch-start", "batch-save", "batch-finish", "routine-fire-payload"):
+            self.assertIn(phrase, text)
+        job = text[text.index("## H. Headless batch"):]
+        self.assertNotIn("changes.py apply", job)
+        prompt = (SKILL / "references" / "headless-prompt.md").read_text()
+        self.assertIn("job H", prompt)
+        self.assertIn("routine-fire-payload", prompt)
+
     def test_readme_states_the_new_threshold(self):
         text = (SKILL / "README.md").read_text()
         self.assertIn("C$20", text)

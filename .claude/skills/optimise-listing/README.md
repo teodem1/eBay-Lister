@@ -10,6 +10,9 @@ Nothing to install: this folder and `.claude/agents/` are part of the eBay Liste
 - `/optimise-listing update my live listings`: reads each listing and its stored sold results, rewrites the title, adds missing verified information and proposes a price, then shows one table per 5 listings. Nothing is sent until you say which SKUs to send.
 - `/optimise-listing Pink Floyd, The Dark Side of the Moon, barcode ..., disc Near mint, inlay Very good+, bought in Canada` (add photos if you have them): one unlisted CD.
 
+## From the phone
+The app's "Update live listings" screen can start a batch with no chat: it fires a Claude Code scheduled task (prompt in `references/headless-prompt.md`), which runs job H in a cloud session on your plan and saves proposals to the app. You approve and send them on the phone.
+
 ## What it spends
 - Asks for your five-hour and weekly percentages (Settings > Usage) and stops at 80% of either; asks again before each batch of 20, and shrinks a batch that would cross 80% (the 5-CD trial used about 1 five-hour and 0.2 weekly points per CD).
 - Web research only for CDs asking C$20 or more. The rest are rewritten from the listing and its stored sales.

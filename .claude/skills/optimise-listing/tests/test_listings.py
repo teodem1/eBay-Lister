@@ -262,6 +262,33 @@ class EngagementCommandTest(unittest.TestCase):
         self.assertEqual(fake.lookups(), 0)
 
 
+class BatchCommandsTest(unittest.TestCase):
+    def test_batch_start_reads_each_reserved_listing(self):
+        fake = Fake(batch_runs_r1={"run": {"id": "r1", "skus": [LISTING["sku"], "GONE"], "status": "started"}},
+                    listing_refresh_read=[Resp(LISTING), http_error(404)])
+        out = listings.batch_start(App(URL, None, opener=fake), "r1")
+        self.assertEqual(fake.paths()[0], "/api/batch/runs/r1")
+        self.assertEqual(out["skus"], [LISTING["sku"]])
+        self.assertEqual(out["not_live"], ["GONE"])
+        self.assertTrue(pathlib.Path(out["files"][LISTING["sku"]]).is_file())
+
+    def test_batch_save_posts_the_run_and_its_proposals(self):
+        fake = Fake(batch_proposals={"saved": 1})
+        proposal = {"sku": "S1", "snapshot": {"title": "T", "price": 10}, "title": "T 1976", "addAspects": {},
+                    "appendHtml": "", "price": 11.0, "pendingPrice": None, "evidence": "e",
+                    "engagement": {"level": "normal", "sold": 3, "listed": 4, "monthsOfSupply": 5.3, "reason": "r"},
+                    "flags": ["over 50%"]}
+        self.assertEqual(listings.batch_save(App(URL, None, opener=fake), "r1", [proposal]), {"saved": 1})
+        request = fake.calls[0]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(json.loads(request.data), {"runId": "r1", "proposals": [proposal]})
+
+    def test_batch_finish_closes_the_run(self):
+        fake = Fake(batch_runs_r1={"run": {"id": "r1", "status": "done"}, "released": []})
+        listings.batch_finish(App(URL, None, opener=fake), "r1", "failed", release=["S2"], reason="usage")
+        self.assertEqual(json.loads(fake.calls[0].data), {"status": "failed", "release": ["S2"], "reason": "usage"})
+
+
 class CheckTest(unittest.TestCase):
     def test_check_reports_only_reachable_and_authorised(self):
         cases = [(http_error(405), {"reachable": True, "authorised": True}),

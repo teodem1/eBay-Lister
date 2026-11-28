@@ -7,6 +7,9 @@
     listings.py engagement stdin {"listing_file", "sold_file"} -> copies listed now against the sales pace:
                          {"level": high|normal|low, "sold", "listed", "days", "months_of_supply", "reason"}
     listings.py import   stdin: the Collection backup -> stores its price checks as partial lookups
+    listings.py batch-start  stdin {"runId"} -> the phone run's reserved listings, read and saved privately
+    listings.py batch-save   stdin {"runId", "proposals": [...]} -> saves them on the run (open on the phone)
+    listings.py batch-finish stdin {"runId", "status": "done"|"failed", "release"?, "reason"?} -> closes the run
 
 Settings: ELISTER_URL (the app's https address). The key normally rides in a network
 secret outside the session; ELISTER_ACCESS_KEY is only a fallback. The key is never
@@ -20,6 +23,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import tempfile
 
 from app_client import ALLOWANCE, App, AppUnavailable
@@ -146,6 +150,36 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def batch_start(app, run_id):
+    """Job H: the listings a phone run reserved, each read and saved privately.
+    A listing that is no longer live goes in `not_live` (release it with batch-finish)."""
+    run = app.get(f"/api/batch/runs/{urllib.parse.quote(run_id, safe='')}")["run"]
+    files, not_live = {}, []
+    for sku in run.get("skus", []):
+        try:
+            files[sku] = read(app, sku)["data_file"]
+        except AppUnavailable as err:
+            if err.status != 404:
+                raise
+            not_live.append(sku)
+    return {"runId": run_id, "skus": list(files), "files": files, "not_live": not_live}
+
+
+def batch_save(app, run_id, proposals):
+    """Job H: saves up to 20 proposals on the phone run (they show on the phone as open)."""
+    return app.post("/api/batch/proposals", {"runId": run_id, "proposals": proposals})
+
+
+def batch_finish(app, run_id, status, release=None, reason=None):
+    """Job H: closes the run; listings it gives back, or never proposed, return to the queue."""
+    body = {"status": status}
+    if release:
+        body["release"] = release
+    if reason:
+        body["reason"] = reason
+    return app.post(f"/api/batch/runs/{urllib.parse.quote(run_id, safe='')}", body)
+
+
 def _sale_ok(s):
     price = s.get("price") if isinstance(s, dict) else None
     return (isinstance(price, dict) and s.get("itemId") and s.get("title")
@@ -175,8 +209,8 @@ def import_backup(app, backup):
 
 
 def main(command, stdin):
-    if command not in ("check", "list", "read", "sold", "engagement", "import"):
-        sys.exit("usage: listings.py check|list|read|sold|engagement|import  (JSON on stdin)")
+    if command not in ("check", "list", "read", "sold", "engagement", "import", "batch-start", "batch-save", "batch-finish"):
+        sys.exit("usage: listings.py check|list|read|sold|engagement|import|batch-start|batch-save|batch-finish  (JSON on stdin)")
     app = App(os.environ.get("ELISTER_URL"), os.environ.get("ELISTER_ACCESS_KEY"))
     if command == "check":
         return check(app)
@@ -191,6 +225,12 @@ def main(command, stdin):
             with open(data["listing_file"], encoding="utf-8") as handle:
                 listing = json.load(handle)
         return sold(app, listing, refresh=bool(data.get("refresh")))
+    if command == "batch-start":
+        return batch_start(app, str(data["runId"]))
+    if command == "batch-save":
+        return batch_save(app, str(data["runId"]), data["proposals"])
+    if command == "batch-finish":
+        return batch_finish(app, str(data["runId"]), data["status"], data.get("release"), data.get("reason"))
     if command == "engagement":
         with open(data["listing_file"], encoding="utf-8") as handle:
             listing = json.load(handle)
