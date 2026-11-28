@@ -65,6 +65,9 @@ Screens (phone first):
   last sold (Marketplace Insights if eBay approves, else sold-comps.com via
   `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
+  Searches by name use the short search name (`searchName` in `src/lib/pricing/version.ts`, via `cdKeywords`): no
+  "Various Artists" prefix, bracketed parts or subtitle after a colon. Every sold lookup is saved to private Vercel Blob
+  (`src/lib/comps/`, keyed by barcode, else the short name) for the plugin, which reads `/api/comps` before buying one.
   Prices use only Canadian copies (sold from CA or titled Canadian) when there are 3+, and leave out
   other versions the item text doesn't name (Japanese, vinyl, signed, lots): `src/lib/pricing/version.ts`.
   Tapping a sale or listing (thumbnail or title) opens `ComparableSheet.tsx`: photos, description, CD and inlay

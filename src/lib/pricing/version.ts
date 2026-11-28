@@ -45,13 +45,30 @@ export function namesOtherFormat(keywords: string): boolean {
 const EXCLUDED_FORMATS = ["vinyl", "lp", "cassette", "tape", "record"];
 
 /**
- * Keywords for a CD search: adds "CD" and, for eBay's web search (used by
- * sold-comps.com), excludes other formats with -word, except words that are in
+ * The name CD searches use: no "Various Artists" prefix, no (...) or [...] parts and no
+ * subtitle after a colon, which eBay titles rarely carry in full ("Baraka: Music From the
+ * Original Motion Picture Soundtrack" -> "Baraka"). The full name when nothing is left.
+ * The plugin's listings.py `search_name` follows the same rules.
+ */
+export function searchName(name: string): string {
+  const short = name
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .split(":")[0]
+    .replace(/^\s*various artists\b/i, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[\s,-]+|[\s,-]+$/g, "");
+  return /[\p{L}\p{N}_]/u.test(short) ? short : name;
+}
+
+/**
+ * Keywords for a CD search: the short search name plus "CD" and, for eBay's web search
+ * (used by sold-comps.com), other formats excluded with -word, except words that are in
  * the item name itself. Unchanged when the seller's text names another format.
  */
 export function cdKeywords(keywords: string, opts: { exclude?: boolean } = {}): string {
-  const k = keywords.trim();
-  if (!k || namesOtherFormat(k)) return k;
+  if (!keywords.trim() || namesOtherFormat(keywords)) return keywords.trim();
+  const k = searchName(keywords.trim());
   const withCd = /\bcds?\b/i.test(k) ? k : `${k} CD`;
   if (!opts.exclude) return withCd;
   const own = new Set(words(k));

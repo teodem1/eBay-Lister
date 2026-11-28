@@ -18,7 +18,7 @@ import { findBothComparables } from "@/lib/ebay/comparables";
 import { SOLD_LIMIT_NOTE, soldLookbackDays } from "@/lib/ebay/soldComps";
 import type { ComparableQuery, ComparableResult } from "@/lib/ebay/types";
 import { suggestPrice } from "@/lib/pricing/suggestPrice";
-import { onlyCds, sameCondition } from "@/lib/pricing/version";
+import { onlyCds, sameCondition, searchName } from "@/lib/pricing/version";
 import type { Condition } from "@/lib/ebay/sell";
 
 export async function POST(request: Request) {
@@ -56,7 +56,8 @@ export async function POST(request: Request) {
           savedAt: new Date().toISOString(),
           partial: false,
           barcode: query.gtin,
-          name: query.keywords,
+          // The name the search used, as the plugin reads it (lookups by barcode are keyed by the barcode).
+          name: query.keywords && searchName(query.keywords),
           condition: sellerCondition,
           queries: soldQueries,
         });

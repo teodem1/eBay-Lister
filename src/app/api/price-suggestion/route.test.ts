@@ -82,6 +82,12 @@ describe("POST /api/price-suggestion saving sold lookups", () => {
     expect(Number.isNaN(Date.parse(input.savedAt))).toBe(false);
   });
 
+  it("saves under the short search name, as the plugin reads it", async () => {
+    searchReturns([["keywords", [sale("1", 10)]]]);
+    await post({ keywords: "James Horner Braveheart (Original Motion Picture Soundtrack)" });
+    expect(saveLookup.mock.calls[0][1].name).toBe("James Horner Braveheart");
+  });
+
   it("answers the same 200 body when the save fails", async () => {
     searchReturns([["keywords", [sale("1", 10), sale("2", 12), sale("3", 14)]]]);
     const ok = await (await post()).json();

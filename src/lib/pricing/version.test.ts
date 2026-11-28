@@ -131,3 +131,25 @@ describe("sameCondition", () => {
     expect(sameCondition(items, undefined)).toHaveLength(8);
   });
 });
+
+describe("searchName", () => {
+  it("drops a Various Artists prefix, bracketed parts and a subtitle after a colon", async () => {
+    const { searchName } = await import("./version");
+    const cases: Record<string, string> = {
+      "Various Artists Baraka: Music From the Original Motion Picture Soundtrack": "Baraka",
+      "James Horner Braveheart (Original Motion Picture Soundtrack)": "James Horner Braveheart",
+      "John Williams Schindler's List: Original Motion Picture Soundtrack": "John Williams Schindler's List",
+      "Genesis Wind & Wuthering [Remastered]": "Genesis Wind & Wuthering",
+      "Jean-Claude Petit Cyrano de Bergerac": "Jean-Claude Petit Cyrano de Bergerac",
+      "Various Artists": "Various Artists",
+      ": (x)": ": (x)",
+    };
+    for (const [long, short] of Object.entries(cases)) expect(searchName(long), long).toBe(short);
+  });
+
+  it("is what CD searches send, unless the name asks for another format", async () => {
+    const { cdKeywords } = await import("./version");
+    expect(cdKeywords("James Horner Braveheart (Original Motion Picture Soundtrack)")).toBe("James Horner Braveheart CD");
+    expect(cdKeywords("Pink Floyd The Wall (Vinyl Edition)")).toBe("Pink Floyd The Wall (Vinyl Edition)");
+  });
+});
