@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Backend } from "../comps/store";
-import { readIndex, readLive, readProposals, readRun, readRuns, saveRun, writeIndex, writeLive, writeProposals } from "./store";
+import { WriteConflict, type Backend } from "../comps/store";
+import { readIndex, readLive, readProposals, readRun, readRuns, saveRun, updateIndex, updateProposals, writeIndex, writeLive, writeProposals } from "./store";
 import type { BatchRun, Proposal } from "./types";
 
 function memory(files: Record<string, string> = {}) {
@@ -96,5 +96,57 @@ describe("batch store", () => {
     const runs = await readRuns(backend);
     expect(runs).toHaveLength(1);
     expect(runs[0].status).toBe("done");
+  });
+});
+
+/** A store with file versions: a write with an old version is refused, as Vercel Blob's ifMatch does. */
+function versioned(files: Record<string, string> = {}) {
+  const versions: Record<string, number> = {};
+  let beforeWrite: (() => void) | null = null;
+  const backend: Backend = {
+    read: async (p) => files[p] ?? null,
+    readTagged: async (p) => (p in files ? { text: files[p], etag: String(versions[p] ?? 0) } : null),
+    write: async (p, b, opts) => {
+      const hook = beforeWrite;
+      beforeWrite = null;
+      hook?.();
+      if (opts?.ifMatch !== undefined && opts.ifMatch !== String(versions[p] ?? 0)) throw new WriteConflict(p);
+      files[p] = b;
+      versions[p] = (versions[p] ?? 0) + 1;
+    },
+  };
+  return { backend, files, onNextWrite: (f: () => void) => (beforeWrite = f), versions };
+}
+
+describe("safe updates", () => {
+  it("redoes a change when another writer saved the file in between, keeping both changes", async () => {
+    const { backend, files, onNextWrite, versions } = versioned();
+    await writeIndex(backend, { A: { status: "open", updatedAt: "t" } });
+    versions["batch/index.json"] = 1;
+    onNextWrite(() => {
+      // Another run reserves B while this change is being written.
+      const cur = JSON.parse(files["batch/index.json"]);
+      files["batch/index.json"] = JSON.stringify({ ...cur, B: { status: "in_progress", updatedAt: "t" } });
+      versions["batch/index.json"] += 1;
+    });
+    await updateIndex(backend, (index) => ({ ...index, A: { status: "dismissed", updatedAt: "t2" } }));
+    expect(JSON.parse(files["batch/index.json"])).toEqual({ A: { status: "dismissed", updatedAt: "t2" }, B: { status: "in_progress", updatedAt: "t" } });
+  });
+
+  it("writes nothing when the change returns undefined", async () => {
+    const { backend, files } = versioned();
+    await updateProposals(backend, new Date(), () => undefined);
+    expect(files["batch/proposals.json"]).toBeUndefined();
+  });
+
+  it("gives up after 5 refused writes", async () => {
+    const backend: Backend = {
+      read: async () => "{}",
+      readTagged: async () => ({ text: "{}", etag: "1" }),
+      write: async (p) => {
+        throw new WriteConflict(p);
+      },
+    };
+    await expect(updateIndex(backend, () => ({}))).rejects.toBeInstanceOf(WriteConflict);
   });
 });

@@ -5,8 +5,8 @@
  */
 import { nextDue, nextSkus } from "@/lib/liveBatch/queue";
 import { offerRoom } from "@/lib/liveBatch/offers";
-import { readLive, readProposals, writeProposals } from "@/lib/liveBatch/store";
-import type { Proposal } from "@/lib/liveBatch/types";
+import { readLive, readProposals, updateProposals } from "@/lib/liveBatch/store";
+import { isPending, type Proposal } from "@/lib/liveBatch/types";
 import { batchStore, readState, storageError } from "./shared";
 
 export async function GET() {
@@ -16,7 +16,9 @@ export async function GET() {
     const now = new Date();
     const { index, runs } = await readState(b, now);
     const [stored, live] = await Promise.all([readProposals(b), readLive(b)]);
-    const proposals = await withBestOfferRoom(b, stored, now);
+    const proposals = Object.values(stored).some(needsBestOfferRoom)
+      ? await updateProposals(b, now, (all) => (Object.values(all).some(needsBestOfferRoom) ? withBestOfferRoom(all) : undefined))
+      : stored;
     return Response.json({
       runs: runs.slice(0, 10),
       proposals: Object.values(proposals).sort((x, y) => y.createdAt.localeCompare(x.createdAt)),
@@ -28,18 +30,19 @@ export async function GET() {
 }
 
 /**
- * Proposals waiting from before the Best Offer rule (no `target`) get it once: a lowered price is listed
- * so a typical offer lands on the sales-based price, with a flag saying so. Written back, so it happens once.
+ * Proposals waiting from before the Best Offer rule have no `target` field at all (new ones always have it,
+ * null when unknown). They get it once: a lowered price is listed so a typical offer lands on the sales-based
+ * price, with a flag saying so. Written back, so it happens once.
  */
-async function withBestOfferRoom(b: Parameters<typeof writeProposals>[0], proposals: Record<string, Proposal>, now: Date) {
-  let changed = false;
+const needsBestOfferRoom = (p: Proposal) => isPending(p.status) && p.target === undefined;
+
+function withBestOfferRoom(proposals: Record<string, Proposal>): Record<string, Proposal> {
   const next: Record<string, Proposal> = {};
   for (const [sku, p] of Object.entries(proposals)) {
-    if ((p.status !== "open" && p.status !== "review") || p.target !== undefined) {
+    if (!needsBestOfferRoom(p)) {
       next[sku] = p;
       continue;
     }
-    changed = true;
     const price = offerRoom(p.snapshot.price, p.price);
     const flags =
       price !== null && p.price !== null && price !== p.price
@@ -47,6 +50,5 @@ async function withBestOfferRoom(b: Parameters<typeof writeProposals>[0], propos
         : p.flags;
     next[sku] = { ...p, target: p.price, price, flags };
   }
-  if (changed) await writeProposals(b, next, now);
   return next;
 }

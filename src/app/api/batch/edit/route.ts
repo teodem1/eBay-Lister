@@ -4,7 +4,8 @@
  */
 import { z } from "zod";
 import { TITLE_MAX } from "@/lib/listing/limits";
-import { readProposals, writeProposals } from "@/lib/liveBatch/store";
+import { updateProposals } from "@/lib/liveBatch/store";
+import { isPending, type Proposal } from "@/lib/liveBatch/types";
 import { batchStore, refuseKeyHeader, storageError } from "../shared";
 
 const Body = z.object({
@@ -24,14 +25,17 @@ export async function POST(request: Request) {
   if (b instanceof Response) return b;
   try {
     const now = new Date();
-    const proposals = await readProposals(b);
-    const p = proposals[parsed.data.sku];
-    if (!p || (p.status !== "open" && p.status !== "review")) {
-      return Response.json({ error: "No open proposal for this listing." }, { status: 404 });
-    }
-    proposals[p.sku] = { ...p, title: parsed.data.title, price: Math.round(parsed.data.price * 100) / 100 };
-    await writeProposals(b, proposals, now);
-    return Response.json({ proposal: proposals[p.sku] });
+    const { sku, title } = parsed.data;
+    const price = Math.round(parsed.data.price * 100) / 100;
+    let edited: Proposal | undefined;
+    await updateProposals(b, now, (all) => {
+      const p = all[sku];
+      if (!p || !isPending(p.status)) return (edited = undefined);
+      edited = { ...p, title, price };
+      return { ...all, [sku]: edited };
+    });
+    if (!edited) return Response.json({ error: "No open proposal for this listing." }, { status: 404 });
+    return Response.json({ proposal: edited });
   } catch (err) {
     return storageError(err);
   }

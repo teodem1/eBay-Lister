@@ -3,7 +3,7 @@
  * when any of them is for a listing that run did not reserve.
  */
 import { z } from "zod";
-import { readProposals, writeIndex, writeProposals } from "@/lib/liveBatch/store";
+import { updateIndex, updateProposals } from "@/lib/liveBatch/store";
 import type { Proposal } from "@/lib/liveBatch/types";
 import { batchStore, readState, storageError } from "../shared";
 
@@ -42,14 +42,19 @@ export async function POST(request: Request) {
     if (notMine.length) {
       return Response.json({ error: `Not reserved by this run: ${notMine.map((p) => p.sku).join(", ")}.` }, { status: 409 });
     }
-    const all = await readProposals(b);
-    const next = { ...index };
-    for (const p of proposals) {
-      all[p.sku] = { ...p, runId, createdAt: now.toISOString(), status: "open" } satisfies Proposal;
-      next[p.sku] = { status: "open", runId, updatedAt: now.toISOString() };
-    }
-    await writeProposals(b, all, now);
-    await writeIndex(b, next);
+    await updateProposals(b, now, (all) => {
+      const next = { ...all };
+      for (const p of proposals) {
+        // `target` always set (null when the session gave none), so the old-proposal Best Offer step never runs on it.
+        next[p.sku] = { ...p, target: p.target ?? null, runId, createdAt: now.toISOString(), status: "open" } satisfies Proposal;
+      }
+      return next;
+    });
+    await updateIndex(b, (cur) => {
+      const next = { ...cur };
+      for (const p of proposals) next[p.sku] = { status: "open", runId, updatedAt: now.toISOString() };
+      return next;
+    });
     return Response.json({ saved: proposals.length });
   } catch (err) {
     return storageError(err);

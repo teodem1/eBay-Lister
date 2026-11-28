@@ -10,7 +10,8 @@ import { readListing } from "@/lib/ebay/refreshListings";
 import { claudeErrorMessage, claudeErrorStatus } from "@/lib/claude/errors";
 import { askAboutProposal } from "@/lib/liveBatch/ask";
 import { listingSales } from "@/lib/liveBatch/sales";
-import { readProposals, writeProposals } from "@/lib/liveBatch/store";
+import { readProposals, updateProposals } from "@/lib/liveBatch/store";
+import { isPending } from "@/lib/liveBatch/types";
 import { sellClient } from "@/app/api/listing/refresh/shared";
 import { batchStore, refuseKeyHeader, storageError } from "../shared";
 
@@ -31,12 +32,12 @@ export async function POST(request: Request) {
   let live;
   try {
     p = (await readProposals(b))[sku];
-    if (!p || (p.status !== "open" && p.status !== "review")) {
+    if (!p || !isPending(p.status)) {
       return Response.json({ error: "No open proposal for this listing." }, { status: 404 });
     }
     live = await readListing(ebay.client, sku);
     if (!live) return Response.json({ error: "This listing is not live (it sold or ended)." }, { status: 404 });
-    sales = (await listingSales(b, live)).sales;
+    sales = (await listingSales(b, live, live.sellerCondition?.condition)).sales;
   } catch (err) {
     return storageError(err);
   }
@@ -53,24 +54,25 @@ export async function POST(request: Request) {
 
   try {
     const now = new Date();
-    const fresh = await readProposals(b);
-    const cur = fresh[sku];
-    if (cur) {
-      // The answer re-proposes the price; the old one stays in `asked.previousPrice`. Nothing is sent to eBay.
-      const repriced = asked.target !== null && asked.price !== null;
+    const answer = asked;
+    await updateProposals(b, now, (fresh) => {
+      const cur = fresh[sku];
+      if (!cur) return undefined;
+      // The answer re-proposes the price; the batch's own price stays in `asked.previousPrice`. Nothing is sent
+      // to eBay. It replaces the earlier price notes and the one-sale pending price, which Apply would else prefer.
+      const repriced = answer.target !== null && answer.price !== null;
       const money = (n: number | null) => (n === null ? "no price" : `C$${n.toFixed(2)}`);
-      const flag = `Price re-proposed by Ask Claude (${asked.basis === "matching" ? `${asked.matching.length} matching sales` : "estimate"}): ${money(asked.price)}, was ${money(asked.previousPrice)}.`;
-      fresh[sku] = {
-        ...cur,
-        asked,
-        ...(repriced && {
-          price: asked.price,
-          target: asked.target,
-          flags: [...cur.flags.filter((f) => !f.startsWith("Price re-proposed by Ask Claude")), flag],
-        }),
+      const flag = `Price re-proposed by Ask Claude (${answer.basis === "matching" ? `${answer.matching.length} matching sales` : "estimate"}): ${money(answer.price)}, was ${money(answer.previousPrice)}.`;
+      const stale = (f: string) => f.startsWith("Price re-proposed by Ask Claude") || f.startsWith("Lowered less to leave room for Best Offer");
+      return {
+        ...fresh,
+        [sku]: {
+          ...cur,
+          asked: answer,
+          ...(repriced && { price: answer.price, target: answer.target, pendingPrice: null, flags: [...cur.flags.filter((f) => !stale(f)), flag] }),
+        },
       };
-    }
-    await writeProposals(b, fresh, now);
+    });
   } catch (err) {
     console.error("saving the answer failed", err);
   }

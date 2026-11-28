@@ -24,7 +24,8 @@ export async function GET(request: Request) {
   }
   if (!live) return Response.json({ error: "This listing is not live (it sold or ended)." }, { status: 404 });
   try {
-    return Response.json(await listingSales(b, live));
+    const { sales, savedAt, partial } = await listingSales(b, live, live.sellerCondition?.condition);
+    return Response.json({ sales, savedAt, partial });
   } catch (err) {
     return storageError(err);
   }

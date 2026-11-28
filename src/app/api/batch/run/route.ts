@@ -8,7 +8,7 @@ import { listLiveListings } from "@/lib/ebay/refreshListings";
 import { sellClient } from "@/app/api/listing/refresh/shared";
 import { fireRoutine } from "@/lib/liveBatch/fire";
 import { estimateFits, nextDue, nextSkus, release, reserve } from "@/lib/liveBatch/queue";
-import { saveRun, writeIndex, writeLive } from "@/lib/liveBatch/store";
+import { saveRun, updateIndex, writeLive } from "@/lib/liveBatch/store";
 import type { BatchRun } from "@/lib/liveBatch/types";
 import { batchStore, readState, storageError, refuseKeyHeader } from "../shared";
 
@@ -64,10 +64,14 @@ export async function POST(request: Request) {
 
   // The run record first: if the reservation is then written, a run that never answers releases it.
   const run: BatchRun = { id: crypto.randomUUID(), startedAt: now.toISOString(), fiveHour, weekly, skus, status: "started" };
-  const reserved = reserve(state.index, skus, run.id, now);
   try {
     await saveRun(b, run);
-    await writeIndex(b, reserved);
+    // Reserved on the index as stored now, leaving out any listing whose state changed meanwhile (another run took it).
+    await updateIndex(b, (index) => {
+      run.skus = skus.filter((s) => index[s]?.status === state.index[s]?.status);
+      return reserve(index, run.skus, run.id, now);
+    });
+    if (run.skus.length !== skus.length) await saveRun(b, run);
     await writeLive(b, live);
   } catch (err) {
     return storageError(err);
@@ -79,8 +83,7 @@ export async function POST(request: Request) {
   } catch (err) {
     const reason = err instanceof Error ? err.message : "The batch could not start.";
     try {
-      const { index } = await readState(b, new Date());
-      await writeIndex(b, release(index, skus.filter((s) => index[s]?.runId === run.id)));
+      await updateIndex(b, (index) => release(index, run.skus.filter((s) => index[s]?.runId === run.id)));
       await saveRun(b, { ...run, status: "failed", reason, finishedAt: new Date().toISOString() });
     } catch (e) {
       console.error("releasing a failed run failed", e);

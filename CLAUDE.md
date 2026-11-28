@@ -66,7 +66,7 @@ Screens (phone first):
   `src/lib/ebay/soldComps.ts` when `SOLD_COMPS_API_KEY` is set) and current listings (Browse). It
   prefills last-sold recommended, else current; a `?price=` or a price the user picks wins.
   Searches by name use the short search name (`searchName` in `src/lib/pricing/version.ts`, via `cdKeywords`): no
-  "Various Artists" prefix, bracketed parts or subtitle after a colon. Once 5+ CDs marked sold in Collection share an interest level (`src/lib/learning/`, recorded quietly by "Mark as sold"), the typical sold price for a CD at that level is taken at the percentile the seller's own sales reached (`learned` in `suggestPrice`, read in `/api/price-suggestion`; Auto's evidence tells Claude, Update live listings' `reprice.py` uses it too). Every sold lookup is saved to private Vercel Blob
+  "Various Artists" prefix, bracketed parts or subtitle after a colon. Once 5+ CDs marked sold in Collection share an interest level (`src/lib/learning/`, recorded quietly by "Mark as sold"), the typical sold price for a CD at that level is taken at the percentile the seller's own sales reached (interest = CD sales in any grade against CDs listed now, measured the same way when a sale is recorded, on Scan/Auto and in the skill; `learned` in `suggestPrice`, read in `/api/price-suggestion`; Auto's evidence tells Claude, Update live listings' `reprice.py` uses it too). Every sold lookup is saved to private Vercel Blob
   (`src/lib/comps/`, keyed by barcode, else the short name) for the plugin, which reads `/api/comps` before buying one.
   Prices use only Canadian copies (sold from CA or titled Canadian) when there are 3+, and leave out
   other versions the item text doesn't name (Japanese, vinyl, signed, lots): `src/lib/pricing/version.ts`.
@@ -144,7 +144,9 @@ Screens (phone first):
   `/api/batch/runs/[id]`); the screen polls `/api/batch` every 20 s, shows proposals (old/new title, specifics, price,
   engagement, flags) and sends the ticked ones through `/api/batch/apply` (`applyProposal` in `src/lib/liveBatch/apply.ts`:
   re-read, skip if changed, text then price alone). `/api/batch/run`, `/apply` and `/dismiss` are phone only (`PHONE_ONLY`
-  in `src/lib/auth/access.ts`: the key header never opens them). Records in Blob under `batch/` (`src/lib/liveBatch/store.ts`).
+  in `src/lib/auth/access.ts`: the key header never opens them; so is `/api/learning/outcome`). Records in Blob under `batch/` (`src/lib/liveBatch/store.ts`);
+  every change goes through `updateIndex` / `updateProposals` / `saveRun` (conditional write on the file's ETag, redone on a
+  conflict), so two runs and the phone never overwrite each other. A text saved with a failed price counts as failed (re-queued).
   A lowered price is listed at the sales-based `target` ÷ 0.85 (`offerRoom` in `src/lib/liveBatch/offers.ts`, same rule in
   the skill's `reprice.py`), so a typical Best Offer lands on it. "Send to Review" moves a proposal to the Review tab
   (`src/app/review/BatchReviewSection.tsx`, `/api/batch/review`): title and price editable (`/api/batch/edit`), "Send to
@@ -154,7 +156,11 @@ Screens (phone first):
   it always re-proposes the price from what the seller adds (`basis` matching or estimate, old price kept) and may
   suggest a title, which only fills the field ("Use this title"). When facts would change the price it asks up to 3
   questions, each with an answer box; "Answer and ask again" adds the answers to the note (`followUpNote`). Review, edit
-  and ask are phone only too.
+  and ask are phone only too. Dismiss works on open and Review proposals. A pending price and short-name sales show as warnings
+  outside "Why?" (`warnings` in `batchView.ts`); the over-50% badge is worked out from the price shown, edited or not, and Review
+  can accept the pending price. Ask Claude keeps the batch's first price as `previousPrice` across asks and, when it re-prices,
+  drops the pending price and the old Best Offer note. New proposals always store `target` (null when unknown), so the one-time
+  Best Offer step in `GET /api/batch` only touches proposals from before that rule.
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { AppBar, Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
+import { TITLE_MAX } from "@/lib/listing/limits";
 import type { BatchRun, Proposal } from "@/lib/listing/types";
 import { priceChange, proposalRows, request as call, runLabel, toSend } from "./batchView";
 import WhyDetails from "./WhyDetails";
@@ -294,7 +295,7 @@ function ProposalCard({
         <>
           <p className="t-caption text-muted line-through">{p.snapshot.title}</p>
           <p className="t-headline">
-            {p.title} <span className="t-caption font-normal text-muted">({p.title.length}/80)</span>
+            {p.title} <span className="t-caption font-normal text-muted">({p.title.length}/{TITLE_MAX})</span>
           </p>
         </>
       ) : (
@@ -308,7 +309,7 @@ function ProposalCard({
         ) : (
           <>
             <span className="text-muted line-through">{money(price.from)}</span> <b>{money(price.to)}</b>
-            {price.flag && <span className="chip-toggle ml-2" aria-pressed="false">{price.flag}</span>}
+            {price.flag && <span className="chip ml-2 border border-line-strong text-foreground">{price.flag}</span>}
           </>
         )}
       </p>
@@ -349,6 +350,7 @@ function ProposalCard({
           </button>
         </div>
       )}
+      {/* White on purpose: eBay shows the description on white, so the preview matches it in dark mode too. */}
       {showText && <iframe title="Text added to the description" sandbox="" className="h-48 w-full rounded-xl border border-line bg-white" srcDoc={p.appendHtml} />}
     </li>
   );

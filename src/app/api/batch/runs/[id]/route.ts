@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { release } from "@/lib/liveBatch/queue";
-import { readRun, saveRun, writeIndex } from "@/lib/liveBatch/store";
+import { readRun, saveRun, updateIndex } from "@/lib/liveBatch/store";
 import { batchStore, readState, storageError } from "../../shared";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -36,11 +36,14 @@ export async function POST(request: Request, { params }: Ctx) {
   if (b instanceof Response) return b;
   try {
     const now = new Date();
-    const { index, runs } = await readState(b, now);
+    const { runs } = await readState(b, now);
     const run = runs.find((r) => r.id === id);
     if (!run) return Response.json({ error: "No such run." }, { status: 404 });
-    const leftovers = run.skus.filter((s) => index[s]?.status === "in_progress" && index[s]?.runId === id);
-    await writeIndex(b, release(index, leftovers));
+    let leftovers: string[] = [];
+    await updateIndex(b, (index) => {
+      leftovers = run.skus.filter((s) => index[s]?.status === "in_progress" && index[s]?.runId === id);
+      return leftovers.length ? release(index, leftovers) : undefined;
+    });
     const closed = { ...run, status: parsed.data.status, reason: parsed.data.reason, finishedAt: now.toISOString() };
     await saveRun(b, closed);
     return Response.json({ run: closed, released: leftovers });

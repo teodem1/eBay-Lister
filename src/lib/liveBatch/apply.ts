@@ -149,6 +149,7 @@ export async function applyProposal(
       reasons.push(`Price failed: ${message(err)}`);
     }
   }
-  const status: EntryStatus = text === "updated" || price !== "failed" ? "applied" : "failed";
+  // A price that did not go through is a failure even when the text did: the listing comes back in the queue.
+  const status: EntryStatus = price === "failed" ? "failed" : "applied";
   return { status, result: { text, price, reason: reasons.join(" ") } };
 }

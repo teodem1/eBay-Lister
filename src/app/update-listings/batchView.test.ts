@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BatchRun, Proposal } from "@/lib/listing/types";
-import { followUpNote, priceChange, proposalRows, request, runLabel, toSend } from "./batchView";
+import { followUpNote, notes, priceChange, proposalRows, request, runLabel, toSend, warnings } from "./batchView";
 import { vi } from "vitest";
 
 const NOW = new Date("2026-11-28T12:00:00.000Z");
@@ -54,6 +54,23 @@ describe("priceChange", () => {
     expect(priceChange(p({ snapshot: { title: "T", price: 10 }, price: 4 }))).toEqual({ from: 10, to: 4, flag: "-60%" });
     expect(priceChange(p({ snapshot: { title: "T", price: 10 }, price: 12 }))).toEqual({ from: 10, to: 12 });
     expect(priceChange(p({ snapshot: { title: "T", price: null }, price: 12 }))).toEqual({ from: null, to: 12 });
+  });
+});
+
+describe("warnings and notes", () => {
+  it("shows a pending price and short-name sales outside Why?, and leaves the rest for Why?", () => {
+    const flags = ["Pending C$30 from one LED sale.", "Sales from a short-name search.", "Writer: label unknown."];
+    const p = { flags } as unknown as Proposal;
+    expect(warnings(p)).toEqual(flags.slice(0, 2));
+    expect(notes(p)).toEqual(["Writer: label unknown."]);
+  });
+});
+
+describe("priceChange with an edited price", () => {
+  it("flags the price the seller typed, not the proposal's", () => {
+    const p = { snapshot: { price: 10 }, price: 11 } as unknown as Proposal;
+    expect(priceChange(p).flag).toBeUndefined();
+    expect(priceChange(p, 16).flag).toBe("+60%");
   });
 });
 

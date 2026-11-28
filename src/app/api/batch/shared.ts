@@ -2,7 +2,7 @@
 import { KEY_HEADER } from "@/lib/auth/access";
 import { blobBackend, type Backend } from "@/lib/comps/store";
 import { expireRuns } from "@/lib/liveBatch/queue";
-import { readIndex, readRuns, saveRun, writeIndex } from "@/lib/liveBatch/store";
+import { readIndex, readRuns, saveRun, updateIndex } from "@/lib/liveBatch/store";
 import type { BatchIndex, BatchRun } from "@/lib/liveBatch/types";
 
 export function batchStore(): Backend | Response {
@@ -19,9 +19,10 @@ export async function readState(b: Backend, now: Date): Promise<{ index: BatchIn
   const [index, runs] = await Promise.all([readIndex(b), readRuns(b)]);
   const out = expireRuns(runs, index, now);
   const expired = out.runs.filter((r, i) => r !== runs[i]);
-  if (out.index !== index) await writeIndex(b, out.index);
+  // Released on the index as stored now, so a change written meanwhile is kept.
+  const stored = out.index === index ? index : await updateIndex(b, (cur) => expireRuns(runs, cur, now).index);
   for (const r of expired) await saveRun(b, r);
-  return out;
+  return { runs: out.runs, index: stored };
 }
 
 /** Phone-only routes refuse any request carrying the key header (a cloud session), whatever path reached them. */

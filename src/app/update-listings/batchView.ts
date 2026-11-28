@@ -1,5 +1,6 @@
-/** Pure view logic for the phone batch screen (no React, no fetch), so it is tested on its own. */
+/** View logic for the phone batch screen and Review (no React), so it is tested on its own; `request` wraps fetch. */
 import type { BatchRun, Proposal } from "@/lib/listing/types";
+import { isPending } from "@/lib/liveBatch/types";
 
 const cds = (n: number) => `${n} CD${n === 1 ? "" : "s"}`;
 
@@ -22,14 +23,13 @@ export function proposalRows(proposals: Proposal[]): { open: Proposal[]; review:
   return {
     open: proposals.filter((p) => p.status === "open"),
     review: proposals.filter((p) => p.status === "review"),
-    recent: proposals.filter((p) => p.status !== "open" && p.status !== "review" && p.status !== "in_progress"),
+    recent: proposals.filter((p) => !isPending(p.status) && p.status !== "in_progress"),
   };
 }
 
-/** The price before and after; `flag` ("+60%", "-55%") when it moves more than 50%. */
-export function priceChange(p: Proposal): { from: number | null; to: number | null; flag?: string } {
+/** The price before and after (`to`: the seller's edited price, else the proposal's); `flag` ("+60%", "-55%") when it moves more than 50%. */
+export function priceChange(p: Proposal, to: number | null = p.price): { from: number | null; to: number | null; flag?: string } {
   const from = p.snapshot.price;
-  const to = p.price;
   if (from === null || to === null || from <= 0) return { from, to };
   const change = (to - from) / from;
   return Math.abs(change) > 0.5 ? { from, to, flag: `${change > 0 ? "+" : "-"}${Math.round(Math.abs(change) * 100)}%` } : { from, to };
@@ -50,6 +50,21 @@ export async function request<T>(url: string, body?: unknown): Promise<{ ok: boo
 export function toSend(shown: string[], open: Proposal[], skipped: Set<string>): string[] {
   const stillOpen = new Set(open.map((p) => p.sku));
   return shown.filter((sku) => stillOpen.has(sku) && !skipped.has(sku));
+}
+
+/**
+ * Flags the seller must see without tapping "Why?": a pending price and sales from a short-name search.
+ * The over-50% change is not one of them: the card works it out from the price shown (`priceChange`),
+ * so it stays right after an edit or an Ask Claude price.
+ */
+export function warnings(p: Proposal): string[] {
+  return p.flags.filter((f) => /pending|short[- ]name/i.test(f));
+}
+
+/** The flags left for "Why?" (writer notes, Best Offer room, Ask Claude's price note). */
+export function notes(p: Proposal): string[] {
+  const shown = new Set(warnings(p));
+  return p.flags.filter((f) => !shown.has(f));
 }
 
 const NOTE_MAX = 600;
