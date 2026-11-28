@@ -117,6 +117,13 @@ class DemandTest(unittest.TestCase):
     def test_interest_needs_3_sales_like_the_base(self):
         self.assertEqual(reprice(12, plain(10, 30), [], demand="high")["proposed"], 12)
 
+    def test_penny_and_far_too_low_sales_are_left_out(self):
+        r = reprice(12.99, plain(0.01, 4.43, 5.0, 5.74, 6.0, 21.36), [], demand="low")
+        self.assertEqual(r["count"], 5)
+        self.assertGreaterEqual(r["proposed"], 4.43)
+        self.assertIn("left out", r["reason"])
+        self.assertEqual(reprice(10, plain(1.5, 9, 10, 11), [])["count"], 3)  # under a third of the median
+
     def test_unknown_interest_is_refused(self):
         with self.assertRaises(ValueError):
             reprice(12, plain(10, 12, 14), [], demand="huge")

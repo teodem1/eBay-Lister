@@ -8,7 +8,7 @@
                high (collected artist or pressing, sought-after edition), low (common,
                recent, widely available), normal otherwise
 
-Needs 3 CAD sales, else the price stays. Where the price lands in those sales follows
+Penny sales (under C$1) and sales under a third of the median are left out as junk. Needs 3 CAD sales, else the price stays. Where the price lands in those sales follows
 demand: high = 75th percentile, normal = median, low = 25th percentile (to help it sell).
 A price may go up or down; changes over 50% either way are flagged, and nothing is sent
 without the seller's approval. A confirmed detail counts when its sales' median is above
@@ -24,6 +24,7 @@ import sys
 from pricing import EDITIONS
 
 MIN_BASE = 3
+MIN_SALE = 1.0
 DEMAND = {"low": 0, "normal": 1, "high": 2}  # index into the quartiles
 MIN_DETAIL = 2
 FLAG_CHANGE = 0.5
@@ -41,6 +42,15 @@ def _cad(items):
     return out
 
 
+def _sane(sales):
+    """Leaves out penny sales (under C$1) and sales under a third of the median: junk, not prices."""
+    kept = [(t, v) for t, v in sales if v >= MIN_SALE]
+    if kept:
+        floor = statistics.median([v for _, v in kept]) / 3
+        kept = [(t, v) for t, v in kept if v >= floor]
+    return kept, len(sales) - len(kept)
+
+
 def _money(value):
     return f"C${value:.2f}"
 
@@ -51,7 +61,7 @@ def reprice(current, items, details, demand="normal"):
     unknown = [d for d in details if d not in EDITIONS]
     if unknown:
         raise ValueError(f"Unknown detail: {', '.join(unknown)}")
-    sales = _cad(items)
+    sales, left_out = _sane(_cad(items))
     values = [v for _, v in sales]
     base = round(statistics.median(values), 2) if len(values) >= MIN_BASE else None
     target = (round(statistics.quantiles(values, n=4, method="inclusive")[DEMAND[demand]], 2)
@@ -88,6 +98,8 @@ def reprice(current, items, details, demand="normal"):
             reason += f" {applied[2]} {LABEL[applied[0]]} sales, median {_money(applied[1])}, set it higher."
         else:
             applied = None
+    if left_out:
+        reason += f" {left_out} sale{'s' if left_out != 1 else ''} under C$1 or under a third of the median left out."
     if pending and (proposed is None or pending[1] <= proposed):
         pending = None
     over_50 = bool(current and proposed is not None and abs(proposed - current) / current > FLAG_CHANGE)
