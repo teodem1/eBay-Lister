@@ -144,7 +144,7 @@
 
 ### Task 8: Release (each step needs the seller's approval)
 
-- [ ] Merge `comps-store` to `main`, deploy, check `GET /api/batch` answers and `POST /api/batch/apply` with the key header answers 401.
+- [x] Merge `comps-store` to `main`, deploy, check `GET /api/batch` answers and `POST /api/batch/apply` with the key header answers 401. Done 2026-11-28 at `c2bed48`: GET 200, apply and run with the key header 401.
 - [ ] Seller, at claude.ai/code/routines: task "Phone listing batch", repository `teodem1/eBay-Lister` branch `main`, environment "Optimize listing plug-in", prompt from `references/headless-prompt.md`, trigger API → Generate token. Seller adds `ROUTINE_FIRE_URL` and `ROUTINE_FIRE_TOKEN` (Sensitive) in Vercel and redeploys. The token never goes in chat.
 - [ ] First run from the phone with 5 listings (size 5 for the trial, call), proposals checked on the screen, one applied; record usage before and after.
 - [ ] If the API trigger is refused for the plan: switch to approach B (nightly schedule, same task without the API trigger, `size` 20, usage gate skipped with a warning flag), recorded in the spec.
