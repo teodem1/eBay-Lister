@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-6. Next: Task 7.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-7. Next: Task 8. SKILL.md and README still describe the old C$40 gate until Task 9.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -171,7 +171,7 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - `reprice.reprice(current, items, details) -> {"base", "count", "proposed", "applied_detail", "pending": {"detail","price"}|None, "over_50", "reason"}`; `items` = the same-grade sales, `details` = edition names confirmed on the seller's copy
 - `gate.research_needed(price) -> bool` (replaces `research_gate`)
 
-- [ ] **Step 1: Failing tests** (CAD item prices):
+- [x] **Step 1: Failing tests** (CAD item prices):
   - current 18, `[10,12,14]` → proposed 12
   - current 18, `[10,12]` → proposed 18, base `None`
   - current 10, others `[10,11,12]`, Canadian `[20,22]` → proposed 21, `over_50` true
@@ -180,10 +180,10 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
   - matching median not above the others', or every sale matching → detail ignored
   - unconfirmed detail ignored; non-CAD sales ignored; missing current price → `proposed` `None`
   - `research_needed(20)` true, `19.99` false, `None` false
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement** with `statistics.median`, `pricing.EDITIONS`, 2 decimals. No percentage cap. No detail raise without a base. Highest pending only if above `proposed`.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: stored-sales repricing`.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement** with `statistics.median`, `pricing.EDITIONS`, 2 decimals. No percentage cap. No detail raise without a base. Highest pending only if above `proposed`.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: stored-sales repricing`.
 
 ### Task 8: Check and apply approved changes (plugin)
 
