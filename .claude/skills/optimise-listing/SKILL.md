@@ -28,13 +28,13 @@ Run `scripts/listings.py list`; it prints a count and `data_file` (sku, title, p
 ### A3. Read each listing and its sold results
 Per listing:
 1. `scripts/listings.py read` with `{"sku": "..."}`: prints title, price, barcode, query, condition, `disc`, `booklet` and `data_file` (the snapshot). Skip a listing with no `condition` and say so.
-2. `scripts/listings.py sold` with `{"listing_file": "<snapshot data_file>"}`. Add `"refresh": true` only when the seller asks for fresh sold results. It reads the stored result first and looks up only when none exists. Report `source`, `saved_at`, and `partial` (an imported backup check, latest sales only). `lookup_unsaved`: the lookup was used once and not stored; say so. Never run `sold` twice for one listing. On an error, stop that listing: never retry a lookup.
+2. `scripts/listings.py sold` with `{"listing_file": "<snapshot data_file>"}`. Add `"refresh": true` only when the seller asks for fresh sold results. It reads the stored result first and looks up only when none exists. Searches use a short name (no "Various Artists", bracketed parts or subtitle after a colon); a CD whose stored result has 0 sales from before that change can be refreshed once, if the seller agrees to the lookup cost. Report `source`, `saved_at`, and `partial` (an imported backup check, latest sales only). `lookup_unsaved`: the lookup was used once and not stored; say so. Never run `sold` twice for one listing. On an error, stop that listing: never retry a lookup.
 
 Never open the snapshot or sold file yourself; pass the paths to the writer.
 
 ### A4. Research only from C$20
 Run `scripts/gate.py` with `{"price": <the listing's price>}`. Web research only when `research` is true (asking price C$20 or more). Below that, the listing and its stored sales are the only sources: title words and missing details that only research would find are not added.
-For the listings that need it, send `source-collector` (Haiku) once per artist where possible: one call with every album of that artist in the batch.
+For the listings that need it, send `source-collector` (Haiku) once per artist where possible: one call with every album of that artist in the batch. Soundtrack Collector (www.soundtrackcollector.com), Discogs (www.discogs.com), Filmtracks (www.filmtracks.com) and Muzilla (muzilla.ru) open from this session's network; other sites may not.
 
 ### A5. Write
 Send the batch of up to 5 to `listing-writer` (Sonnet) in one call: per listing the snapshot path, the sold file path, `research` and any leads, and both guide paths (`${CLAUDE_SKILL_DIR}/references/listing-rules.md`, `${CLAUDE_SKILL_DIR}/references/collector-research.md`).

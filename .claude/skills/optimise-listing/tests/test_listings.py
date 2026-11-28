@@ -196,6 +196,44 @@ class SoldTest(unittest.TestCase):
         self.assertNotIn(KEY, str(caught.exception))
 
 
+class SearchNameTest(unittest.TestCase):
+    def test_drops_subtitles_brackets_and_various_artists(self):
+        cases = {
+            "Various Artists Baraka: Music From the Original Motion Picture Soundtrack": "Baraka",
+            "James Horner Braveheart (Original Motion Picture Soundtrack)": "James Horner Braveheart",
+            "John Williams Schindler's List: Original Motion Picture Soundtrack": "John Williams Schindler's List",
+            "Genesis Wind & Wuthering [Remastered]": "Genesis Wind & Wuthering",
+            "Jean-Claude Petit Cyrano de Bergerac": "Jean-Claude Petit Cyrano de Bergerac",
+            "Various Artists": "Various Artists",
+            ": (x)": ": (x)",
+        }
+        for long, short in cases.items():
+            self.assertEqual(listings.search_name(long), short, long)
+
+    def test_lookup_searches_by_the_short_name(self):
+        long = {**LISTING, "query": "James Horner Braveheart (Original Motion Picture Soundtrack)"}
+        fake = Fake(comps=[{"found": False}, stored("2026-11-28T01:00:00.000Z")], price_suggestion=ANSWER)
+        run_sold(fake, listing=long)
+        read = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(fake.calls[0].full_url).query))
+        self.assertEqual(read["name"], "James Horner Braveheart")
+        self.assertEqual(json.loads(fake.calls[1].data)["keywords"], "James Horner Braveheart")
+
+    def test_without_a_barcode_a_result_stored_under_the_long_name_is_still_found(self):
+        long = {**LISTING, "barcode": None, "query": "John Williams Schindler's List: Original Motion Picture Soundtrack"}
+        fake = Fake(comps=[{"found": False}, stored()], price_suggestion=ANSWER)
+        out = run_sold(fake, listing=long)
+        self.assertEqual(out["source"], "stored")
+        self.assertEqual(fake.lookups(), 0)
+        names = [dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(r.full_url).query))["name"] for r in fake.calls]
+        self.assertEqual(names, ["John Williams Schindler's List", long["query"]])
+
+    def test_with_a_barcode_only_one_read_is_made(self):
+        long = {**LISTING, "query": "James Horner Braveheart (Original Motion Picture Soundtrack)"}
+        fake = Fake(comps=stored())
+        run_sold(fake, listing=long)
+        self.assertEqual(len(fake.calls), 1)
+
+
 class CheckTest(unittest.TestCase):
     def test_check_reports_only_reachable_and_authorised(self):
         cases = [(http_error(405), {"reachable": True, "authorised": True}),

@@ -16,6 +16,7 @@ and a paid lookup is never repeated, even when saving it failed.
 """
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -66,6 +67,16 @@ def _digits(barcode):
     return d if 8 <= len(d) <= 14 else ""
 
 
+def search_name(query):
+    """The name sold searches use: no "Various Artists" prefix, no (...) or [...] parts and no
+    subtitle after a colon, which eBay titles rarely carry in full. The full name when nothing is left."""
+    short = re.sub(r"\([^)]*\)|\[[^\]]*\]", " ", query or "")
+    short = short.split(":", 1)[0]
+    short = re.sub(r"^\s*various artists\b", " ", short, flags=re.I)
+    short = " ".join(short.split()).strip(" -,")
+    return short if re.search(r"\w", short) else (query or "")
+
+
 def _result(source, lookup, filtered):
     return {"source": source, "partial": bool(lookup.get("partial")), "saved_at": lookup.get("savedAt"),
             "data_file": _private_file("sold.json", {"lookup": lookup, "filtered": filtered})}
@@ -74,14 +85,18 @@ def _result(source, lookup, filtered):
 def sold(app, listing, refresh=False):
     """Sold sales for a live listing: the stored result, else exactly one paid lookup."""
     condition = (listing.get("sellerCondition") or {}).get("condition")
-    params = {"barcode": _digits(listing.get("barcode")), "name": listing.get("query"), "condition": condition}
+    name = search_name(listing.get("query"))
+    params = {"barcode": _digits(listing.get("barcode")), "name": name, "condition": condition}
     # Raises on 400 (no usable key), 502 (unreadable) or 503 (no storage): never looks up blind.
     before = app.get("/api/comps", params)
+    if not before.get("found") and not params["barcode"] and name != listing.get("query"):
+        # Stored before names were shortened: read it under the full name too, so it is not bought again.
+        before = app.get("/api/comps", {**params, "name": listing.get("query")})
     if before.get("found") and not refresh:
         return _result("stored", before["lookup"], before["filtered"])
     old_saved_at = before["lookup"].get("savedAt") if before.get("found") else None
 
-    body = {"keywords": listing.get("query"), "gtin": params["barcode"], "sellerCondition": condition}
+    body = {"keywords": name, "gtin": params["barcode"], "sellerCondition": condition}
     answer = app.post("/api/price-suggestion", {k: v for k, v in body.items() if v})
     if answer.get("soldLimitReached"):
         raise AppUnavailable(ALLOWANCE)
@@ -100,7 +115,7 @@ def sold(app, listing, refresh=False):
     items = comparables.get("items") or []
     ids = [i.get("itemId") for i in items]
     lookup = {"version": 1, "savedAt": None, "partial": False, "barcode": params["barcode"] or None,
-              "name": listing.get("query"), "condition": condition,
+              "name": name, "condition": condition,
               "queries": [{"by": comparables.get("matchedBy") or "keywords", "items": items}]}
     return _result("lookup_unsaved", lookup, {"cdOnly": ids, "sameGrade": ids, "detail": {}})
 
