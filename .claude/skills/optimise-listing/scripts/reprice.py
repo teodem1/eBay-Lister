@@ -25,6 +25,10 @@ from pricing import EDITIONS
 
 MIN_BASE = 3
 MIN_SALE = 1.0
+HIGH_MONTHS = 3
+LOW_MONTHS = 12
+SPAN_MIN_DAYS = 30
+SPAN_NO_DATES = 365
 DEMAND = {"low": 0, "normal": 1, "high": 2}  # index into the quartiles
 MIN_DETAIL = 2
 FLAG_CHANGE = 0.5
@@ -49,6 +53,35 @@ def _sane(sales):
         floor = statistics.median([v for _, v in kept]) / 3
         kept = [(t, v) for t, v in kept if v >= floor]
     return kept, len(sales) - len(kept)
+
+
+def engagement_level(sales, saved_at, listed, capped=False):
+    """Engagement from data: copies listed now against how fast copies sold.
+
+    sales: the CD's sold copies (any grade), each with `soldDate`; saved_at: when they were saved.
+    The pace covers the oldest sale to saved_at (at least 30 days; a year when no dates).
+    Months of supply = listed / sales per month: 3 or less is high, 12 or more is low.
+    """
+    from datetime import datetime
+    end = datetime.fromisoformat(saved_at.replace("Z", "+00:00")).date()
+    dates = [datetime.fromisoformat(d["soldDate"][:10]).date() for d in sales if d.get("soldDate")]
+    days = max(SPAN_MIN_DAYS, (end - min(dates)).days) if dates else SPAN_NO_DATES
+    sold = len(sales)
+    per_month = sold / (days / 30)
+    supply = round(listed / per_month, 1) if per_month else None
+    if sold == 0:
+        level = "low" if listed else "normal"
+    elif supply <= HIGH_MONTHS:
+        level = "high"
+    elif supply >= LOW_MONTHS:
+        level = "low"
+    else:
+        level = "normal"
+    shown = f"{listed}{' or more' if capped else ''}"
+    reason = (f"{sold} sold in {days} days, {shown} listed now"
+              + (f": {supply:g} months of supply" if supply is not None else "") + f", so {level} engagement.")
+    return {"level": level, "sold": sold, "listed": listed, "capped": capped, "days": days,
+            "months_of_supply": supply, "reason": reason}
 
 
 def _money(value):

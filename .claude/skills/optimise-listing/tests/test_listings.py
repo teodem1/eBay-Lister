@@ -242,6 +242,26 @@ class SearchNameTest(unittest.TestCase):
         self.assertEqual(len(fake.calls), 1)
 
 
+class EngagementCommandTest(unittest.TestCase):
+    def test_counts_listings_by_barcode_and_short_name_and_rates_them(self):
+        import datetime, tempfile
+        sold = stored("2026-11-28T00:00:00.000Z")
+        sold["lookup"]["queries"][-1]["items"] = [
+            {**sale(str(i), 10), "soldDate": (datetime.date(2026, 11, 28) - datetime.timedelta(days=10 * i)).isoformat()}
+            for i in range(1, 7)]
+        sold["filtered"]["cdOnly"] = [str(i) for i in range(1, 7)]
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "sold.json")
+            pathlib.Path(path).write_text(json.dumps({"lookup": sold["lookup"], "filtered": sold["filtered"]}))
+            fake = Fake(comps_current={"count": 2, "capped": False, "matchedBy": "barcode"})
+            long = {**LISTING, "query": "James Horner Braveheart (Original Motion Picture Soundtrack)"}
+            out = listings.engagement(App(URL, None, opener=fake), long, path)
+        query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(fake.calls[0].full_url).query))
+        self.assertEqual(query, {"barcode": "075678154323", "name": "James Horner Braveheart"})
+        self.assertEqual((out["level"], out["sold"], out["listed"]), ("high", 6, 2))
+        self.assertEqual(fake.lookups(), 0)
+
+
 class CheckTest(unittest.TestCase):
     def test_check_reports_only_reachable_and_authorised(self):
         cases = [(http_error(405), {"reachable": True, "authorised": True}),

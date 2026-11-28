@@ -4,6 +4,8 @@
     listings.py list     -> every live listing, saved to a private file; prints the count and path
     listings.py read     stdin {"sku"} -> the listing in full, saved privately; prints a headline
     listings.py sold     stdin {"listing_file" | "listing", "refresh"?} -> sold sales, saved privately
+    listings.py engagement stdin {"listing_file", "sold_file"} -> copies listed now against the sales pace:
+                         {"level": high|normal|low, "sold", "listed", "days", "months_of_supply", "reason"}
     listings.py import   stdin: the Collection backup -> stores its price checks as partial lookups
 
 Settings: ELISTER_URL (the app's https address). The key normally rides in a network
@@ -125,6 +127,25 @@ def sold(app, listing, refresh=False):
     return _result("lookup_unsaved", lookup, {"cdOnly": ids, "sameGrade": ids, "detail": {}}, listing.get("query"))
 
 
+def engagement(app, listing, sold_file):
+    """Engagement for a listing: copies listed now (eBay, no sold-comps lookup) against
+    the pace of the stored CD sales (any grade) in its sold file."""
+    from reprice import engagement_level
+    with open(sold_file, encoding="utf-8") as handle:
+        stored = json.load(handle)
+    keep = set(stored["filtered"]["cdOnly"])
+    sales = [i for i in stored["lookup"]["queries"][-1]["items"] if i.get("itemId") in keep]
+    params = {"barcode": _digits(listing.get("barcode")), "name": search_name(listing.get("query"))}
+    now = app.get("/api/comps/current", params)
+    saved_at = stored["lookup"].get("savedAt") or _now()
+    return engagement_level(sales, saved_at, int(now.get("count", 0)), bool(now.get("capped")))
+
+
+def _now():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _sale_ok(s):
     price = s.get("price") if isinstance(s, dict) else None
     return (isinstance(price, dict) and s.get("itemId") and s.get("title")
@@ -154,8 +175,8 @@ def import_backup(app, backup):
 
 
 def main(command, stdin):
-    if command not in ("check", "list", "read", "sold", "import"):
-        sys.exit("usage: listings.py check|list|read|sold|import  (JSON on stdin)")
+    if command not in ("check", "list", "read", "sold", "engagement", "import"):
+        sys.exit("usage: listings.py check|list|read|sold|engagement|import  (JSON on stdin)")
     app = App(os.environ.get("ELISTER_URL"), os.environ.get("ELISTER_ACCESS_KEY"))
     if command == "check":
         return check(app)
@@ -170,6 +191,10 @@ def main(command, stdin):
             with open(data["listing_file"], encoding="utf-8") as handle:
                 listing = json.load(handle)
         return sold(app, listing, refresh=bool(data.get("refresh")))
+    if command == "engagement":
+        with open(data["listing_file"], encoding="utf-8") as handle:
+            listing = json.load(handle)
+        return engagement(app, listing, data["sold_file"])
     return import_backup(app, data)
 
 

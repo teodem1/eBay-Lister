@@ -54,7 +54,7 @@ class PackageTest(unittest.TestCase):
 
     def test_demand_sets_the_price_position(self):
         skill = (SKILL / "SKILL.md").read_text()
-        for phrase in ('"demand"', "75th percentile", "25th percentile"):
+        for phrase in ('"demand"', "75th percentile", "25th percentile", "listings.py engagement", "months of supply"):
             self.assertIn(phrase, skill)
         for gone in ("keep_if_lower", "accept_lower", "lower_price", "never lowered"):
             self.assertNotIn(gone, skill)

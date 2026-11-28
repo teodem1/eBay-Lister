@@ -1,6 +1,6 @@
 import json, os, pathlib, subprocess, sys, tempfile, unittest
 from tests import helpers  # noqa: F401  (adds scripts to the path)
-from reprice import reprice
+from reprice import engagement_level, reprice
 
 
 def sale(value, title="Genesis Wind & Wuthering CD", currency="CAD"):
@@ -127,6 +127,49 @@ class DemandTest(unittest.TestCase):
     def test_unknown_interest_is_refused(self):
         with self.assertRaises(ValueError):
             reprice(12, plain(10, 12, 14), [], demand="huge")
+
+
+def dated(*days_ago, saved="2026-11-28T00:00:00.000Z"):
+    import datetime
+    end = datetime.datetime(2026, 11, 28)
+    return [{"soldDate": (end - datetime.timedelta(days=d)).date().isoformat()} for d in days_ago], saved
+
+
+class EngagementTest(unittest.TestCase):
+    def test_few_listed_against_steady_sales_is_high(self):
+        sales, saved = dated(5, 20, 40, 60, 80, 100)        # 6 sales over 100 days: 1.8 a month
+        r = engagement_level(sales, saved, listed=3)
+        self.assertEqual(r["level"], "high")
+        self.assertEqual((r["sold"], r["listed"], r["days"]), (6, 3, 100))
+        self.assertAlmostEqual(r["months_of_supply"], 1.7, places=1)
+
+    def test_many_listed_against_slow_sales_is_low(self):
+        sales, saved = dated(30, 200, 360)                   # 3 sales a year
+        self.assertEqual(engagement_level(sales, saved, listed=40)["level"], "low")
+
+    def test_in_between_is_normal(self):
+        sales, saved = dated(10, 40, 70, 100, 130, 160)      # about 1.1 a month
+        self.assertEqual(engagement_level(sales, saved, listed=8)["level"], "normal")
+
+    def test_none_listed_with_sales_is_high_and_none_sold_with_listings_is_low(self):
+        sales, saved = dated(10, 50)
+        self.assertEqual(engagement_level(sales, saved, listed=0)["level"], "high")
+        self.assertEqual(engagement_level([], saved, listed=5)["level"], "low")
+
+    def test_no_data_is_normal(self):
+        self.assertEqual(engagement_level([], "2026-11-28T00:00:00.000Z", listed=0)["level"], "normal")
+
+    def test_a_short_span_counts_as_30_days(self):
+        sales, saved = dated(1, 2)
+        self.assertEqual(engagement_level(sales, saved, listed=1)["days"], 30)
+
+    def test_sales_without_dates_count_over_a_year(self):
+        r = engagement_level([{"soldDate": None}] * 6, "2026-11-28T00:00:00.000Z", listed=1)
+        self.assertEqual(r["days"], 365)
+
+    def test_a_capped_count_is_said(self):
+        sales, saved = dated(5, 20, 40)
+        self.assertIn("or more", engagement_level(sales, saved, listed=200, capped=True)["reason"])
 
 
 class CommandTest(unittest.TestCase):

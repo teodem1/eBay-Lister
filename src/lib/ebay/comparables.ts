@@ -185,7 +185,8 @@ export async function searchActive(
 }
 
 /** Current listings with the item's barcode; by name when too few carry it. */
-async function searchActiveAny(
+/** Current listings for an item: by barcode, else (or with fewer than 3 barcode matches) by name. */
+export async function findCurrentListings(
   client: EbayClient,
   q: ComparableQuery,
 ): Promise<{ items: Comparable[]; notes: string[]; matchedBy: ComparableResult["matchedBy"] }> {
@@ -347,7 +348,7 @@ export async function findBothComparables(
   const marketplaceId = client.config.marketplaceId;
   let soldRemaining: number | undefined;
   const [active, sold] = await Promise.allSettled([
-    searchActiveAny(client, q),
+    findCurrentListings(client, q),
     searchSoldAny(client, q, {
       ...opts,
       onSoldRemaining: (n) => {
