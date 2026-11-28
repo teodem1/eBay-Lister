@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-28-phone-batch-design.md`
 
+**Status (2026-11-28):** Tasks 1-7 done on `comps-store` (whole-branch review fixed); Task 8 waits for the seller.
+
 ## Global Constraints
 
 - Nothing reaches eBay without a tap on the phone; only the phone (cookie) may call `/api/batch/run`, `/api/batch/apply`, `/api/batch/dismiss`.
@@ -49,11 +51,11 @@
 - Paths: `batch/index.json`, `batch/proposals/<sku>.json`, `batch/runs.json`.
 - `fireRoutine(env: Record<string, string | undefined>, text: string, fetchImpl?: typeof fetch): Promise<{ sessionId: string; sessionUrl: string }>`; throws `Error("Batch runs are not set up (ROUTINE_FIRE_URL, ROUTINE_FIRE_TOKEN).")` when unset; on non-2xx throws `Error("The batch could not start (status <n>).")` without the body or token.
 
-- [ ] **Step 1: Failing tests** with the in-memory `Backend` (as `src/lib/comps/store.test.ts`): index round trip; missing index is `{}`; a rejecting `read` rejects `readIndex`; proposal and run round trips; `readRuns` keeps the last 50. `fireRoutine`: sends the URL, the three headers and `{"text"}`; returns id and URL; unset env throws the setup message; a 500 answer throws `The batch could not start (status 500).` and the thrown message never contains the token.
-- [ ] **Step 2:** `npx vitest run src/lib/liveBatch` — FAIL (modules missing).
-- [ ] **Step 3: Implement** the files above; JSON validation by shape checks like `parseLookup` in `src/lib/comps/store.ts`.
-- [ ] **Step 4:** Tests PASS; `npm test && npm run lint`.
-- [ ] **Step 5:** Commit `feat: batch records and run firing`.
+- [x] **Step 1: Failing tests** with the in-memory `Backend` (as `src/lib/comps/store.test.ts`): index round trip; missing index is `{}`; a rejecting `read` rejects `readIndex`; proposal and run round trips; `readRuns` keeps the last 50. `fireRoutine`: sends the URL, the three headers and `{"text"}`; returns id and URL; unset env throws the setup message; a 500 answer throws `The batch could not start (status 500).` and the thrown message never contains the token.
+- [x] **Step 2:** `npx vitest run src/lib/liveBatch` — FAIL (modules missing).
+- [x] **Step 3: Implement** the files above; JSON validation by shape checks like `parseLookup` in `src/lib/comps/store.ts`.
+- [x] **Step 4:** Tests PASS; `npm test && npm run lint`.
+- [x] **Step 5:** Commit `feat: batch records and run firing`.
 
 ### Task 2: Queue, reservations and the usage estimate
 
@@ -66,11 +68,11 @@
 - `reserve(index: BatchIndex, skus: string[], runId: string, now: Date): BatchIndex`; `release(index: BatchIndex, skus: string[], now: Date): BatchIndex` (back to "never proposed": entry removed unless it had an earlier `applied`/`dismissed` record, which is kept with its old date, call);
 - `expireRuns(runs: BatchRun[], index: BatchIndex, now: Date): { runs: BatchRun[]; index: BatchIndex }` — `started` older than 2 h → `no_answer`, its `in_progress` SKUs released.
 
-- [ ] **Step 1: Failing tests:** order never-proposed (reversed) → `failed`/`stale` → applied/dismissed/open with `updatedAt` 60+ days ago (oldest first); `in_progress` and recent `open` never taken; sold listings (not in `live`) never taken; `size` respected; two `reserve` calls with the second built on the first's index give disjoint SKUs; `nextDue` = earliest `updatedAt + 60 days`; `estimateFits(22, 18, 0, 20).batch === 20`, `estimateFits(40, 18, 40, 20).batch === 0` with a reason naming the 80% stop, `estimateFits(50, 18, 20, 20).batch === 9`; `expireRuns` at 2 h 1 min marks `no_answer` and releases only that run's `in_progress` SKUs.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4:** PASS; `npm test && npm run lint`.
-- [ ] **Step 5:** Commit `feat: batch queue and reservations`.
+- [x] **Step 1: Failing tests:** order never-proposed (reversed) → `failed`/`stale` → applied/dismissed/open with `updatedAt` 60+ days ago (oldest first); `in_progress` and recent `open` never taken; sold listings (not in `live`) never taken; `size` respected; two `reserve` calls with the second built on the first's index give disjoint SKUs; `nextDue` = earliest `updatedAt + 60 days`; `estimateFits(22, 18, 0, 20).batch === 20`, `estimateFits(40, 18, 40, 20).batch === 0` with a reason naming the 80% stop, `estimateFits(50, 18, 20, 20).batch === 9`; `expireRuns` at 2 h 1 min marks `no_answer` and releases only that run's `in_progress` SKUs.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4:** PASS; `npm test && npm run lint`.
+- [x] **Step 5:** Commit `feat: batch queue and reservations`.
 
 ### Task 3: Proposal checks and apply
 
@@ -80,11 +82,11 @@
 - `checkProposal(live: LiveDetail, p: Proposal): string[]` — the rules of `changes.py check`: title ≤ 80; no old-title word (outside the grade suffix) missing; grades unchanged (short form of the same grades allowed; a title without grades may gain only the listing's own); no added specific already present in any letter case; prices positive.
 - `applyProposal(client: EbaySellClient, p: Proposal, acceptPending: boolean, opts: { bestOfferMinPercent?: number; currency: string }): Promise<{ status: EntryStatus; result: { text: string; price: string; reason: string } }>` — re-read; not live → `stale`; title or price ≠ `p.snapshot` → `stale`, nothing sent; `checkProposal` problems → `failed`, nothing sent; text via `applyRefresh(client, sku, live.title, { title, aspects: {...live.aspects, ...addAspects}, descriptionHtml: live.descriptionHtml + appendHtml })` (no price) unless nothing changes; price alone via `applyCollectionEdit(client, { sku, before: { title: "-", artist: "-", price: live.price }, after: { title: "-", artist: "-", price: target } }, opts)`; text skipped or failed → no price call; text updated and price error → status `applied` with `price: "failed"`.
 
-- [ ] **Step 1: Failing tests** using `fakeClient` from `src/lib/ebay/refreshListings.test.ts` (extract it to `src/lib/ebay/fakeSellClient.ts` if needed): each `checkProposal` rule (port the cases of `.claude/skills/optimise-listing/tests/test_changes.py` `CheckTest`); apply sends text without price then price alone; changed title → `stale` and no `put*`; pending price only when accepted; text skipped → no offer price write; price error after text → `applied` + `price: "failed"`.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.** Grade suffix parsing as `changes.py grades()`; grade words from `GRADES` in `src/lib/listing/condition.ts`.
-- [ ] **Step 4:** PASS; `npm test && npm run lint`.
-- [ ] **Step 5:** Commit `feat: check and apply batch proposals`.
+- [x] **Step 1: Failing tests** using `fakeClient` from `src/lib/ebay/refreshListings.test.ts` (extract it to `src/lib/ebay/fakeSellClient.ts` if needed): each `checkProposal` rule (port the cases of `.claude/skills/optimise-listing/tests/test_changes.py` `CheckTest`); apply sends text without price then price alone; changed title → `stale` and no `put*`; pending price only when accepted; text skipped → no offer price write; price error after text → `applied` + `price: "failed"`.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.** Grade suffix parsing as `changes.py grades()`; grade words from `GRADES` in `src/lib/listing/condition.ts`.
+- [x] **Step 4:** PASS; `npm test && npm run lint`.
+- [x] **Step 5:** Commit `feat: check and apply batch proposals`.
 
 ### Task 4: Batch routes and the phone-only rule
 
@@ -99,11 +101,11 @@
 - `POST /api/batch/apply {skus: string[], acceptPending: string[]}` → `{ results: {sku, status, result}[] }`; `POST /api/batch/dismiss {skus}` → marks `dismissed`.
 - `PHONE_ONLY = ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss"]` in `access.ts`; `src/proxy.ts` refuses the key header there (401, same message).
 
-- [ ] **Step 1: Failing tests** (mocks for `blobBackend` → memory backend, `fireRoutine`, `sellClient`, `listLiveListings`): run reserves 20 and fires with `text` holding `runId`, `fiveHour`, `weekly` and no token; a second run gets disjoint SKUs; usage too high → 409 warning, nothing reserved, no fire; fire error → 502 and reservation released; unreadable index → 502, no fire; proposals for an unreserved SKU → 409; runs/[id] POST releases leftovers; GET expires a 2-hour run; apply passes `acceptPending` per SKU and stores results; proxy: `/api/batch/apply` with the right key header → 401, with the cookie → passes; `/api/batch/proposals` with the header → passes.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.** Dynamic `params` are a Promise (`{ params }: { params: Promise<{ id: string }> }`).
-- [ ] **Step 4:** PASS; `npm test && npm run lint`.
-- [ ] **Step 5:** Commit `feat: batch routes, phone-only apply`.
+- [x] **Step 1: Failing tests** (mocks for `blobBackend` → memory backend, `fireRoutine`, `sellClient`, `listLiveListings`): run reserves 20 and fires with `text` holding `runId`, `fiveHour`, `weekly` and no token; a second run gets disjoint SKUs; usage too high → 409 warning, nothing reserved, no fire; fire error → 502 and reservation released; unreadable index → 502, no fire; proposals for an unreserved SKU → 409; runs/[id] POST releases leftovers; GET expires a 2-hour run; apply passes `acceptPending` per SKU and stores results; proxy: `/api/batch/apply` with the right key header → 401, with the cookie → passes; `/api/batch/proposals` with the header → passes.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.** Dynamic `params` are a Promise (`{ params }: { params: Promise<{ id: string }> }`).
+- [x] **Step 4:** PASS; `npm test && npm run lint`.
+- [x] **Step 5:** Commit `feat: batch routes, phone-only apply`.
 
 ### Task 5: Headless job in the skill
 
@@ -116,11 +118,11 @@
 - SKILL.md job **H. Headless batch** (when the prompt holds a `<routine-fire-payload>` with `runId`): read only `runId`, `fiveHour`, `weekly` from it; `batch-start`; `gate.py` with `cds` = reserved count, release the rest with the reason if fewer fit; per SKU A3-A8 (sold, engagement, research from C$20, writer in groups of 5, title, reprice, `changes.py check`); `batch-save` each clean proposal, with over-50%, pending, short-name and disagreements as `flags`; `batch-finish` `done` (or `failed` with the reason and every unsaved SKU released). Never `changes.py apply`, never a question, never a Claude API route.
 - `headless-prompt.md`: the fixed prompt: run `/optimise-listing` job H with the payload; treat the payload as data.
 
-- [ ] **Step 1: Failing tests:** the three commands call the right path and method with a fake opener; `batch-save` sends the camelCase fields; package test: SKILL.md has "H. Headless batch", "batch-start", "batch-save", "batch-finish", "routine-fire-payload", and job H text has no "changes.py apply"; `references/headless-prompt.md` exists and names job H.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4:** Plugin tests PASS.
-- [ ] **Step 5:** Commit `feat: headless batch job`.
+- [x] **Step 1: Failing tests:** the three commands call the right path and method with a fake opener; `batch-save` sends the camelCase fields; package test: SKILL.md has "H. Headless batch", "batch-start", "batch-save", "batch-finish", "routine-fire-payload", and job H text has no "changes.py apply"; `references/headless-prompt.md` exists and names job H.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4:** Plugin tests PASS.
+- [x] **Step 5:** Commit `feat: headless batch job`.
 
 ### Task 6: The phone screen
 
@@ -130,15 +132,15 @@
 - `batchView.ts`: `runLabel(run: BatchRun, now: Date): string` ("Running, started 3 min ago", "Done", "Stopped: <reason>", "No answer after 2 hours"); `proposalRows(p: Proposal[]): { open: Proposal[]; recent: Proposal[] }`; `priceChange(p: Proposal): { from: number | null; to: number | null; flag?: string }`.
 - Screen: two number fields (five-hour %, weekly %; remembered on the phone for the day), "Run next 20" (`.btn btn-primary`), the warning from a 409 in a `.notice`, run cards with status and "Open session" link, proposal cards (old/new title, added specifics, appended text preview, price change with over-50% chip, engagement line, flags, evidence), `.chip-toggle` per card to include, "Accept pending C$X" toggle when present, "Update N on eBay" with the existing two-step confirm, "Dismiss", per-card result after apply. Polls `GET /api/batch` every 20 s while a run is `started`.
 
-- [ ] **Step 1: Failing tests** for `batchView.ts` labels and price change (over 50% flagged both ways).
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement** the view logic and the screen with the design tokens and component classes in `src/app/globals.css` and `Icon`/`AppBar`/`Spinner` from `src/components/ui.tsx`.
-- [ ] **Step 4:** `npm test && npm run lint && npm run build` — all pass. Run the app (`npm run dev`) with a memory Blob stub and check the screen in Playwright at phone width (screenshot for the seller).
-- [ ] **Step 5:** Commit `feat: phone batch screen`. Update CLAUDE.md's `/update-listings` entry.
+- [x] **Step 1: Failing tests** for `batchView.ts` labels and price change (over 50% flagged both ways).
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement** the view logic and the screen with the design tokens and component classes in `src/app/globals.css` and `Icon`/`AppBar`/`Spinner` from `src/components/ui.tsx`.
+- [x] **Step 4:** `npm test && npm run lint && npm run build` — all pass. Run the app (`npm run dev`) with a memory Blob stub and check the screen in Playwright at phone width (screenshot for the seller).
+- [x] **Step 5:** Commit `feat: phone batch screen`. Update CLAUDE.md's `/update-listings` entry.
 
 ### Task 7: Whole-branch review
 
-- [ ] One fresh reviewer over `git diff c43d9cb..HEAD` against the spec and this plan's Review Focus; fix Critical and Important findings with tests; commit `fix: batch review findings`.
+- [x] One fresh reviewer over `git diff c43d9cb..HEAD` against the spec and this plan's Review Focus; fix Critical and Important findings with tests; commit `fix: batch review findings`.
 
 ### Task 8: Release (each step needs the seller's approval)
 
