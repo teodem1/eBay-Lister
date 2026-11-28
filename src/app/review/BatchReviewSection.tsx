@@ -5,6 +5,7 @@ import { Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
 import { proposalRows, request } from "@/app/update-listings/batchView";
 import type { Proposal } from "@/lib/listing/types";
+import { AskClaude, SalesList } from "./ProposalExtras";
 
 /**
  * Review tab: batch proposals the seller sent here from "Update live listings". Each keeps the
@@ -53,6 +54,7 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
   const [busy, setBusy] = useState<"" | "saving" | "sending" | "dismissing">("");
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState("");
+  const [asked, setAsked] = useState(p.asked);
   const edited = title !== p.title || price !== (p.price === null ? "" : p.price.toFixed(2));
   const money = (n: number | null | undefined) => (n == null ? "no price" : formatMoney(n, "CAD"));
 
@@ -126,6 +128,17 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
           ))}
         </ul>
       )}
+      <SalesList sku={p.sku} matching={asked?.matching ?? []} />
+      <AskClaude
+        sku={p.sku}
+        asked={asked}
+        onAnswer={setAsked}
+        onUse={(a) => {
+          if (a.title) setTitle(a.title);
+          if (a.price !== null) setPrice(a.price.toFixed(2));
+          setMessage("Filled in from Claude's answer. Save or send when you're happy with it.");
+        }}
+      />
       {message && <p className="notice t-small">{message}</p>}
       {confirming ? (
         <div className="flex gap-2">

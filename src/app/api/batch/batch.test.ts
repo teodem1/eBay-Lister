@@ -18,10 +18,17 @@ const backend: Backend = {
 const fireRoutine = vi.fn();
 const listLiveListings = vi.fn();
 const applyProposal = vi.fn();
+const readListing = vi.fn();
+const askAboutProposal = vi.fn();
 
 vi.mock("@/lib/comps/store", async (orig) => ({ ...(await orig<object>()), blobBackend: () => backend }));
 vi.mock("@/lib/liveBatch/fire", () => ({ fireRoutine: (...a: unknown[]) => fireRoutine(...a) }));
-vi.mock("@/lib/ebay/refreshListings", async (orig) => ({ ...(await orig<object>()), listLiveListings: (...a: unknown[]) => listLiveListings(...a) }));
+vi.mock("@/lib/ebay/refreshListings", async (orig) => ({
+  ...(await orig<object>()),
+  listLiveListings: (...a: unknown[]) => listLiveListings(...a),
+  readListing: (...a: unknown[]) => readListing(...a),
+}));
+vi.mock("@/lib/liveBatch/ask", () => ({ askAboutProposal: (...a: unknown[]) => askAboutProposal(...a) }));
 vi.mock("@/lib/liveBatch/apply", () => ({ applyProposal: (...a: unknown[]) => applyProposal(...a) }));
 vi.mock("@/app/api/listing/refresh/shared", () => ({
   sellClient: () => ({ client: {}, config: { bestOfferMinPercent: 70, currency: "CAD" } }),
@@ -36,6 +43,8 @@ const { POST: postApply } = await import("./apply/route");
 const { POST: postDismiss } = await import("./dismiss/route");
 const { POST: postReview } = await import("./review/route");
 const { POST: postEdit } = await import("./edit/route");
+const { POST: postAsk } = await import("./ask/route");
+const { GET: getSales } = await import("./sales/route");
 
 const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
 const req = (path: string, init?: RequestInit) => new Request(`http://x${path}`, init);
@@ -71,6 +80,8 @@ beforeEach(() => {
   fireRoutine.mockReset().mockResolvedValue({ sessionId: "s1", sessionUrl: "https://claude.ai/code/session_1" });
   listLiveListings.mockReset().mockResolvedValue(live(30));
   applyProposal.mockReset();
+  readListing.mockReset();
+  askAboutProposal.mockReset();
 });
 
 describe("POST /api/batch/run", () => {
@@ -253,6 +264,7 @@ describe("POST /api/batch/apply and dismiss", () => {
       await postRun(req("/api/batch/run", withKey({ fiveHour: 10, weekly: 10 }))),
       await postReview(req("/api/batch/review", withKey({ skus: ["S0"] }))),
       await postEdit(req("/api/batch/edit", withKey({ sku: "S0", title: "T", price: 10 }))),
+      await postAsk(req("/api/batch/ask", withKey({ sku: "S0", note: "LED spine" }))),
     ]) expect(res.status).toBe(401);
     expect(applyProposal).not.toHaveBeenCalled();
     expect(fireRoutine).not.toHaveBeenCalled();
@@ -298,6 +310,54 @@ describe("POST /api/batch/apply and dismiss", () => {
     expect([got[b].price, got[b].target]).toEqual([12, 12]);
     await getBatch();
     expect(read<Record<string, Proposal>>("batch/proposals.json")[a].price).toBe(13.41);
+  });
+
+  it("asks Claude with the stored sales of that listing and keeps the answer on the proposal", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(a, r.id)] })));
+    await postReview(req("/api/batch/review", json({ skus: [a] })));
+    readListing.mockResolvedValue({ sku: a, title: "T", price: 10, barcode: "075678154323", query: "Genesis Wind & Wuthering", aspects: {}, descriptionHtml: "", imageUrls: [] });
+    const sold = (id: string, value: number) => ({ itemId: id, title: "Genesis CD", price: { value, currency: "CAD" }, shippingCost: null, itemLocation: { country: null, postalCode: null }, shippingDestination: null, condition: null, soldDate: null, quantitySold: 1, url: null });
+    files["comps/upc/075678154323.json"] = JSON.stringify({
+      version: 1, savedAt: "2026-11-28T00:00:00.000Z", partial: false, barcode: "075678154323",
+      queries: [{ by: "barcode", items: [sold("x", 19), sold("y", 55)] }],
+      filtered: { cdOnly: ["x", "y"], sameGrade: ["y"], detail: {} },
+    });
+    askAboutProposal.mockResolvedValue({ note: "LED spine", answer: "ok", matching: ["y"], target: 55, price: 55, title: null, at: "2026-11-28T00:00:00.000Z" });
+    const res = await postAsk(req("/api/batch/ask", json({ sku: a, note: "LED spine" })));
+    expect(res.status).toBe(200);
+    const [, p, note, sales] = askAboutProposal.mock.calls[0];
+    expect([p.sku, note, sales.map((x: { itemId: string }) => x.itemId)]).toEqual([a, "LED spine", ["y"]]);
+    expect((read<Record<string, Proposal>>("batch/proposals.json")[a] as Proposal & { asked?: { answer: string } }).asked?.answer).toBe("ok");
+    expect(applyProposal).not.toHaveBeenCalled();
+  });
+
+  it("refuses to ask about a proposal that is not open or in Review, or an empty note", async () => {
+    expect((await postAsk(req("/api/batch/ask", json({ sku: "S0", note: "LED" })))).status).toBe(404);
+    expect((await postAsk(req("/api/batch/ask", json({ sku: "S0", note: "" })))).status).toBe(400);
+    expect(askAboutProposal).not.toHaveBeenCalled();
+  });
+
+  it("shows a listing's stored same-grade sales, with no lookup", async () => {
+    readListing.mockResolvedValue({ sku: "S0", title: "T", price: 10, barcode: "075678154323", query: "Genesis", aspects: {}, descriptionHtml: "", imageUrls: [] });
+    const sold = (id: string) => ({ itemId: id, title: "Genesis CD", price: { value: 10, currency: "CAD" }, shippingCost: null, itemLocation: { country: null, postalCode: null }, shippingDestination: null, condition: null, soldDate: "2026-10-01", quantitySold: 1, url: null });
+    files["comps/upc/075678154323.json"] = JSON.stringify({
+      version: 1, savedAt: "2026-11-20T00:00:00.000Z", partial: true, barcode: "075678154323",
+      queries: [{ by: "barcode", items: [sold("x"), sold("y")] }],
+      filtered: { cdOnly: ["x", "y"], sameGrade: ["x"], detail: {} },
+    });
+    const body = await (await getSales(req("/api/batch/sales?sku=S0"))).json();
+    expect(body).toMatchObject({ savedAt: "2026-11-20T00:00:00.000Z", partial: true });
+    expect(body.sales.map((x: { itemId: string }) => x.itemId)).toEqual(["x"]);
+    expect(fireRoutine).not.toHaveBeenCalled();
+  });
+
+  it("answers an empty list when nothing is stored, and 404 when the listing is gone", async () => {
+    readListing.mockResolvedValue({ sku: "S0", title: "T", price: 10, query: "Nothing Stored", aspects: {}, descriptionHtml: "", imageUrls: [] });
+    expect((await (await getSales(req("/api/batch/sales?sku=S0"))).json()).sales).toEqual([]);
+    readListing.mockResolvedValue(null);
+    expect((await getSales(req("/api/batch/sales?sku=S0"))).status).toBe(404);
   });
 
   it("never applies a proposal that is not open", async () => {

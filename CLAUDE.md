@@ -145,6 +145,13 @@ Screens (phone first):
   engagement, flags) and sends the ticked ones through `/api/batch/apply` (`applyProposal` in `src/lib/liveBatch/apply.ts`:
   re-read, skip if changed, text then price alone). `/api/batch/run`, `/apply` and `/dismiss` are phone only (`PHONE_ONLY`
   in `src/lib/auth/access.ts`: the key header never opens them). Records in Blob under `batch/` (`src/lib/liveBatch/store.ts`).
+  A lowered price is listed at the sales-based `target` ÷ 0.85 (`offerRoom` in `src/lib/liveBatch/offers.ts`, same rule in
+  the skill's `reprice.py`), so a typical Best Offer lands on it. "Send to Review" moves a proposal to the Review tab
+  (`src/app/review/BatchReviewSection.tsx`, `/api/batch/review`): title and price editable (`/api/batch/edit`), "Send to
+  eBay" or "Dismiss"; "Show the sales" lists its stored same-grade sales (`/api/batch/sales`, `listingSales`, no lookup;
+  tap for `ComparableSheet`), and "Ask Claude" (`/api/batch/ask`, `askAboutProposal` in `src/lib/liveBatch/ask.ts`,
+  `claude-haiku-5-5` on the app's API key) re-weighs the seller's note against those sales and marks the matching ones;
+  its title and price only fill the edit fields ("Use this"). Review, edit and ask are phone only too.
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in

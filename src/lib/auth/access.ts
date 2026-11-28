@@ -57,7 +57,14 @@ export const KEY_HEADER = "x-elister-key";
 
 /** API routes only the phone (cookie) may call: starting, sending, dismissing, sending to Review and editing batch
  * proposals. The key header never opens them. */
-export const PHONE_ONLY = ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss", "/api/batch/review", "/api/batch/edit"];
+export const PHONE_ONLY = [
+  "/api/batch/run",
+  "/api/batch/apply",
+  "/api/batch/dismiss",
+  "/api/batch/review",
+  "/api/batch/edit",
+  "/api/batch/ask",
+];
 
 export function isPhoneOnly(pathname: string): boolean {
   let path = pathname;
