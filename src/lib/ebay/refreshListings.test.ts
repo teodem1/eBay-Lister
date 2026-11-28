@@ -9,6 +9,7 @@ import {
   mergeAspects,
   previewRefresh,
   queryFromListing,
+  readListing,
   sellerConditionFromListing,
 } from "./refreshListings";
 
@@ -122,6 +123,40 @@ describe("listLiveListings", () => {
       { sku: item.sku, listingId: "366831191940", title: item.product.title, price: 17.5, imageUrl: "https://i.ebayimg.com/a.jpg" },
     ]);
     expect(out.nextOffset).toBeUndefined();
+  });
+});
+
+describe("readListing", () => {
+  it("reads one live listing in full, sending nothing to eBay", async () => {
+    const client = fakeClient();
+    const out = await readListing(client, item.sku);
+    expect(out).toEqual({
+      sku: item.sku,
+      listingId: "366831191940",
+      title: item.product.title,
+      price: 17.5,
+      currency: "CAD",
+      barcode: "075678154323",
+      query: "Genesis Wind & Wuthering",
+      aspects: item.product.aspects,
+      descriptionHtml: "<p>old</p>",
+      conditionDescription: item.conditionDescription,
+      sellerCondition: sellerConditionFromListing(item),
+      imageUrls: ["https://i.ebayimg.com/a.jpg"],
+    });
+    expect(out?.sellerCondition?.disc).toBeDefined();
+    expect((client as any).putInventoryItemRaw).not.toHaveBeenCalled();
+    expect((client as any).putOfferRaw).not.toHaveBeenCalled();
+  });
+
+  it("is null when the listing has no published offer", async () => {
+    const ended = fakeClient({ getOffersRaw: vi.fn().mockResolvedValue([{ ...offer, status: "UNPUBLISHED" }]) });
+    expect(await readListing(ended, item.sku)).toBeNull();
+  });
+
+  it("is null when eBay has no inventory item", async () => {
+    const gone = fakeClient({ getInventoryItemRaw: vi.fn().mockResolvedValue(null) });
+    expect(await readListing(gone, item.sku)).toBeNull();
   });
 });
 

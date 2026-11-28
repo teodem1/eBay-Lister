@@ -221,6 +221,49 @@ export function mergeAspects(
   return { aspects, changed, conflicts };
 }
 
+/** Everything the plugin needs from one live listing, read from eBay as it is (no Claude call). */
+export interface LiveDetail {
+  sku: string;
+  listingId?: string;
+  title: string;
+  price?: number;
+  currency?: string;
+  barcode?: string;
+  /** "Artist Album", as Update live listings searches for it. */
+  query: string;
+  aspects: Record<string, string[]>;
+  descriptionHtml: string;
+  conditionDescription?: string;
+  /** The seller's grades, read back from the condition text or title. */
+  sellerCondition?: SellerCondition;
+  imageUrls: string[];
+}
+
+/** One live listing in full, or null when it is not live (no inventory item or no published offer). Writes nothing. */
+export async function readListing(client: EbaySellClient, sku: string): Promise<LiveDetail | null> {
+  const item = await client.getInventoryItemRaw(sku);
+  if (!item) return null;
+  const offer = published(await client.getOffersRaw(sku));
+  if (!offer) return null;
+  const p = product(item);
+  const price = offerPrice(offer);
+  const currency = (offer.pricingSummary as { price?: { currency?: string } } | undefined)?.price?.currency;
+  return {
+    sku,
+    listingId: listingIdOf(offer),
+    title: String(p.title ?? ""),
+    price: Number.isFinite(price) ? price : undefined,
+    currency: currency || undefined,
+    barcode: barcodeOf(item),
+    query: queryFromListing(item),
+    aspects: (p.aspects as Record<string, string[]> | undefined) ?? {},
+    descriptionHtml: String(offer.listingDescription ?? p.description ?? ""),
+    conditionDescription: typeof item.conditionDescription === "string" ? item.conditionDescription : undefined,
+    sellerCondition: sellerConditionFromListing(item),
+    imageUrls: (p.imageUrls as string[] | undefined) ?? [],
+  };
+}
+
 /** Claude rewrites one live listing with the current rules. Reads eBay, writes nothing. */
 export async function previewRefresh(
   client: EbaySellClient,
