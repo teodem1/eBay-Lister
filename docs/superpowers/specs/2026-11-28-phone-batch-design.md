@@ -42,13 +42,18 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
    soundtrack sites), prompt = the fixed headless prompt in the plan, trigger = API, "Generate token". The trigger
    id and token go into Vercel as `ROUTINE_FIRE_URL` and `ROUTINE_FIRE_TOKEN` (Sensitive). Nobody pastes the token
    in chat.
-2. **Run (phone → app):** the screen posts `{fiveHour, weekly}` to `POST /api/batch/run`. The app checks both
-   are below 80%, refuses if a run started in the last 30 minutes is still open (call), records a run in Blob
-   (`batch/runs/<id>.json`: status `started`, percentages, time), and fires the task with
-   `text = {"runId", "fiveHour", "weekly", "size": 20}`. It stores the returned session URL on the run.
-3. **Batch (cloud session, skill job "headless"):** reads the payload; runs the usage gate with `cds: 20` (fewer if
-   near the stop); lists live listings; skips SKUs already in the proposal index (any status); for each of the next
-   N: `read`, `sold`, `engagement`, research only from C$20, writer in groups of 5, `title.py`, `reprice.py`,
+2. **Run (phone → app):** the screen posts `{fiveHour, weekly}` to `POST /api/batch/run`. No waiting rule
+   (seller, 2026-11-28): every tap may start a run. The app adds the estimated cost of the runs still in progress
+   (1 five-hour and 0.2 weekly points per CD they hold) to the typed percentages; if a new batch would reach the
+   80% stop, it answers with a warning and starts nothing. Otherwise it **reserves** the next N listings of the
+   queue (status `in_progress`, with the run id), records the run (`batch/runs/<id>.json`: status `started`,
+   percentages, SKUs, time) and fires the task with `text = {"runId", "fiveHour", "weekly"}`. It stores the
+   returned session URL. A second tap reserves the next free listings, so two runs never work on the same CD;
+   two runs at once are allowed and simply use the plan faster. A failed fire releases the reservation.
+3. **Batch (cloud session, skill job "headless"):** reads the payload; gets its reserved SKUs from
+   `GET /api/batch/runs/<id>`; runs the usage gate with `cds` = that count. If usage is too high it releases the
+   SKUs it cannot do (`POST /api/batch/runs/<id>` with them and the gate's reason): they return to the queue and
+   the phone shows the warning. For each SKU it keeps: `read`, `sold`, `engagement`, research only from C$20, writer in groups of 5, `title.py`, `reprice.py`,
    `changes.py check`; then posts each proposal to `POST /api/batch/proposals` and finally marks the run `done`
    (or `failed` with a reason) via `POST /api/batch/runs/<id>`. It never applies anything and never asks a question:
    anything that would need the seller (a pending price, an over-50% change, disagreements) becomes a flag on the
@@ -70,8 +75,8 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
   saved prompt tells the session to read the run id and percentages from it (and nothing else).
 - Response: `{"type": "routine_fire", "claude_code_session_id", "claude_code_session_url"}`; the run stores both.
 - Available on Pro (the seller's plan); runs count against the account's usage. The token is shown once when
-  generated. Hourly caps exist (about 30 fires per task per hour, per a summary of the docs); the 30-minute
-  "one open run" rule stays far below them. The beta header may change: a non-2xx answer marks the run `failed`
+  generated. Hourly caps exist (about 30 fires per task per hour, per a summary of the docs); a phone tapping a
+  few times stays far below them. The beta header may change: a non-2xx answer marks the run `failed`
   with the status, and the screen says so. If the API trigger turns out unavailable, approach B applies.
 - Runs start in auto mode; a run that stops for a permission prompt shows as "waiting" via its session link.
 
@@ -81,8 +86,9 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
   (`open | applied | dismissed | failed`), times.
 - `batch/index.json`: sku → status and updatedAt, one file, written by the app only. The session reads it through
   `GET /api/batch/index` (it has no Blob token).
-- Statuses and the queue: `open` (shown, waiting), `applied` / `dismissed` (done), `failed`, `stale` (the listing
-  changed before apply). Which live listings a run takes, in this order (seller, 2026-11-28):
+- Statuses and the queue: `in_progress` (reserved by a run), `open` (shown, waiting), `applied` / `dismissed`
+  (done), `failed`, `stale` (the listing changed before apply). A run's reserved SKUs it released or never
+  finished return to the queue. Which live listings a run takes, in this order (seller, 2026-11-28):
   1. listings never proposed: on the first pass every current listing, afterwards the newly added ones
      (newest first);
   2. `failed` and `stale` proposals (call);
@@ -107,5 +113,6 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
 - Usage stop 80% stays; the phone asks for both percentages before each run.
 
 ## Left to the builder
-Polling interval, run timeout (a run `started` over 2 hours shows as "no answer" with its session link), screen
+Polling interval, run timeout (a run `started` over 2 hours shows as "no answer" with its session link, and its
+unfinished SKUs return to the queue), screen
 layout within the existing design tokens, exact headless prompt wording, how the session reports partial progress.
