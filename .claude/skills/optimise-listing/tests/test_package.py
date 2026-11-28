@@ -14,7 +14,7 @@ class PackageTest(unittest.TestCase):
     def test_referenced_files_exist(self):
         text = (SKILL / "SKILL.md").read_text()
         names = set(re.findall(r"(?:references|scripts)/[\w-]+\.(?:md|py)", text))
-        self.assertEqual(len(names), 6)
+        self.assertEqual(len(names), 9)
         for name in names:
             self.assertTrue((SKILL / name).is_file(), name)
 
@@ -36,6 +36,27 @@ class PackageTest(unittest.TestCase):
                        "no `reference.edition`", "Fill `current`"):
             self.assertIn(phrase, text)
 
+    def test_skill_runs_the_live_listing_batch(self):
+        text = (SKILL / "SKILL.md").read_text()
+        for phrase in ("C$20", "every 5 CDs", "batches of 5", "Nothing is sent without approval",
+                       "once per artist", "only when evidence conflicts",
+                       "scripts/listings.py", "scripts/reprice.py", "scripts/changes.py"):
+            self.assertIn(phrase, text)
+        self.assertNotIn("not worth deeper research", text)
+        self.assertNotIn("C$40", text)
+
+    def test_agents_know_the_batch_flow(self):
+        writer = (AGENTS / "listing-writer.md").read_text()
+        self.assertIn("batch", writer)
+        self.assertIn("add_aspects", writer)
+        self.assertIn("once per artist", (AGENTS / "source-collector.md").read_text())
+        self.assertIn("evidence conflicts", (AGENTS / "collector-appraiser.md").read_text())
+
+    def test_readme_states_the_new_threshold(self):
+        text = (SKILL / "README.md").read_text()
+        self.assertIn("C$20", text)
+        self.assertNotIn("C$40", text)
+
     def test_readme_install_line(self):
         self.assertIn("## Install", (SKILL / "README.md").read_text())
 
@@ -48,11 +69,12 @@ class PackageTest(unittest.TestCase):
 class SpendingTest(unittest.TestCase):
     def test_skill_checks_usage_and_worth_before_any_agent(self):
         text = (SKILL / "SKILL.md").read_text()
-        for phrase in ("scripts/gate.py", "Settings > Usage", "every 5 CDs", "not worth deeper research",
+        for phrase in ("scripts/gate.py", "Settings > Usage", "every 5 CDs", "C$20",
                        "usage credits", "Never call the app's Claude features", "If gate.py fails, stop"):
             self.assertIn(phrase, text)
-        self.assertLess(text.index("## 0."), text.index("## 1."))
-        self.assertLess(text.index("not worth deeper research"), text.index("## 3. Model routing"))
+        self.assertLess(text.index("## 0."), text.index("## A."))
+        self.assertLess(text.index("### A4. Research only from C$20"), text.index("### A5. Write"))
+        self.assertLess(text.index("### B3. Research only from C$20"), text.index("### B4. Model routing"))
 
 class OptimisationTest(unittest.TestCase):
     def check(self, path, *phrases):

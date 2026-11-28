@@ -1,17 +1,20 @@
 # optimise-listing
 
-`/optimise-listing` writes and prices one eBay CD listing. It reads price data from your e-bay-lister app and publishes nothing.
+`/optimise-listing` rewrites and reprices your live eBay CD listings in batches of 5 from stored sold results, sending only the changes you approve. It can also write and price one unlisted CD, which it never publishes.
 Use the plain `/optimise-listing`, not an `ebay-cd-optimiser:` entry from the account plugin, which is an older copy.
 
 ## Install
-Nothing to install: this folder and `.claude/agents/` are part of the eBay Lister repository, so a normal Claude Code cloud session on it loads them (not a thread inside a Claude Code project). Not yet confirmed here; plan Task 0 checks it.
+Nothing to install: this folder and `.claude/agents/` are part of the eBay Lister repository, so a normal Claude Code cloud session on it loads them (not a thread inside a Claude Code project). Confirmed on 2026-11-28 (plan Task 0).
 
 ## Use
-`/optimise-listing Pink Floyd, The Dark Side of the Moon, barcode ..., disc Near mint, inlay Very good+, bought in Canada` (add photos if you have them).
+- `/optimise-listing update my live listings`: reads each listing and its stored sold results, rewrites the title, adds missing verified information and proposes a price, then shows one table per 5 listings. Nothing is sent until you say which SKUs to send.
+- `/optimise-listing Pink Floyd, The Dark Side of the Moon, barcode ..., disc Near mint, inlay Very good+, bought in Canada` (add photos if you have them): one unlisted CD.
 
 ## What it spends
 - Asks for your five-hour and weekly percentages (Settings > Usage) and stops at 80% of either; asks again every 5 CDs.
-- Researches only CDs whose sold price is C$40 or more (3+ CAD sales; a special or Canadian edition counts with 3+ sales). Others get the figures and stop, unless you ask for that CD anyway.
+- Web research only for CDs asking C$20 or more. The rest are rewritten from the listing and its stored sales.
+- Sold results come from the app's store first; a SoldComps lookup is made only when none is stored (or when you ask for fresh ones), once per CD.
+- Haiku looks for sources once per artist, Sonnet writes in batches of 5, Opus only when evidence conflicts.
 - Never calls the app's Claude features, so no API credits. Keep usage credits off to avoid charges beyond your plan.
 
 ## Settings (where Claude runs; never in chat)
@@ -23,14 +26,17 @@ Nothing to install: this folder and `.claude/agents/` are part of the eBay Liste
 Without a working connection the skill asks for a paste or screenshot of the app's price screen. Python 3 is required for the scripts.
 
 ## Model routing
-Haiku collects source leads. Sonnet handles standard CDs. Opus replaces Sonnet for special editions, uncertain or conflicting evidence, fewer than 8 sales, or prices of 25 CAD or more. Where agents are unavailable, the session model does everything.
+Haiku collects source leads, once per artist where possible. Sonnet writes every listing. Opus is used only when evidence conflicts (an uncertain pressing or contradicting sources). Where agents are unavailable, the session model does everything.
+
+## Prices for live listings
+The typical price of stored sales in the same grade (needs 3, else the price stays). A detail of your copy (Canadian, no barcode...) sets the price with 2 or more matching sales that went higher; with 1 it is shown as pending, applied only if you accept it by name. Changes over 50% are flagged, not capped.
 
 ## Limits
 - Price caps (Discogs 10%, edition 10%, demand 7%, supply 5%, collector 5%, combined 25%) are untested starting values.
 - The app's sold prices can include Best Offer sales at the asking price.
 - Item prices assume the shipping amount the app reports.
-- Not yet tested against the live app; tests use simulated responses.
-- Each price check uses your SoldComps allowance, including for CDs then judged not worth researching.
+- Tests use simulated responses; the live flow is first tried in a 5-CD trial.
+- Each SoldComps lookup uses your allowance; stored results are reused instead, and never expire (their date is shown).
 - The usage stop relies on the percentages you type; the plugin cannot read them. The chat itself uses some usage even when it stops.
 - Each run saves price data (no key) in a temporary folder readable only by your user.
 - Token savings are estimated from simulated price data; real use has not been measured.
