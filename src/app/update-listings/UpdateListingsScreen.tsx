@@ -5,6 +5,7 @@ import { AppBar, Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
 import type { BatchRun, Proposal } from "@/lib/listing/types";
 import { priceChange, proposalRows, request as call, runLabel, toSend } from "./batchView";
+import WhyDetails from "./WhyDetails";
 
 /**
  * Update live listings: starts a batch in a Claude Code cloud session (the optimise-listing
@@ -311,27 +312,15 @@ function ProposalCard({
           </>
         )}
       </p>
-      <p className="t-small text-muted">
-        <b>Engagement {p.engagement.level}:</b> {p.engagement.reason}
-      </p>
       {added.length > 0 && (
         <p className="t-small">
           <b>Item specifics added:</b> {added.map(([n, v]) => `${n}: ${v.join(", ")}`).join(" · ")}
         </p>
       )}
-      {p.evidence && <p className="t-small text-muted">{p.evidence}</p>}
-      {p.flags.length > 0 && (
-        <ul className="t-small flex flex-col gap-1">
-          {p.flags.map((f) => (
-            <li key={f} className="notice notice-warn">
-              {f}
-            </li>
-          ))}
-        </ul>
-      )}
+      <WhyDetails p={p} />
       {p.result && (
         <p className={`notice t-small ${p.status === "applied" ? "notice-ok" : "notice-warn"}`}>
-          {p.status === "applied" ? `Updated on eBay (text ${p.result.text}, price ${p.result.price}).` : ""} {p.result.reason}
+          {p.status === "applied" && p.result.price !== "failed" ? "Updated on eBay." : p.result.reason}
         </p>
       )}
       {!p.result && p.status !== "open" && <p className="t-caption text-muted">{p.status === "dismissed" ? "Dismissed." : p.status}</p>}

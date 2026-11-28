@@ -135,11 +135,9 @@ export function AskClaude({
         <div className="flex flex-col gap-1">
           <p className="t-small">{asked.answer}</p>
           <p className="t-caption text-muted">
-            {asked.matching.length} matching sale{asked.matching.length === 1 ? "" : "s"} · price re-proposed {money(asked.price)}
+            New price {money(asked.price)}
             {asked.previousPrice !== null && asked.previousPrice !== asked.price ? ` (was ${money(asked.previousPrice)})` : ""}
-            {asked.target !== null && asked.price !== asked.target ? ` · sales support ${money(asked.target)}` : ""}
-            {asked.basis === "estimate" ? " · estimate: fewer than 2 sales match" : ""}
-            {asked.title ? ` · title: ${asked.title}` : ""}
+            {asked.title ? ` · suggested title: ${asked.title}` : ""}
           </p>
           {asked.title && (
             <button type="button" className="link t-small self-start px-1 py-1" onClick={() => onUse(asked)}>

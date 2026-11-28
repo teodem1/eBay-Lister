@@ -6,6 +6,7 @@ import { formatMoney } from "@/app/listing/priceRequest";
 import { proposalRows, request } from "@/app/update-listings/batchView";
 import type { Proposal } from "@/lib/listing/types";
 import { AskClaude, SalesList } from "./ProposalExtras";
+import WhyDetails from "@/app/update-listings/WhyDetails";
 
 /**
  * Review tab: batch proposals the seller sent here from "Update live listings". Each keeps the
@@ -106,28 +107,16 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
       </label>
       <label className="flex flex-col gap-1">
         <span className="t-caption text-muted">
-          Price (CAD){p.target != null && p.target !== p.price ? ` · sales support ${money(p.target)}` : ""}
+          Price (CAD)
         </span>
         <input className="field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
       </label>
-      <p className="t-small text-muted">
-        <b>Engagement {p.engagement.level}:</b> {p.engagement.reason}
-      </p>
       {Object.keys(p.addAspects).length > 0 && (
         <p className="t-small">
           <b>Item specifics added:</b> {Object.entries(p.addAspects).map(([n, v]) => `${n}: ${v.join(", ")}`).join(" · ")}
         </p>
       )}
-      {p.evidence && <p className="t-small text-muted">{p.evidence}</p>}
-      {p.flags.length > 0 && (
-        <ul className="t-small flex flex-col gap-1">
-          {p.flags.map((f) => (
-            <li key={f} className="notice notice-warn">
-              {f}
-            </li>
-          ))}
-        </ul>
-      )}
+      <WhyDetails p={p} />
       <SalesList sku={p.sku} matching={asked?.matching ?? []} />
       <AskClaude
         sku={p.sku}
