@@ -53,6 +53,16 @@ def grades(title):
     return title, None
 
 
+def own_grades(snapshot):
+    """The listing's grades from its condition text, in the title's form; None when unknown."""
+    sc = snapshot.get("sellerCondition") or {}
+    if not sc.get("disc"):
+        return ("sealed",) if sc.get("condition") == "NEW" else None
+    disc = _grade_key(sc["disc"])
+    inlay = _grade_key(sc["booklet"]) if sc.get("booklet") else None
+    return (disc, inlay) if disc and (inlay or not sc.get("booklet")) else None
+
+
 def _words(text):
     return set(re.findall(r"[a-z0-9']+", text.lower()))
 
@@ -72,7 +82,9 @@ def check(snapshot, proposal):
         problems.append(f"The new title has {len(title)} characters, over {TITLE_MAX}.")
     old_rest, old_grades = grades(snapshot.get("title") or "")
     new_rest, new_grades = grades(title)
-    if old_grades != new_grades:
+    # A title without grades may gain them, only as the listing's own grades (from its condition text).
+    adding_own = old_grades is None and new_grades is not None and new_grades == own_grades(snapshot)
+    if old_grades != new_grades and not adding_own:
         problems.append("The grades in the title changed; grades and condition never change.")
     missing = sorted(_words(old_rest) - _words(new_rest))
     if missing:
@@ -141,6 +153,11 @@ def apply(app, snapshot, proposal, accept_pending=False):
         out["reason"] = " ".join(reasons)
         return out
 
+    if live.get("price") is None:
+        out["price"] = "skipped"
+        reasons.append("The listing has no price, so no price was sent.")
+        out["reason"] = " ".join(reasons)
+        return out
     pending = proposal.get("pending_price")
     target = pending if accept_pending and pending is not None else proposal.get("price")
     if target is None or _same_price(target, live.get("price")):

@@ -15,8 +15,9 @@ beforeEach(() => {
 });
 
 describe("GET /api/listing/refresh/read", () => {
-  it("answers 400 without a SKU", async () => {
+  it("answers 400 without a SKU or with one longer than the apply route takes", async () => {
     expect((await get("")).status).toBe(400);
+    expect((await get(`sku=${"A".repeat(51)}`)).status).toBe(400);
     expect(readListing).not.toHaveBeenCalled();
   });
 

@@ -8,7 +8,7 @@ import { errorResponse, sellClient } from "../shared";
  */
 export async function GET(request: Request) {
   const sku = new URL(request.url).searchParams.get("sku")?.trim();
-  if (!sku || sku.length > 100) return Response.json({ error: "Provide a sku." }, { status: 400 });
+  if (!sku || sku.length > 50) return Response.json({ error: "Provide a sku." }, { status: 400 });
   const ebay = sellClient();
   if (ebay instanceof Response) return ebay;
   try {

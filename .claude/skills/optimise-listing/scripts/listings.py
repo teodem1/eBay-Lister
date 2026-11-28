@@ -55,7 +55,8 @@ def list_live(app):
 def read(app, sku):
     listing = app.get("/api/listing/refresh/read", {"sku": sku})
     head = {k: listing.get(k) for k in ("sku", "title", "price", "currency", "barcode", "query")}
-    head["condition"] = (listing.get("sellerCondition") or {}).get("condition")
+    grades = listing.get("sellerCondition") or {}
+    head.update({k: grades.get(k) for k in ("condition", "disc", "booklet")})
     head["data_file"] = _private_file("listing.json", listing)
     return head
 

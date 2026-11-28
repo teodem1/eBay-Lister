@@ -98,6 +98,15 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(changes.check(SNAPSHOT, proposal(price=0)))
         self.assertTrue(changes.check(SNAPSHOT, proposal(pending_price=-1)))
 
+    def test_grades_may_be_added_when_they_are_the_listings_own(self):
+        bare = {**SNAPSHOT, "title": "Genesis Wind & Wuthering RARE CD",
+                "sellerCondition": {"condition": "USED_VERY_GOOD", "disc": "Near mint", "booklet": "Very good"}}
+        self.assertEqual(changes.check(bare, proposal()), [])
+        other = NEW_TITLE.replace("Inlay: Very Good", "Inlay: Mint")
+        self.assertTrue(any("grade" in p.lower() for p in changes.check(bare, proposal(title=other))))
+        unknown = {**bare, "sellerCondition": None}
+        self.assertTrue(any("grade" in p.lower() for p in changes.check(unknown, proposal())))
+
     def test_another_sku_is_refused(self):
         self.assertTrue(changes.check(SNAPSHOT, proposal(sku="OTHER")))
 
@@ -175,6 +184,14 @@ class ApplyTest(unittest.TestCase):
         out = apply(fake, proposal(title=OLD_TITLE, add_aspects={}, append_html="", price=17.5))
         self.assertEqual((out["text"], out["price"]), ("unchanged", "unchanged"))
         self.assertEqual(fake.writes(), [])
+
+    def test_a_listing_without_a_price_gets_no_price_call(self):
+        unpriced = {**SNAPSHOT, "price": None}
+        fake = Fake(listing_refresh_read=unpriced)
+        out = apply(fake, snapshot=unpriced)
+        self.assertEqual((out["text"], out["price"]), ("updated", "skipped"))
+        self.assertEqual(fake.sent("/api/listing/update-details"), [])
+        self.assertIn("no price", out["reason"])
 
     def test_price_only_change_skips_the_text_route(self):
         fake = Fake()

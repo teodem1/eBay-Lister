@@ -213,6 +213,7 @@ class ReadTest(unittest.TestCase):
                          {"sku": [LISTING["sku"]]})
         self.assertEqual(out["sku"], LISTING["sku"])
         self.assertEqual(out["price"], 17.5)
+        self.assertEqual((out["condition"], out["disc"], out["booklet"]), ("LIKE_NEW", "Near Mint", None))
         path = pathlib.Path(out["data_file"])
         self.assertEqual(path.stat().st_mode & 0o077, 0)
         self.assertEqual(json.loads(path.read_text()), LISTING)

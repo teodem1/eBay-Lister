@@ -27,7 +27,7 @@ Run `scripts/listings.py list`; it prints a count and `data_file` (sku, title, p
 
 ### A3. Read each listing and its sold results
 Per listing:
-1. `scripts/listings.py read` with `{"sku": "..."}`: prints title, price, barcode, query, condition and `data_file` (the snapshot). Skip a listing with no `condition` and say so.
+1. `scripts/listings.py read` with `{"sku": "..."}`: prints title, price, barcode, query, condition, `disc`, `booklet` and `data_file` (the snapshot). Skip a listing with no `condition` and say so.
 2. `scripts/listings.py sold` with `{"listing_file": "<snapshot data_file>"}`. Add `"refresh": true` only when the seller asks for fresh sold results. It reads the stored result first and looks up only when none exists. Report `source`, `saved_at`, and `partial` (an imported backup check, latest sales only). `lookup_unsaved`: the lookup was used once and not stored; say so. Never run `sold` twice for one listing. On an error, stop that listing: never retry a lookup.
 
 Never open the snapshot or sold file yourself; pass the paths to the writer.
@@ -41,7 +41,7 @@ Send the batch of up to 5 to `listing-writer` (Sonnet) in one call: per listing 
 Use `collector-appraiser` (Opus) only when evidence conflicts (the writer reports an uncertain pressing or contradicting sources), once per listing, with the writer's findings and opened sources.
 
 ### A6. Title
-Build each title with `scripts/title.py`: `album` = "Artist Album", `disc` and `booklet` from the snapshot's grades, `discs`, and `extras` in this order: every word of the old title beyond artist, album, format and grades (the seller's own words stay), then edition, year, label, genre as the writer returned them. If `fits` is false, shorten the album name (subtitle first) and rerun. Report `dropped` terms.
+Build each title with `scripts/title.py`: `album` = "Artist Album", `disc` and `booklet` from the `read` headline (a title without grades gains them only as these), `discs`, and `extras` in this order: every word of the old title beyond artist, album, format and grades (the seller's own words stay), then edition, year, label, genre as the writer returned them. If `fits` is false, shorten the album name (subtitle first) and rerun. Report `dropped` terms.
 
 ### A7. Price
 Run `scripts/reprice.py` with `{"current": <listing price>, "data_file": "<sold data_file>", "details": [...]}`. `details` lists only edition codes (`canadian|no_barcode|early_press|promo|club|limited|japan`) the writer confirmed on this copy from the listing, the seller or the photos; every CD was bought in Canada, but `canadian` still needs the copy to be the Canadian pressing. The script's numbers are final: `proposed` is the new price; `pending` is shown separately and applied only if the seller accepts that item by name; `over_50` is flagged in the table.
