@@ -14,7 +14,7 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
   engagement (sold, listed now, months of supply), evidence, flags (over 50%, pending, short-name sales).
 - The seller ticks proposals and taps "Update N on eBay"; only ticked ones are sent, with the same safety
   checks as `changes.py` (listing re-read, title or price changed since = skipped, nothing dropped, grades kept).
-- The next run continues with listings not yet proposed, then newly added ones, then listings unsold 30 days
+- The next run continues with listings not yet proposed, then newly added ones, then listings unsold 60 days
   after their last batch (see Data).
 
 ## Non-goals
@@ -86,8 +86,8 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
   1. listings never proposed: on the first pass every current listing, afterwards the newly added ones
      (newest first);
   2. `failed` and `stale` proposals (call);
-  3. listings still live (unsold) 30 days or more after their last proposal was applied or dismissed, oldest
-     first; an `open` proposal 30 days or older is re-proposed from fresh data and replaces the old one (call).
+  3. listings still live (unsold) 60 days or more after their last proposal was applied or dismissed, oldest
+     first; an `open` proposal 60 days or older is re-proposed from fresh data and replaces the old one (call).
   Listings that sold drop out because they are no longer live. With nothing due, "Run next 20" is disabled and
   the screen says when the next listing becomes due. Open proposals stay open across runs.
 - `batch/runs/<id>.json`: run record.
