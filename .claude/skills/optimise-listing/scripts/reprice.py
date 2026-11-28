@@ -90,7 +90,11 @@ def _money(value):
     return f"C${value:.2f}"
 
 
-def reprice(current, items, details, demand="normal"):
+def reprice(current, items, details, demand="normal", learned=None):
+    """learned: {"percentile", "n"} from the seller's recorded sales at this engagement level (listings.py learning);
+    when given, the price sits at that percentile of the sales instead of the engagement quartile."""
+    if learned is not None and not (isinstance(learned.get("percentile"), (int, float)) and 0 < learned["percentile"] < 100):
+        raise ValueError("learned percentile must be between 1 and 99.")
     if demand not in DEMAND:
         raise ValueError(f"Unknown demand: {demand!r}. Use high, normal or low.")
     unknown = [d for d in details if d not in EDITIONS]
@@ -99,8 +103,12 @@ def reprice(current, items, details, demand="normal"):
     sales, left_out = _sane(_cad(items))
     values = [v for _, v in sales]
     base = round(statistics.median(values), 2) if len(values) >= MIN_BASE else None
-    target = (round(statistics.quantiles(values, n=4, method="inclusive")[DEMAND[demand]], 2)
-              if base is not None else None)
+    if base is not None and learned is not None:
+        target = round(statistics.quantiles(values, n=100, method="inclusive")[round(learned["percentile"]) - 1], 2)
+    elif base is not None:
+        target = round(statistics.quantiles(values, n=4, method="inclusive")[DEMAND[demand]], 2)
+    else:
+        target = None
     applied, pending = None, None
     if base is not None:
         for name in dict.fromkeys(details):
@@ -124,9 +132,14 @@ def reprice(current, items, details, demand="normal"):
         proposed = round(float(current), 2)
         reason = f"Only {len(values)} CAD sale{'s' if len(values) != 1 else ''} in this grade: price kept."
     else:
-        where = {"low": "lower quarter", "normal": "median", "high": "upper quarter"}[demand]
-        reason = (f"{len(values)} sales in this grade, median {_money(base)}; {demand} interest, "
-                  f"so the {where}: {_money(target)}.")
+        if learned is not None:
+            reason = (f"{len(values)} sales in this grade, median {_money(base)}; placed at the "
+                      f"{round(learned['percentile'])}th percentile, learned from your own sales "
+                      f"({learned.get('n')} at {demand} interest): {_money(target)}.")
+        else:
+            where = {"low": "lower quarter", "normal": "median", "high": "upper quarter"}[demand]
+            reason = (f"{len(values)} sales in this grade, median {_money(base)}; {demand} interest, "
+                      f"so the {where}: {_money(target)}.")
         proposed = target
         if applied and applied[1] > target:
             proposed = applied[1]
@@ -164,6 +177,6 @@ if __name__ == "__main__":
             keep = set(stored["filtered"]["sameGrade"])
             items = [i for i in stored["lookup"]["queries"][-1]["items"] if i.get("itemId") in keep]
         print(json.dumps(reprice(data.get("current"), items, data.get("details") or [],
-                                 demand=data.get("demand") or "normal")))
+                                 demand=data.get("demand") or "normal", learned=data.get("learned"))))
     except (ValueError, KeyError, TypeError, IndexError, OSError) as err:
         sys.exit(f"reprice.py: {err}")

@@ -289,6 +289,19 @@ class BatchCommandsTest(unittest.TestCase):
         self.assertEqual(json.loads(fake.calls[0].data), {"status": "failed", "release": ["S2"], "reason": "usage"})
 
 
+class LearningCommandTest(unittest.TestCase):
+    def test_asks_the_app_for_the_learned_position_by_barcode_short_name_and_level(self):
+        fake = Fake(learning={"position": {"percentile": 70, "n": 6}})
+        long = {**LISTING, "query": "James Horner Braveheart (Original Motion Picture Soundtrack)"}
+        out = listings.learning(App(URL, None, opener=fake), long, "low")
+        self.assertEqual(out, {"percentile": 70, "n": 6})
+        query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(fake.calls[0].full_url).query))
+        self.assertEqual(query, {"level": "low"})
+
+    def test_no_position_is_none(self):
+        self.assertIsNone(listings.learning(App(URL, None, opener=Fake(learning={"position": None})), LISTING, "high"))
+
+
 class CheckTest(unittest.TestCase):
     def test_check_reports_only_reachable_and_authorised(self):
         cases = [(http_error(405), {"reachable": True, "authorised": True}),

@@ -180,6 +180,12 @@ def batch_finish(app, run_id, status, release=None, reason=None):
     return app.post(f"/api/batch/runs/{urllib.parse.quote(run_id, safe='')}", body)
 
 
+def learning(app, listing, level):
+    """The learned price position for this engagement level, from the seller's recorded sales (5+ at that
+    level); None until then. Each CD is sold once, so the level is what carries over, not the CD."""
+    return app.get("/api/learning", {"level": level}).get("position")
+
+
 def _sale_ok(s):
     price = s.get("price") if isinstance(s, dict) else None
     return (isinstance(price, dict) and s.get("itemId") and s.get("title")
@@ -209,8 +215,8 @@ def import_backup(app, backup):
 
 
 def main(command, stdin):
-    if command not in ("check", "list", "read", "sold", "engagement", "import", "batch-start", "batch-save", "batch-finish"):
-        sys.exit("usage: listings.py check|list|read|sold|engagement|import|batch-start|batch-save|batch-finish  (JSON on stdin)")
+    if command not in ("check", "list", "read", "sold", "engagement", "learning", "import", "batch-start", "batch-save", "batch-finish"):
+        sys.exit("usage: listings.py check|list|read|sold|engagement|learning|import|batch-start|batch-save|batch-finish  (JSON on stdin)")
     app = App(os.environ.get("ELISTER_URL"), os.environ.get("ELISTER_ACCESS_KEY"))
     if command == "check":
         return check(app)
@@ -231,6 +237,10 @@ def main(command, stdin):
         return batch_save(app, str(data["runId"]), data["proposals"])
     if command == "batch-finish":
         return batch_finish(app, str(data["runId"]), data["status"], data.get("release"), data.get("reason"))
+    if command == "learning":
+        with open(data["listing_file"], encoding="utf-8") as handle:
+            listing = json.load(handle)
+        return {"learned": learning(app, listing, data["level"])}
     if command == "engagement":
         with open(data["listing_file"], encoding="utf-8") as handle:
             listing = json.load(handle)

@@ -286,3 +286,19 @@ describe("saved price check on a Collection CD", () => {
     expect(itemFromListing({ title: "t", aspects: [] }, null, now).priceCheck).toBeUndefined();
   });
 });
+
+describe("saleRecord", () => {
+  it("is what Collection sends when a CD is marked sold with a price, so future proposals learn from it", async () => {
+    const { saleRecord } = await import("./collection");
+    const cd = { id: "1", title: "Wind & Wuthering", artist: "Genesis", barcode: "075678154323", categories: [], addedAt: "", updatedAt: "" };
+    expect(saleRecord(cd, "2026-11-27", 15)).toEqual({ barcode: "075678154323", artist: "Genesis", title: "Wind & Wuthering", soldPrice: 15, soldAt: "2026-11-27" });
+    expect(saleRecord({ ...cd, barcode: undefined }, "2026-11-27", 15)).toEqual({ artist: "Genesis", title: "Wind & Wuthering", soldPrice: 15, soldAt: "2026-11-27" });
+  });
+
+  it("is nothing without a positive sale price", async () => {
+    const { saleRecord } = await import("./collection");
+    const cd = { id: "1", title: "Wind & Wuthering", artist: "Genesis", categories: [], addedAt: "", updatedAt: "" };
+    expect(saleRecord(cd, "2026-11-27", undefined)).toBeNull();
+    expect(saleRecord(cd, "2026-11-27", 0)).toBeNull();
+  });
+});

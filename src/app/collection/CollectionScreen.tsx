@@ -12,6 +12,7 @@ import {
   markSold,
   mergeBackup,
   NOT_SOLD,
+  saleRecord,
   parseBackup,
   soldTotal,
   today,
@@ -540,8 +541,16 @@ function SoldSection({ item, listedPrice }: { item: CollectionItem; listedPrice?
   const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(date);
 
   function save() {
-    collectionStore.update(item.id, markSold(date, priceNum));
+    const sale = markSold(date, priceNum);
+    collectionStore.update(item.id, sale);
     setOpen(false);
+    // Quietly recorded so future price proposals learn from it; a failure never bothers the seller.
+    const record = saleRecord(item, date, sale.soldPrice);
+    if (record) {
+      fetch("/api/learning/outcome", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) }).catch(
+        () => {},
+      );
+    }
   }
 
   if (sold && !open) {

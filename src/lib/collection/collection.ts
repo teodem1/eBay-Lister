@@ -142,6 +142,16 @@ export function markSold(soldAt: string, soldPrice?: number): Pick<CollectionIte
 
 export const NOT_SOLD: Pick<CollectionItem, "soldAt" | "soldPrice"> = { soldAt: undefined, soldPrice: undefined };
 
+/** What "Mark as sold" sends to /api/learning/outcome, so future price proposals learn from the sale; null without a price. */
+export function saleRecord(
+  item: Pick<CollectionItem, "title" | "artist" | "barcode">,
+  soldAt: string,
+  soldPrice: number | undefined,
+): { barcode?: string; artist: string; title: string; soldPrice: number; soldAt: string } | null {
+  if (soldPrice === undefined || !Number.isFinite(soldPrice) || soldPrice <= 0) return null;
+  return { ...(item.barcode && { barcode: item.barcode }), artist: item.artist, title: item.title, soldPrice, soldAt };
+}
+
 export type StatusFilter = "unsold" | "sold" | "all";
 
 /** Every category in use, with how many CDs carry it, most used first. */

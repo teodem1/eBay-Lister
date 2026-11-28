@@ -193,6 +193,21 @@ class BestOfferTest(unittest.TestCase):
         self.assertFalse(reprice(20, plain(8, 9, 10), [])["over_50"])  # 9 / 0.85 = 10.59: a 47% drop
 
 
+class LearnedTest(unittest.TestCase):
+    def test_a_learned_position_replaces_the_engagement_quartile(self):
+        sales = plain(10, 12, 14, 16, 18)
+        r = reprice(10, sales, [], demand="low", learned={"percentile": 80, "n": 6})
+        self.assertEqual(r["target"], 16.4)
+        self.assertIn("your own sales", r["reason"])
+
+    def test_without_a_learned_position_the_quartile_stays(self):
+        self.assertEqual(reprice(10, plain(10, 12, 14, 16, 18), [], demand="low", learned=None)["target"], 12)
+
+    def test_a_learned_position_out_of_range_is_refused(self):
+        with self.assertRaises(ValueError):
+            reprice(10, plain(10, 12, 14), [], learned={"percentile": 120, "n": 5})
+
+
 class CommandTest(unittest.TestCase):
     def test_reads_only_the_same_grade_sales_of_a_sold_file(self):
         items = plain(10, 12, 14) + [sale(99, "Genesis Wind & Wuthering CD Good")]

@@ -64,6 +64,7 @@ export const PHONE_ONLY = [
   "/api/batch/review",
   "/api/batch/edit",
   "/api/batch/ask",
+  "/api/learning/outcome",
 ];
 
 export function isPhoneOnly(pathname: string): boolean {
