@@ -14,7 +14,8 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-9. Next: the whole-branch review, then Task 10 (each step needs the seller's approval).
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-9 and the whole-branch review (findings fixed 2026-11-28). Next: Task 10 (each step needs the seller's approval).
+- Seller's decisions after the review (2026-11-28): a CD with a usable barcode is stored and read under its barcode only (`lookupKeys` returns one key: barcode, else name), so another pressing's by-name result is never used. Job B (one unlisted CD) stays not cache-first for now.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
