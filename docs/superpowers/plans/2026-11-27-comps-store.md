@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-2. Next: Task 3.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-3. Next: Task 4.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -115,11 +115,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 
 **Interfaces — Produces:** `BothOptions.onSoldQuery?: (by: "barcode"|"keywords", items: Comparable[]) => void`
 
-- [ ] **Step 1: Failing tests:** barcode with 1 sale then name fallback calls `onSoldQuery` twice, in that order, with unfiltered items. Route (mocked eBay client, comps search and backend): success saves once with both queries, `partial:false`, the body's `gtin`, `keywords`, `sellerCondition`; a rejecting save still answers 200 with the same body; a failed sold search saves nothing; an empty sold result is saved (so it is not bought again).
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.** Await the save inside `try/catch` and log; skip when `blobBackend()` is null.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: save every sold lookup`.
+- [x] **Step 1: Failing tests:** barcode with 1 sale then name fallback calls `onSoldQuery` twice, in that order, with unfiltered items. Route (mocked eBay client, comps search and backend): success saves once with both queries, `partial:false`, the body's `gtin`, `keywords`, `sellerCondition`; a rejecting save still answers 200 with the same body; a failed sold search saves nothing; an empty sold result is saved (so it is not bought again).
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.** Await the save inside `try/catch` and log; skip when `blobBackend()` is null.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: save every sold lookup`.
 
 ### Task 4: Read and import routes (app)
 
