@@ -77,8 +77,13 @@ def search_name(query):
     return short if re.search(r"\w", short) else (query or "")
 
 
-def _result(source, lookup, filtered):
+def _result(source, lookup, filtered, query):
+    """`short_name`: the sales came from a by-name search under a shortened name, so they
+    may include cheaper copies of other releases; a price never goes down on them alone."""
+    queries = lookup.get("queries") or [{}]
+    short = queries[-1].get("by") == "keywords" and search_name(query) != (query or "")
     return {"source": source, "partial": bool(lookup.get("partial")), "saved_at": lookup.get("savedAt"),
+            "short_name": short,
             "data_file": _private_file("sold.json", {"lookup": lookup, "filtered": filtered})}
 
 
@@ -93,7 +98,7 @@ def sold(app, listing, refresh=False):
         # Stored before names were shortened: read it under the full name too, so it is not bought again.
         before = app.get("/api/comps", {**params, "name": listing.get("query")})
     if before.get("found") and not refresh:
-        return _result("stored", before["lookup"], before["filtered"])
+        return _result("stored", before["lookup"], before["filtered"], listing.get("query"))
     old_saved_at = before["lookup"].get("savedAt") if before.get("found") else None
 
     body = {"keywords": name, "gtin": params["barcode"], "sellerCondition": condition}
@@ -109,7 +114,7 @@ def sold(app, listing, refresh=False):
     except AppUnavailable:
         after = {"found": False}
     if after.get("found") and after["lookup"].get("savedAt") != old_saved_at:
-        return _result("lookup", after["lookup"], after["filtered"])
+        return _result("lookup", after["lookup"], after["filtered"], listing.get("query"))
     # Not saved: the answer's sales, which the app already narrowed to CDs in this grade.
     comparables = (answer.get("sold") or {}).get("comparables") or {}
     items = comparables.get("items") or []
@@ -117,7 +122,7 @@ def sold(app, listing, refresh=False):
     lookup = {"version": 1, "savedAt": None, "partial": False, "barcode": params["barcode"] or None,
               "name": name, "condition": condition,
               "queries": [{"by": comparables.get("matchedBy") or "keywords", "items": items}]}
-    return _result("lookup_unsaved", lookup, {"cdOnly": ids, "sameGrade": ids, "detail": {}})
+    return _result("lookup_unsaved", lookup, {"cdOnly": ids, "sameGrade": ids, "detail": {}}, listing.get("query"))
 
 
 def _sale_ok(s):

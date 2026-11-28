@@ -39,7 +39,9 @@ def _money(value):
     return f"C${value:.2f}"
 
 
-def reprice(current, items, details):
+def reprice(current, items, details, keep_if_lower=False):
+    """keep_if_lower: the sales came from a shortened-name search; buyers search the full name,
+    so the price is never lowered on them (it may still go up)."""
     unknown = [d for d in details if d not in EDITIONS]
     if unknown:
         raise ValueError(f"Unknown detail: {', '.join(unknown)}")
@@ -74,6 +76,10 @@ def reprice(current, items, details):
                   f"(all {len(values)} sales: {_money(base)}).")
     else:
         proposed, reason = base, f"{len(values)} sales in this grade, median {_money(base)}."
+    if keep_if_lower and current is not None and proposed is not None and proposed < current:
+        reason = (f"{reason} Those sales came from a short name search and went lower, "
+                  f"so the price stays at {_money(float(current))} (buyers search the full name).")
+        proposed, applied = round(float(current), 2), None
     if pending and (proposed is None or pending[1] <= proposed):
         pending = None
     over_50 = bool(current and proposed is not None and abs(proposed - current) / current > FLAG_CHANGE)
@@ -93,6 +99,7 @@ if __name__ == "__main__":
                 stored = json.load(handle)
             keep = set(stored["filtered"]["sameGrade"])
             items = [i for i in stored["lookup"]["queries"][-1]["items"] if i.get("itemId") in keep]
-        print(json.dumps(reprice(data.get("current"), items, data.get("details") or [])))
+        print(json.dumps(reprice(data.get("current"), items, data.get("details") or [],
+                                 keep_if_lower=bool(data.get("keep_if_lower")))))
     except (ValueError, KeyError, TypeError, IndexError, OSError) as err:
         sys.exit(f"reprice.py: {err}")

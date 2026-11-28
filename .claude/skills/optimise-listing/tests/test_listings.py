@@ -227,6 +227,14 @@ class SearchNameTest(unittest.TestCase):
         names = [dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(r.full_url).query))["name"] for r in fake.calls]
         self.assertEqual(names, ["John Williams Schindler's List", long["query"]])
 
+    def test_reports_when_the_sales_came_from_a_shortened_name(self):
+        long = {**LISTING, "query": "James Horner Braveheart (Original Motion Picture Soundtrack)"}
+        by_name = stored()
+        by_name["lookup"]["queries"] = [{"by": "barcode", "items": []}, {"by": "keywords", "items": [sale("a", 12)]}]
+        self.assertTrue(run_sold(Fake(comps=by_name), listing=long)["short_name"])
+        self.assertFalse(run_sold(Fake(comps=stored()), listing=long)["short_name"])  # matched by barcode
+        self.assertFalse(run_sold(Fake(comps=by_name))["short_name"])  # the name had nothing to shorten
+
     def test_with_a_barcode_only_one_read_is_made(self):
         long = {**LISTING, "query": "James Horner Braveheart (Original Motion Picture Soundtrack)"}
         fake = Fake(comps=stored())

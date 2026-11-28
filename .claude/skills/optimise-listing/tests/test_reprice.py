@@ -100,6 +100,19 @@ class DetailTest(unittest.TestCase):
             reprice(10, plain(10, 11, 12), ["rare"])
 
 
+class KeepIfLowerTest(unittest.TestCase):
+    def test_short_name_sales_never_lower_the_price(self):
+        r = reprice(12.99, plain(4, 5, 6), [], keep_if_lower=True)
+        self.assertEqual((r["base"], r["proposed"], r["over_50"]), (5, 12.99, False))
+        self.assertIn("short name", r["reason"])
+
+    def test_short_name_sales_may_still_raise_it(self):
+        self.assertEqual(reprice(8, plain(10, 12, 14), [], keep_if_lower=True)["proposed"], 12)
+
+    def test_without_the_flag_a_lower_price_is_proposed(self):
+        self.assertEqual(reprice(12.99, plain(4, 5, 6), [])["proposed"], 5)
+
+
 class CommandTest(unittest.TestCase):
     def test_reads_only_the_same_grade_sales_of_a_sold_file(self):
         items = plain(10, 12, 14) + [sale(99, "Genesis Wind & Wuthering CD Good")]
