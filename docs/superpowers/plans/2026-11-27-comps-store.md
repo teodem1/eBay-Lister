@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Task 1. Next: Task 2.
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-2. Next: Task 3.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -103,11 +103,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - `readLookup(b: Backend, keys: string[]): Promise<StoredLookup | null>`
 - `saveLookup(b: Backend, input: Omit<StoredLookup,"version"|"filtered">): Promise<"saved" | "kept" | "no_key">`
 
-- [ ] **Step 1: Failing tests** with an in-memory `Backend`: second key found when first is absent; a rejecting `read` makes `readLookup` reject; unreadable JSON rejects; partial over full returns `"kept"` and writes nothing; full over partial `"saved"`; one `write` per save, to `keys[0]`; no key returns `"no_key"`; `blobBackend({})` is `null`.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.** `npm install @vercel/blob@^2.9.0`; confirm the private `get`/`put` signatures in the installed types. `put` with `access:"private"`, `addRandomSuffix:false`, `allowOverwrite:true`; no `list`. Backend exists when `BLOB_READ_WRITE_TOKEN` or `BLOB_STORE_ID` is set. Only a partial save reads before writing.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: private blob store for sold lookups`.
+- [x] **Step 1: Failing tests** with an in-memory `Backend`: second key found when first is absent; a rejecting `read` makes `readLookup` reject; unreadable JSON rejects; partial over full returns `"kept"` and writes nothing; full over partial `"saved"`; one `write` per save, to `keys[0]`; no key returns `"no_key"`; `blobBackend({})` is `null`.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.** `npm install @vercel/blob@^2.9.0`; confirm the private `get`/`put` signatures in the installed types. `put` with `access:"private"`, `addRandomSuffix:false`, `allowOverwrite:true`; no `list`. Backend exists when `BLOB_READ_WRITE_TOKEN` or `BLOB_STORE_ID` is set. Only a partial save reads before writing.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: private blob store for sold lookups`.
 
 ### Task 3: Save every sold lookup (app)
 
