@@ -1,6 +1,6 @@
 # Phone-run listing batches (skill on plan usage, approved on the phone)
 
-Status: approach A chosen by the seller 2026-11-28 (fallback B). Draft for approval.
+Status: approach A chosen by the seller 2026-11-28 (fallback B); queue rules from the seller. Draft for approval.
 "(call)" marks a builder's decision.
 
 ## Intent
@@ -14,7 +14,8 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
   engagement (sold, listed now, months of supply), evidence, flags (over 50%, pending, short-name sales).
 - The seller ticks proposals and taps "Update N on eBay"; only ticked ones are sent, with the same safety
   checks as `changes.py` (listing re-read, title or price changed since = skipped, nothing dropped, grades kept).
-- The next run continues with listings not yet proposed.
+- The next run continues with listings not yet proposed, then newly added ones, then listings unsold 30 days
+  after their last batch (see Data).
 
 ## Non-goals
 - No chat step anywhere in the normal flow.
@@ -80,9 +81,15 @@ listings" screen (Review tab) starts a batch, shows the skill's proposals, and s
   (`open | applied | dismissed | failed`), times.
 - `batch/index.json`: sku → status and updatedAt, one file, written by the app only. The session reads it through
   `GET /api/batch/index` (it has no Blob token).
-- Statuses and the queue (call): `open` (shown, waiting) and `applied` / `dismissed` (done) are skipped by later
-  runs; `failed` and `stale` (the listing changed before apply) go back into the queue. Open proposals stay open
-  across runs.
+- Statuses and the queue: `open` (shown, waiting), `applied` / `dismissed` (done), `failed`, `stale` (the listing
+  changed before apply). Which live listings a run takes, in this order (seller, 2026-11-28):
+  1. listings never proposed: on the first pass every current listing, afterwards the newly added ones
+     (newest first);
+  2. `failed` and `stale` proposals (call);
+  3. listings still live (unsold) 30 days or more after their last proposal was applied or dismissed, oldest
+     first; an `open` proposal 30 days or older is re-proposed from fresh data and replaces the old one (call).
+  Listings that sold drop out because they are no longer live. With nothing due, "Run next 20" is disabled and
+  the screen says when the next listing becomes due. Open proposals stay open across runs.
 - `batch/runs/<id>.json`: run record.
 
 ## Constraints
