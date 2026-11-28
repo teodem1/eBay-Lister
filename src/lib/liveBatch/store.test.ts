@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Backend } from "../comps/store";
-import { readIndex, readProposal, readRun, readRuns, saveProposal, saveRun, writeIndex } from "./store";
+import { readIndex, readLive, readProposals, readRun, readRuns, saveRun, writeIndex, writeLive, writeProposals } from "./store";
 import type { BatchRun, Proposal } from "./types";
 
 function memory(files: Record<string, string> = {}) {
@@ -55,12 +55,27 @@ describe("batch store", () => {
     await expect(readIndex(backend)).rejects.toThrow();
   });
 
-  it("round-trips a proposal under its SKU", async () => {
+  it("keeps proposals in one file by SKU", async () => {
     const { backend, files } = memory();
-    await saveProposal(backend, proposal);
-    expect(Object.keys(files)).toEqual(["batch/proposals/BC-1.json"]);
-    expect(await readProposal(backend, "BC-1")).toEqual(proposal);
-    expect(await readProposal(backend, "BC-2")).toBeNull();
+    expect(await readProposals(backend)).toEqual({});
+    await writeProposals(backend, { "BC-1": proposal }, new Date("2026-11-28T00:00:00.000Z"));
+    expect(Object.keys(files)).toEqual(["batch/proposals.json"]);
+    expect((await readProposals(backend))["BC-1"]).toEqual(proposal);
+  });
+
+  it("drops proposals done more than 7 days ago, keeping open ones", async () => {
+    const { backend } = memory();
+    const old = { ...proposal, sku: "BC-2", status: "applied" as const, createdAt: "2026-11-01T00:00:00.000Z" };
+    const openOld = { ...proposal, sku: "BC-3", createdAt: "2026-11-01T00:00:00.000Z" };
+    await writeProposals(backend, { "BC-1": proposal, "BC-2": old, "BC-3": openOld }, new Date("2026-11-28T00:00:00.000Z"));
+    expect(Object.keys(await readProposals(backend)).sort()).toEqual(["BC-1", "BC-3"]);
+  });
+
+  it("caches the live SKUs", async () => {
+    const { backend } = memory();
+    expect(await readLive(backend)).toEqual([]);
+    await writeLive(backend, ["A", "B"]);
+    expect(await readLive(backend)).toEqual(["A", "B"]);
   });
 
   it("keeps runs in one file, the last 50", async () => {

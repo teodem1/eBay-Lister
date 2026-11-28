@@ -36,6 +36,19 @@ describe("proxy", () => {
     expect(passed(await call("/api/listing/refresh", { cookie }))).toBe(true);
   });
 
+  it("refuses the key header where only the phone may act (starting, sending, dismissing batches)", async () => {
+    vi.stubEnv("APP_ACCESS_KEY", "s3cret-key");
+    for (const path of ["/api/batch/run", "/api/batch/apply", "/api/batch/dismiss", "/api/batch/apply/"]) {
+      const res = await call(path, { "x-elister-key": "s3cret-key" });
+      expect(res.status, path).toBe(401);
+    }
+    const cookie = `el_access=${await accessToken("s3cret-key")}`;
+    expect(passed(await call("/api/batch/apply", { cookie }))).toBe(true);
+    for (const path of ["/api/batch/proposals", "/api/batch/runs/r1", "/api/batch"]) {
+      expect(passed(await call(path, { "x-elister-key": "s3cret-key" })), path).toBe(true);
+    }
+  });
+
   it("stays open when no key is set", async () => {
     vi.stubEnv("APP_ACCESS_KEY", "");
     expect(passed(await call("/api/listing/refresh"))).toBe(true);

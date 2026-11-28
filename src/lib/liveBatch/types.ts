@@ -38,6 +38,8 @@ export interface Proposal {
   flags: string[];
   status: EntryStatus;
   result?: { text: string; price: string; reason: string };
+  /** When it was applied, dismissed or skipped (ISO); proposals done over 7 days ago are pruned. */
+  doneAt?: string;
 }
 
 export interface BatchRun {

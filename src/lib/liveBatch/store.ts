@@ -1,6 +1,6 @@
 /**
- * Batch records in the private Blob store: one index file, one file per proposal and
- * one file of recent runs. Read by key, never listed. Storage that cannot be read rejects:
+ * Batch records in the private Blob store: the index, the proposals, recent runs and the
+ * cached live SKUs, one file each. Read by key, never listed. Storage that cannot be read rejects:
  * a caller stops rather than treating it as "nothing stored".
  */
 import type { Backend } from "../comps/store";
@@ -8,8 +8,10 @@ import type { BatchIndex, BatchRun, Proposal } from "./types";
 
 const INDEX = "batch/index.json";
 const RUNS = "batch/runs.json";
+const PROPOSALS = "batch/proposals.json";
+const LIVE = "batch/live.json";
 const KEEP_RUNS = 50;
-const proposalPath = (sku: string) => `batch/proposals/${encodeURIComponent(sku)}.json`;
+const KEEP_DONE_DAYS = 7;
 
 function parse<T>(path: string, text: string, ok: (v: unknown) => boolean): T {
   const v = JSON.parse(text) as unknown;
@@ -28,14 +30,31 @@ export async function writeIndex(b: Backend, index: BatchIndex): Promise<void> {
   await b.write(INDEX, JSON.stringify(index));
 }
 
-export async function readProposal(b: Backend, sku: string): Promise<Proposal | null> {
-  const path = proposalPath(sku);
-  const text = await b.read(path);
-  return text === null ? null : parse<Proposal>(path, text, (v) => isObject(v) && typeof (v as Proposal).sku === "string");
+/** Open proposals and those done in the last 7 days, by SKU (one file, one read per poll). */
+export async function readProposals(b: Backend): Promise<Record<string, Proposal>> {
+  const text = await b.read(PROPOSALS);
+  return text === null ? {} : parse<Record<string, Proposal>>(PROPOSALS, text, isObject);
 }
 
-export async function saveProposal(b: Backend, p: Proposal): Promise<void> {
-  await b.write(proposalPath(p.sku), JSON.stringify(p));
+/** Writes the proposals, dropping those applied, dismissed, failed or stale more than 7 days ago. */
+export async function writeProposals(b: Backend, proposals: Record<string, Proposal>, now: Date): Promise<void> {
+  const cutoff = now.getTime() - KEEP_DONE_DAYS * 86_400_000;
+  const kept = Object.fromEntries(
+    Object.entries(proposals).filter(
+      ([, p]) => p.status === "open" || p.status === "in_progress" || new Date(p.doneAt ?? p.createdAt).getTime() >= cutoff,
+    ),
+  );
+  await b.write(PROPOSALS, JSON.stringify(kept));
+}
+
+/** The live SKUs as eBay listed them when the last run started (so polling never calls eBay). */
+export async function readLive(b: Backend): Promise<string[]> {
+  const text = await b.read(LIVE);
+  return text === null ? [] : parse<string[]>(LIVE, text, Array.isArray);
+}
+
+export async function writeLive(b: Backend, skus: string[]): Promise<void> {
+  await b.write(LIVE, JSON.stringify(skus));
 }
 
 /** Recent runs, newest first. */
