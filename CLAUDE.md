@@ -136,14 +136,15 @@ Screens (phone first):
   that draft (`withLiveChange` / `liveChangeForSku` in `src/lib/auto/auto.ts`). "Try again" on one Auto CD never makes a
   third CD run at once and never un-pauses the run (`useAutoRun` `start(onlyId)`).
 - `/update-listings` — `src/app/update-listings/UpdateListingsScreen.tsx` ("Update live listings", linked from Review):
-  rewrites every live listing with the current listing rules. "Find" lists inventory items with a published offer
-  (`/api/listing/refresh`), "Preview" has Claude rewrite each (`/api/listing/refresh/preview`, `previewRefresh` in
-  `src/lib/ebay/refreshListings.ts`: grades read back from the condition text / title by `sellerConditionFromListing`,
-  same category, nothing sent to eBay), then "Update N on eBay" (`/api/listing/refresh/apply`, `applyRefresh`) replaces
-  only title, item specifics (merged: old values kept, guessed values skipped, Brand/MPN untouched) and description,
-  plus a price raise for a special edition that sold for more. Policies, promotion, photos and condition are read back
-  and sent unchanged; a listing whose title
-  changed since the preview is skipped. Previews are kept on the phone (`ebay-lister:refresh:v1`).
+  phone-run batches of the `optimise-listing` skill on the seller's Claude plan (no Claude API credits). The seller types
+  both usage percentages and taps "Run next 20": `/api/batch/run` counts CDs of runs still going (`estimateFits`, 80% stop),
+  reserves the next listings (`src/lib/liveBatch/queue.ts`: never proposed newest first, then failed/stale, then unsold 60
+  days after their last proposal) and fires the seller's Claude Code scheduled task (`fireRoutine`, `ROUTINE_FIRE_URL` /
+  `ROUTINE_FIRE_TOKEN`). The cloud session runs the skill's job H and posts proposals (`/api/batch/proposals`,
+  `/api/batch/runs/[id]`); the screen polls `/api/batch` every 20 s, shows proposals (old/new title, specifics, price,
+  engagement, flags) and sends the ticked ones through `/api/batch/apply` (`applyProposal` in `src/lib/liveBatch/apply.ts`:
+  re-read, skip if changed, text then price alone). `/api/batch/run`, `/apply` and `/dismiss` are phone only (`PHONE_ONLY`
+  in `src/lib/auth/access.ts`: the key header never opens them). Records in Blob under `batch/` (`src/lib/liveBatch/store.ts`).
 - `/collection` — `src/app/collection/CollectionScreen.tsx`: a CD is saved here from the listing
   screen (`src/app/listing/SaveToCollection.tsx`: "Add to Collection", or automatically on publish),
   using the reviewed item specifics and price plus the cover the scan found (handed over in
