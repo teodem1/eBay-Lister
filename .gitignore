@@ -28,3 +28,4 @@ npm-debug.log*
 # vercel
 .vercel
 capacitor-shell/server.js
+.superpowers/
