@@ -14,7 +14,7 @@
 
 ## Resume here (moved from Claude chat to Claude Code, 2026-11-27)
 
-- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-5 (app part done). Next: Task 6 (plugin).
+- Done: Task 0A (deployed), Task 0 (gate returns 405, skill and agents load), Tasks 1-6. Next: Task 7.
 - The seller approved this plan and **Native** execution: build every task in the session, test first, then one fresh reviewer checks the whole branch. No other subagents unless the seller asks.
 - Run `npm install` first. Read this plan's spec before Task 1.
 
@@ -157,11 +157,11 @@ Expected: `405` (let through). `401`: secret not attached. Anything else: stop a
 - `listings.sold(app, listing, refresh=False) -> {"source": "stored"|"lookup"|"lookup_unsaved", "partial": bool, "saved_at": str|None, "data_file": str}`; the file holds `{"lookup", "filtered"}`
 - CLI `listings.py check|list|read|sold|import` (JSON on stdin); `check` prints only `{"reachable","authorised"}`; `read` and `sold` write private files and print a short headline with paths
 
-- [ ] **Step 1: Failing tests** (fake opener): with no key, requests go out without a cookie and without calling `/api/unlock`; stored hit makes no `/api/price-suggestion` call; miss makes exactly one, then reads again → `"lookup"`; 502 or 503 from `/api/comps` raises and makes **no** lookup; second read still empty → `"lookup_unsaved"`, one lookup, items taken from the answer; `soldLimitReached` raises; `refresh=True` looks up once; `import` sends only items with `soldItems`; no output contains the key. Existing `test_app_client.py` still passes.
-- [ ] **Step 2:** Run, FAIL.
-- [ ] **Step 3: Implement.** Send `barcode`, `name` = `listing.query`, `condition` = `sellerCondition.condition`.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: cache-first sold lookups`.
+- [x] **Step 1: Failing tests** (fake opener): with no key, requests go out without a cookie and without calling `/api/unlock`; stored hit makes no `/api/price-suggestion` call; miss makes exactly one, then reads again → `"lookup"`; 502 or 503 from `/api/comps` raises and makes **no** lookup; second read still empty → `"lookup_unsaved"`, one lookup, items taken from the answer; `soldLimitReached` raises; `refresh=True` looks up once; `import` sends only items with `soldItems`; no output contains the key. Existing `test_app_client.py` still passes.
+- [x] **Step 2:** Run, FAIL.
+- [x] **Step 3: Implement.** Send `barcode`, `name` = `listing.query`, `condition` = `sellerCondition.condition`.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: cache-first sold lookups`.
 
 ### Task 7: Repricing and research threshold (plugin)
 
