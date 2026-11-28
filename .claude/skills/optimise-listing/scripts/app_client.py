@@ -18,8 +18,10 @@ ALLOWANCE = "The sold-comps.com allowance is used up."
 
 
 class AppUnavailable(Exception):
-    def __init__(self, reason):
+    """`status` is the HTTP status the app answered with, None when it gave none (network, bad data)."""
+    def __init__(self, reason, status=None):
         super().__init__(f"{reason} {FALLBACK}")
+        self.status = status
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -33,10 +35,18 @@ def _default_opener(request):
 
 
 def _post(opener, url, path, body, cookie=None):
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    return _request(opener, url, path, body, cookie, "POST")
+
+
+def _request(opener, url, path, body=None, cookie=None, method="POST", params=None):
+    headers = {"Accept": "application/json"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
     if cookie:
         headers["Cookie"] = cookie
-    request = urllib.request.Request(url + path, json.dumps(body).encode(), headers, method="POST")
+    query = urllib.parse.urlencode({k: v for k, v in (params or {}).items() if v not in (None, "")})
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(url + path + (f"?{query}" if query else ""), data, headers, method=method)
     try:
         response = opener(request)
         data = json.loads(response.read())
@@ -46,14 +56,14 @@ def _post(opener, url, path, body, cookie=None):
         except (ValueError, AttributeError, OSError):
             limited = False
         if limited:
-            raise AppUnavailable(ALLOWANCE) from None
+            raise AppUnavailable(ALLOWANCE, err.code) from None
         hint = {403: "blocked (deployment protection or network rules)"}.get(err.code)
         if err.code == 401:
             hint = ("ELISTER_ACCESS_KEY was rejected" if path == "/api/unlock"
                     else "the app needs a valid access key (or a Vercel sign-in is in front of it)")
         if 300 <= err.code < 400:
             hint = "it redirected, probably to a sign-in page"
-        raise AppUnavailable(f"{path} failed with status {err.code}{': ' + hint if hint else ''}.") from None
+        raise AppUnavailable(f"{path} failed with status {err.code}{': ' + hint if hint else ''}.", err.code) from None
     except ValueError:
         raise AppUnavailable(f"{path} did not return data (possibly a sign-in page).") from None
     except OSError:
@@ -63,26 +73,56 @@ def _post(opener, url, path, body, cookie=None):
     return data, response.headers
 
 
-def fetch_prices(url, key, keywords, barcode, condition, opener=None):
-    opener = opener or _default_opener
+def _checked_url(url):
     url = (url or "").rstrip("/")
     parts = urllib.parse.urlsplit(url)
     if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password
             or parts.path or parts.query or parts.fragment):
         raise AppUnavailable("ELISTER_URL must be set to the app's https address, with nothing after the host.")
+    return url
+
+
+def _unlock(opener, url, key):
+    _, headers = _post(opener, url, "/api/unlock", {"key": key})
+    if hasattr(headers, "get_all"):
+        sent = headers.get_all("Set-Cookie") or []
+    else:
+        sent = [headers.get("Set-Cookie") or ""]
+    cookie = next((c.split(";")[0] for c in sent if c.startswith("el_access=")), None)
+    if not cookie:
+        raise AppUnavailable("The app accepted the request but sent no access cookie "
+                             "(APP_ACCESS_KEY may be unset; try without ELISTER_ACCESS_KEY).")
+    return cookie
+
+
+class App:
+    """The app at ELISTER_URL. Without a key, requests carry none (the session's network
+    secret adds the x-elister-key header outside it); with one, it unlocks once for a cookie."""
+
+    def __init__(self, url, key=None, opener=None):
+        self.url = _checked_url(url)
+        self._key = key or None
+        self._opener = opener or _default_opener
+        self._cookie = None
+
+    def _access(self):
+        if self._key and not self._cookie:
+            self._cookie = _unlock(self._opener, self.url, self._key)
+        return self._cookie
+
+    def get(self, path, params=None):
+        return _request(self._opener, self.url, path, None, self._access(), "GET", params)[0]
+
+    def post(self, path, body):
+        return _request(self._opener, self.url, path, body, self._access(), "POST")[0]
+
+
+def fetch_prices(url, key, keywords, barcode, condition, opener=None):
+    opener = opener or _default_opener
+    url = _checked_url(url)
     digits = "".join(c for c in (barcode or "") if c.isdigit())
 
-    cookie = None
-    if key:
-        _, headers = _post(opener, url, "/api/unlock", {"key": key})
-        if hasattr(headers, "get_all"):
-            sent = headers.get_all("Set-Cookie") or []
-        else:
-            sent = [headers.get("Set-Cookie") or ""]
-        cookie = next((c.split(";")[0] for c in sent if c.startswith("el_access=")), None)
-        if not cookie:
-            raise AppUnavailable("The app accepted the request but sent no access cookie "
-                                 "(APP_ACCESS_KEY may be unset; try without ELISTER_ACCESS_KEY).")
+    cookie = _unlock(opener, url, key) if key else None
 
     full = 8 <= len(digits) <= 14
     query = {"keywords": keywords, "gtin": digits if full else "", "sellerCondition": condition}
