@@ -15,6 +15,28 @@ class UsageGateTest(unittest.TestCase):
             self.assertRaises(ValueError, usage_gate, bad, 10)
             self.assertRaises(ValueError, usage_gate, 10, bad)
 
+class BatchSizeTest(unittest.TestCase):
+    def test_a_full_batch_when_it_fits_under_80(self):
+        r = usage_gate(22, 18, cds=20)
+        self.assertEqual((r["go"], r["batch"]), (True, 20))
+
+    def test_a_smaller_batch_near_the_stop(self):
+        self.assertEqual(usage_gate(70, 18, cds=20)["batch"], 9)    # 70 + 9 < 80
+        self.assertEqual(usage_gate(20, 78, cds=20)["batch"], 9)    # weekly: 78 + 9 x 0.2 < 80
+        self.assertIn("9", usage_gate(70, 18, cds=20)["reason"])
+
+    def test_no_batch_when_even_one_cd_would_reach_80(self):
+        r = usage_gate(79, 10, cds=20)
+        self.assertEqual((r["go"], r["batch"]), (False, 0))
+
+    def test_without_a_batch_size_it_works_as_before(self):
+        self.assertNotIn("batch", usage_gate(22, 18))
+
+    def test_a_bad_batch_size_is_refused(self):
+        for bad in (0, -1, 2.5, "20", True):
+            self.assertRaises(ValueError, usage_gate, 10, 10, cds=bad)
+
+
 class ResearchNeededTest(unittest.TestCase):
     def test_starts_at_20_cad(self):
         self.assertTrue(research_needed(20))

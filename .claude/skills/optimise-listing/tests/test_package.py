@@ -38,7 +38,7 @@ class PackageTest(unittest.TestCase):
 
     def test_skill_runs_the_live_listing_batch(self):
         text = (SKILL / "SKILL.md").read_text()
-        for phrase in ("C$20", "every 5 CDs", "batches of 5", "Nothing is sent without approval",
+        for phrase in ("C$20", "every 20 CDs", "batches of 20", "groups of 5", '"cds": 20', "Nothing is sent without approval",
                        "once per artist", "only when evidence conflicts",
                        "scripts/listings.py", "scripts/reprice.py", "scripts/changes.py"):
             self.assertIn(phrase, text)
@@ -78,7 +78,7 @@ class PackageTest(unittest.TestCase):
 class SpendingTest(unittest.TestCase):
     def test_skill_checks_usage_and_worth_before_any_agent(self):
         text = (SKILL / "SKILL.md").read_text()
-        for phrase in ("scripts/gate.py", "Settings > Usage", "every 5 CDs", "C$20",
+        for phrase in ("scripts/gate.py", "Settings > Usage", "every 20 CDs", "C$20",
                        "usage credits", "Never call the app's Claude features", "If gate.py fails, stop"):
             self.assertIn(phrase, text)
         self.assertLess(text.index("## 0."), text.index("## A."))

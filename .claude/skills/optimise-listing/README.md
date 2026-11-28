@@ -1,6 +1,6 @@
 # optimise-listing
 
-`/optimise-listing` rewrites and reprices your live eBay CD listings in batches of 5 from stored sold results, sending only the changes you approve. It can also write and price one unlisted CD, which it never publishes.
+`/optimise-listing` rewrites and reprices your live eBay CD listings in batches of 20 from stored sold results, sending only the changes you approve. It can also write and price one unlisted CD, which it never publishes.
 Use the plain `/optimise-listing`, not an `ebay-cd-optimiser:` entry from the account plugin, which is an older copy.
 
 ## Install
@@ -11,10 +11,10 @@ Nothing to install: this folder and `.claude/agents/` are part of the eBay Liste
 - `/optimise-listing Pink Floyd, The Dark Side of the Moon, barcode ..., disc Near mint, inlay Very good+, bought in Canada` (add photos if you have them): one unlisted CD.
 
 ## What it spends
-- Asks for your five-hour and weekly percentages (Settings > Usage) and stops at 80% of either; asks again every 5 CDs.
+- Asks for your five-hour and weekly percentages (Settings > Usage) and stops at 80% of either; asks again before each batch of 20, and shrinks a batch that would cross 80% (the 5-CD trial used about 1 five-hour and 0.2 weekly points per CD).
 - Web research only for CDs asking C$20 or more. The rest are rewritten from the listing and its stored sales.
 - Sold results come from the app's store first; a SoldComps lookup is made only when none is stored (or when you ask for fresh ones), once per CD.
-- Haiku looks for sources once per artist, Sonnet writes in batches of 5, Opus only when evidence conflicts.
+- Haiku looks for sources once per artist, Sonnet writes in groups of 5 (4 calls per batch of 20), Opus only when evidence conflicts.
 - Never calls the app's Claude features, so no API credits. Keep usage credits off to avoid charges beyond your plan.
 
 ## Settings (where Claude runs; never in chat)
