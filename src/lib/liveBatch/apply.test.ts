@@ -156,11 +156,11 @@ describe("applyProposal", () => {
     expect(two.putOfferRaw.mock.calls.at(-1)![0].pricingSummary.price.value).toBe("30.00");
   });
 
-  it("reports the text saved and the price failed when only the price write fails", async () => {
+  it("marks it failed (back in the queue) when the text saved but the price write failed", async () => {
     let calls = 0;
     const client = fakeClient({ putOffer: async () => { if (++calls === 2) throw new Error("eBay price error"); } });
     const out = await applyProposal(client, proposal(), false, opts);
-    expect(out.status).toBe("applied");
+    expect(out.status).toBe("failed");
     expect(out.result).toMatchObject({ text: "updated", price: "failed" });
     expect(out.result.reason).toMatch(/price/i);
   });

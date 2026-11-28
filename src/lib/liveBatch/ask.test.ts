@@ -83,6 +83,13 @@ describe("askAboutProposal", () => {
     expect([out.basis, out.previousPrice]).toEqual(["matching", 21.95]);
   });
 
+  it("keeps the batch's own price as the previous price on a second ask", async () => {
+    const { client } = fakeClient({ answer: "a", matching: [1, 2], basis: "matching", targetPrice: 40, title: null });
+    const askedBefore = { note: "n", answer: "a", matching: [], basis: "estimate" as const, previousPrice: 18.5, target: 55, price: 55, title: null, at: "t" };
+    const out = await askAboutProposal(live, { ...proposal, price: 55, asked: askedBefore }, "note", sales, client);
+    expect(out.previousPrice).toBe(18.5);
+  });
+
   it("lists a lower target with room for a Best Offer", async () => {
     const { client } = fakeClient({ answer: "a", matching: [1, 2], basis: "matching", targetPrice: 20, title: null });
     const out = await askAboutProposal(live, proposal, "note", sales, client);

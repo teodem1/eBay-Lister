@@ -74,14 +74,17 @@ export async function POST(request: Request) {
     const cdsOnly = (r: ComparableResult | null) =>
       r && { ...r, items: sameCondition(onlyCds(r.items, query.keywords), sellerCondition) };
     // The seller's own sales teach where CDs with this much interest sell (src/lib/learning): the typical
-    // sold price is taken there. Needs both sides to read the interest; any failure keeps the median.
+    // sold price is taken there. Interest is CD sales in any grade against CDs listed now in any grade, the
+    // same measure a sale was recorded with and the skill uses. Needs both sides; any failure keeps the median.
     let learned: LearnedPosition | undefined;
     const soldCds = cdsOnly(both.sold);
-    const listedCds = cdsOnly(both.current);
-    const learningStore = soldCds && listedCds ? blobBackend() : null;
-    if (learningStore && soldCds && listedCds) {
+    const anyGrade = (r: ComparableResult | null) => r && onlyCds(r.items, query.keywords);
+    const soldAnyGrade = anyGrade(both.sold);
+    const listedAnyGrade = anyGrade(both.current);
+    const learningStore = soldAnyGrade && listedAnyGrade ? blobBackend() : null;
+    if (learningStore && soldAnyGrade && listedAnyGrade) {
       try {
-        const level = engagementLevel(soldCds.items, new Date().toISOString(), listedCds.items.length);
+        const level = engagementLevel(soldAnyGrade, new Date().toISOString(), listedAnyGrade.length);
         const position = learnedPosition(await readOutcomes(learningStore), level);
         if (position) learned = { ...position, level };
       } catch (err) {

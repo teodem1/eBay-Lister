@@ -62,7 +62,8 @@ export async function POST(request: Request) {
       salesCount: values.length,
       median: values.length ? Math.round(median(values) * 100) / 100 : null,
       listedNow,
-      level: listedNow === null ? null : engagementLevel(stored.sales, stored.savedAt ?? new Date().toISOString(), listedNow),
+      // Interest is measured as everywhere else (Scan, Auto, the skill): CD sales in any grade against CDs listed now.
+      level: listedNow === null ? null : engagementLevel(stored.cds, stored.savedAt ?? new Date().toISOString(), listedNow),
       recordedAt: new Date().toISOString(),
     };
     await recordOutcome(b, outcome);

@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { Icon, Spinner } from "@/components/ui";
 import { formatMoney } from "@/app/listing/priceRequest";
-import { proposalRows, request } from "@/app/update-listings/batchView";
-import type { Proposal } from "@/lib/listing/types";
+import { priceChange, proposalRows, request } from "@/app/update-listings/batchView";
+import { TITLE_MAX } from "@/lib/listing/limits";
+import type { ApplyOutcome, Proposal } from "@/lib/listing/types";
 import { AskClaude, SalesList } from "./ProposalExtras";
 import WhyDetails from "@/app/update-listings/WhyDetails";
 
@@ -17,22 +18,22 @@ export default function BatchReviewSection() {
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [error, setError] = useState("");
 
-  const load = async () => {
-    const res = await request<{ proposals?: Proposal[]; error?: string }>("/api/batch");
-    if (res.ok) setProposals(proposalRows(res.data.proposals ?? []).review);
-    else setError(res.data.error ?? `Error ${res.status}`);
+  const fetchReview = () => request<{ proposals?: Proposal[]; error?: string }>("/api/batch");
+  const show = (res: Awaited<ReturnType<typeof fetchReview>>) => {
+    if (res.ok) {
+      setError("");
+      setProposals(proposalRows(res.data.proposals ?? []).review);
+    } else if (res.status !== 503) setError(res.data.error ?? `Error ${res.status}`);
   };
 
   useEffect(() => {
     let alive = true;
-    request<{ proposals?: Proposal[]; error?: string }>("/api/batch").then((res) => {
-      if (!alive) return;
-      if (res.ok) setProposals(proposalRows(res.data.proposals ?? []).review);
-      else if (res.status !== 503) setError(res.data.error ?? `Error ${res.status}`);
-    });
+    fetchReview().then((res) => alive && show(res));
     return () => {
       alive = false;
     };
+    // Loaded once when Review opens; cards reload it after a change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!proposals?.length && !error) return null;
@@ -42,7 +43,7 @@ export default function BatchReviewSection() {
       {error && <p className="notice notice-warn t-small">{error}</p>}
       <ul className="flex flex-col gap-3">
         {proposals?.map((p) => (
-          <ReviewProposalCard key={p.sku} p={p} onChanged={load} />
+          <ReviewProposalCard key={p.sku} p={p} onChanged={async () => show(await fetchReview())} />
         ))}
       </ul>
     </section>
@@ -56,7 +57,12 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState("");
   const [asked, setAsked] = useState(p.asked);
+  const [usePending, setUsePending] = useState(false);
   const edited = title !== p.title || price !== (p.price === null ? "" : p.price.toFixed(2));
+  const typed = Number(price);
+  const change = priceChange(p, price.trim() && Number.isFinite(typed) && typed > 0 ? typed : p.price);
+  // Ask Claude's price replaces the pending one on the server; until it is saved, a changed price does too.
+  const pending = p.pendingPrice !== null && !edited ? p.pendingPrice : null;
   const money = (n: number | null | undefined) => (n == null ? "no price" : formatMoney(n, "CAD"));
 
   async function save(): Promise<boolean> {
@@ -80,10 +86,10 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
     setConfirming(false);
     if (edited && !(await save())) return;
     setBusy("sending");
-    const res = await request<{ results?: { status: string; result?: { text: string; price: string; reason: string } }[]; error?: string }>(
-      "/api/batch/apply",
-      { skus: [p.sku], acceptPending: [] },
-    );
+    const res = await request<{ results?: ApplyOutcome[]; error?: string }>("/api/batch/apply", {
+      skus: [p.sku],
+      acceptPending: pending !== null && usePending ? [p.sku] : [],
+    });
     setBusy("");
     const r = res.data.results?.[0];
     setMessage(!res.ok ? (res.data.error ?? `Error ${res.status}`) : r?.status === "applied" ? "Updated on eBay." : (r?.result?.reason ?? "Not sent."));
@@ -102,15 +108,23 @@ function ReviewProposalCard({ p, onChanged }: { p: Proposal; onChanged: () => Pr
     <li className="card flex flex-col gap-2 p-3">
       <p className="t-caption text-muted">Live now: {p.snapshot.title} · {money(p.snapshot.price)}</p>
       <label className="flex flex-col gap-1">
-        <span className="t-caption text-muted">Title ({title.length}/80)</span>
-        <input className="field" value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} />
+        <span className="t-caption text-muted">
+          Title ({title.length}/{TITLE_MAX})
+        </span>
+        <input className="field" value={title} maxLength={TITLE_MAX} onChange={(e) => setTitle(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1">
         <span className="t-caption text-muted">
           Price (CAD)
+          {change.flag && <span className="chip ml-2 border border-line-strong text-foreground">{change.flag} from the live price</span>}
         </span>
         <input className="field" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
       </label>
+      {pending !== null && (
+        <button type="button" className="chip-toggle self-start" aria-pressed={usePending} onClick={() => setUsePending(!usePending)} disabled={!!busy}>
+          {usePending ? <Icon name="check" size={16} /> : null} Use {money(pending)} instead
+        </button>
+      )}
       {Object.keys(p.addAspects).length > 0 && (
         <p className="t-small">
           <b>Item specifics added:</b> {Object.entries(p.addAspects).map(([n, v]) => `${n}: ${v.join(", ")}`).join(" · ")}

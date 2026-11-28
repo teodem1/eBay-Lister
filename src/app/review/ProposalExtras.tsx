@@ -5,8 +5,7 @@ import { Icon, Spinner } from "@/components/ui";
 import ComparableSheet from "@/app/listing/ComparableSheet";
 import { formatMoney } from "@/app/listing/priceRequest";
 import { followUpNote, request } from "@/app/update-listings/batchView";
-import type { Comparable } from "@/lib/ebay/types";
-import type { Proposal } from "@/lib/listing/types";
+import type { Comparable, Proposal } from "@/lib/listing/types";
 
 type Asked = NonNullable<Proposal["asked"]>;
 

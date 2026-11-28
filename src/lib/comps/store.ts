@@ -4,13 +4,24 @@
  * these reject; a caller must stop rather than treat it as "not stored" and
  * spend a paid lookup.
  */
-import { get, put } from "@vercel/blob";
+import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 import { filterLookup, lookupKeys, type StoredLookup } from "./record";
 
 export interface Backend {
   /** The file's text, or null when there is no such file. Rejects when storage cannot be read. */
   read(path: string): Promise<string | null>;
-  write(path: string, body: string): Promise<void>;
+  /** With `ifMatch`, writes only if the file is still that version, else rejects with `WriteConflict`. */
+  write(path: string, body: string, opts?: { ifMatch?: string }): Promise<void>;
+  /** The file's text and version (for a conditional write), or null when there is no such file. */
+  readTagged?(path: string): Promise<{ text: string; etag: string } | null>;
+}
+
+/** A conditional write found the file changed since it was read: read it again and redo the change. */
+export class WriteConflict extends Error {
+  constructor(path: string) {
+    super(`${path} changed while it was being written.`);
+    this.name = "WriteConflict";
+  }
 }
 
 /** The Blob store, or null when the app has no Blob store connected. */
@@ -19,21 +30,31 @@ export function blobBackend(env: Record<string, string | undefined> = process.en
   const storeId = env.BLOB_STORE_ID || undefined;
   if (!token && !storeId) return null;
   const auth = token ? { token } : { storeId };
+  const readTagged = async (path: string) => {
+    const res = await get(path, { access: "private", useCache: false, ...auth });
+    if (!res) return null;
+    if (res.statusCode !== 200) throw new Error(`Stored file ${path} came back without a body.`);
+    return { text: await new Response(res.stream).text(), etag: res.blob.etag };
+  };
   return {
+    readTagged,
     async read(path) {
-      const res = await get(path, { access: "private", useCache: false, ...auth });
-      if (!res) return null;
-      if (res.statusCode !== 200) throw new Error(`Stored lookup ${path} came back without a body.`);
-      return new Response(res.stream).text();
+      return (await readTagged(path))?.text ?? null;
     },
-    async write(path, body) {
-      await put(path, body, {
-        access: "private",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: "application/json",
-        ...auth,
-      });
+    async write(path, body, opts) {
+      try {
+        await put(path, body, {
+          access: "private",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: "application/json",
+          ...(opts?.ifMatch && { ifMatch: opts.ifMatch }),
+          ...auth,
+        });
+      } catch (err) {
+        if (err instanceof BlobPreconditionFailedError) throw new WriteConflict(path);
+        throw err;
+      }
     },
   };
 }

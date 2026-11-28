@@ -242,6 +242,28 @@ describe("POST /api/batch/apply and dismiss", () => {
     expect(index()[r.skus[0]].status).toBe("dismissed");
   });
 
+  it("dismisses a proposal sent to Review", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(a, r.id)] })));
+    await postReview(req("/api/batch/review", json({ skus: [a] })));
+    const body = await (await postDismiss(req("/api/batch/dismiss", json({ skus: [a] })))).json();
+    expect(body.dismissed).toEqual([a]);
+    expect(index()[a].status).toBe("dismissed");
+    expect(read<Record<string, Proposal>>("batch/proposals.json")[a].status).toBe("dismissed");
+  });
+
+  it("keeps a proposal in Review past 7 days (only done ones are pruned)", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [proposal(a, r.id)] })));
+    await postReview(req("/api/batch/review", json({ skus: [a] })));
+    const all = read<Record<string, Proposal>>("batch/proposals.json");
+    files["batch/proposals.json"] = JSON.stringify({ ...all, [a]: { ...all[a], createdAt: "2026-01-01T00:00:00.000Z" } });
+    await postEdit(req("/api/batch/edit", json({ sku: a, title: "T edited", price: 12 })));
+    expect(read<Record<string, Proposal>>("batch/proposals.json")[a]?.status).toBe("review");
+  });
+
   it("keeps proposals a session saved while another was being applied", async () => {
     const r = ((await (await run()).json()) as { run: BatchRun }).run;
     const [a, b] = r.skus;
@@ -294,6 +316,15 @@ describe("POST /api/batch/apply and dismiss", () => {
     expect((await postEdit(req("/api/batch/edit", json({ sku: "S0", title: "T", price: 10 })))).status).toBe(404);
   });
 
+  it("never lowers a new proposal that came without a target (its price already has the room)", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a] = r.skus;
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [{ ...proposal(a, r.id), snapshot: { title: "T", price: 28.99 }, price: 13.41 }] })));
+    expect(read<Record<string, Proposal>>("batch/proposals.json")[a].target).toBeNull();
+    const body = (await (await getBatch()).json()) as { proposals: Proposal[] };
+    expect(body.proposals[0].price).toBe(13.41);
+  });
+
   it("lowers a waiting proposal made before the Best Offer rule once, keeping its target", async () => {
     const r = ((await (await run()).json()) as { run: BatchRun }).run;
     const [a, b] = r.skus;
@@ -336,6 +367,20 @@ describe("POST /api/batch/apply and dismiss", () => {
     expect(applyProposal).not.toHaveBeenCalled();
   });
 
+  it("drops the pending price and the old Best Offer note when Ask Claude re-proposes the price", async () => {
+    const r = ((await (await run()).json()) as { run: BatchRun }).run;
+    const [a] = r.skus;
+    const flags = ["Lowered less to leave room for Best Offer: listed at C$13.41.", "Pending C$30 from one LED sale."];
+    await postProposals(req("/api/batch/proposals", json({ runId: r.id, proposals: [{ ...proposal(a, r.id), pendingPrice: 30, flags }] })));
+    readListing.mockResolvedValue({ sku: a, title: "T", price: 10, query: "Genesis", aspects: {}, descriptionHtml: "", imageUrls: [] });
+    askAboutProposal.mockResolvedValue({ note: "n", answer: "ok", matching: [], basis: "estimate", target: 20, price: 20, previousPrice: 11, title: null, at: "2026-11-28T00:00:00.000Z" });
+    await postAsk(req("/api/batch/ask", json({ sku: a, note: "n" })));
+    const after = read<Record<string, Proposal>>("batch/proposals.json")[a];
+    expect([after.price, after.pendingPrice]).toEqual([20, null]);
+    expect(after.flags.some((f) => f.startsWith("Lowered less"))).toBe(false);
+    expect(after.flags.some((f) => f.startsWith("Pending"))).toBe(true);
+  });
+
   it("refuses to ask about a proposal that is not open or in Review, or an empty note", async () => {
     expect((await postAsk(req("/api/batch/ask", json({ sku: "S0", note: "LED" })))).status).toBe(404);
     expect((await postAsk(req("/api/batch/ask", json({ sku: "S0", note: "" })))).status).toBe(400);
@@ -354,6 +399,18 @@ describe("POST /api/batch/apply and dismiss", () => {
     expect(body).toMatchObject({ savedAt: "2026-11-20T00:00:00.000Z", partial: true });
     expect(body.sales.map((x: { itemId: string }) => x.itemId)).toEqual(["x"]);
     expect(fireRoutine).not.toHaveBeenCalled();
+  });
+
+  it("shows the sales in the listing's own grade, not the grade the lookup was saved with", async () => {
+    const sold = (id: string, condition: string) => ({ itemId: id, title: "Genesis CD", price: { value: 10, currency: "CAD" }, shippingCost: null, itemLocation: { country: null, postalCode: null }, shippingDestination: null, condition, soldDate: "2026-10-01", quantitySold: 1, url: null });
+    readListing.mockResolvedValue({ sku: "S0", title: "T", price: 10, barcode: "075678154323", query: "Genesis", aspects: {}, descriptionHtml: "", imageUrls: [], sellerCondition: { condition: "NEW" } });
+    files["comps/upc/075678154323.json"] = JSON.stringify({
+      version: 1, savedAt: "2026-11-20T00:00:00.000Z", partial: false, barcode: "075678154323", condition: "USED_VERY_GOOD",
+      queries: [{ by: "barcode", items: [sold("u1", "Used"), sold("u2", "Used"), sold("u3", "Used"), sold("n1", "New"), sold("n2", "New"), sold("n3", "New")] }],
+      filtered: { cdOnly: ["u1", "u2", "u3", "n1", "n2", "n3"], sameGrade: ["u1", "u2", "u3"], detail: {} },
+    });
+    const body = await (await getSales(req("/api/batch/sales?sku=S0"))).json();
+    expect(body.sales.map((x: { itemId: string }) => x.itemId)).toEqual(["n1", "n2", "n3"]);
   });
 
   it("answers an empty list when nothing is stored, and 404 when the listing is gone", async () => {

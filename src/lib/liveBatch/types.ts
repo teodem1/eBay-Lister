@@ -1,12 +1,15 @@
 /**
  * Phone-run listing batches: a Claude Code cloud session (the optimise-listing skill's
  * headless job) proposes changes to live listings; the phone shows and applies them.
- * Plain types, so the screen can import them without the store or zod.
+ * Plain types (and one tiny status check), so the screen can import them without the store or zod.
  */
 
 /** Where a live listing stands in the batch queue. */
 /** `review`: the seller sent it to the Review tab, to edit and send later. */
 export type EntryStatus = "in_progress" | "open" | "review" | "applied" | "dismissed" | "failed" | "stale";
+
+/** Waiting for the seller: shown on Update live listings (`open`) or in the Review tab (`review`). */
+export const isPending = (status: EntryStatus): boolean => status === "open" || status === "review";
 
 export interface IndexEntry {
   status: EntryStatus;
@@ -57,6 +60,13 @@ export interface Proposal {
   };
   /** When it was applied, dismissed or skipped (ISO); proposals done over 7 days ago are pruned. */
   doneAt?: string;
+}
+
+/** One listing's answer from POST /api/batch/apply. */
+export interface ApplyOutcome {
+  sku: string;
+  status: EntryStatus | "skipped";
+  result?: Proposal["result"];
 }
 
 export interface BatchRun {

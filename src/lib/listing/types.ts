@@ -87,4 +87,5 @@ export interface GeneratedListing {
 export type { ShelfCd } from "../identify/shelf";
 export type { ApplyResult, LiveListing, RefreshPreview } from "../ebay/refreshListings";
 export type { PriceCheck } from "../pricing/priceCheck";
-export type { BatchIndex, BatchRun, EngagementLevel, EntryStatus, IndexEntry, Proposal } from "../liveBatch/types";
+export type { Comparable } from "../ebay/types";
+export type { ApplyOutcome, BatchIndex, BatchRun, EngagementLevel, EntryStatus, IndexEntry, Proposal } from "../liveBatch/types";

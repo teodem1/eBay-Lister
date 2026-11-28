@@ -66,7 +66,7 @@ export interface AskAnswer {
   matching: string[];
   /** matching: the typical price of 2+ matching sales; estimate: fewer matched, Claude adjusted from all sales. */
   basis: "matching" | "estimate";
-  /** The proposal's price before this answer. */
+  /** The price the batch first proposed, before any Ask Claude answer (kept across asks). */
   previousPrice: number | null;
   /** What Claude needs to know for a more accurate price (at most 3); the phone shows an answer box for each. */
   questions: string[];
@@ -114,7 +114,7 @@ export async function askAboutProposal(
     answer: out.answer.trim(),
     matching: [...new Set(out.matching)].map((n) => shown[n - 1]?.itemId).filter((id): id is string => !!id),
     basis: out.basis,
-    previousPrice: p.price,
+    previousPrice: p.asked ? p.asked.previousPrice : p.price,
     questions: (out.questions ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 3),
     target,
     price: target === null ? p.price : offerRoom(p.snapshot.price, target),
