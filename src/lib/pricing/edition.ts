@@ -24,6 +24,11 @@ const TITLE: Record<Exclude<Edition, "none">, RegExp> = {
   japan: /\bjapan(ese)?\b|\bobi\b/i,
 };
 
+/** Whether a sold listing's title names that edition. */
+export function matchesEdition(title: string, edition: Exclude<Edition, "none">): boolean {
+  return TITLE[edition].test(title);
+}
+
 export const EDITION_LABEL: Record<Exclude<Edition, "none">, string> = {
   canadian: "Canadian",
   no_barcode: "no-barcode",
