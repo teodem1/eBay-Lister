@@ -52,6 +52,15 @@ class PackageTest(unittest.TestCase):
         self.assertIn("once per artist", (AGENTS / "source-collector.md").read_text())
         self.assertIn("evidence conflicts", (AGENTS / "collector-appraiser.md").read_text())
 
+    def test_demand_sets_the_price_position(self):
+        skill = (SKILL / "SKILL.md").read_text()
+        for phrase in ('"demand"', "75th percentile", "25th percentile"):
+            self.assertIn(phrase, skill)
+        for gone in ("keep_if_lower", "accept_lower", "lower_price", "never lowered"):
+            self.assertNotIn(gone, skill)
+        self.assertIn("demand", (AGENTS / "listing-writer.md").read_text())
+        self.assertIn("demand", (SKILL / "README.md").read_text())
+
     def test_readme_states_the_new_threshold(self):
         text = (SKILL / "README.md").read_text()
         self.assertIn("C$20", text)

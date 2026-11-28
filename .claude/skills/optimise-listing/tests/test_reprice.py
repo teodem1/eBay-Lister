@@ -100,23 +100,26 @@ class DetailTest(unittest.TestCase):
             reprice(10, plain(10, 11, 12), ["rare"])
 
 
-class KeepIfLowerTest(unittest.TestCase):
-    def test_short_name_sales_never_lower_the_price(self):
-        r = reprice(12.99, plain(4, 5, 6), [], keep_if_lower=True)
-        self.assertEqual((r["base"], r["proposed"], r["over_50"]), (5, 12.99, False))
-        self.assertIn("short name", r["reason"])
+class DemandTest(unittest.TestCase):
+    def test_interest_sets_where_in_the_range_the_price_lands(self):
+        sales = plain(10, 12, 14, 16)
+        self.assertEqual(reprice(13, sales, [])["proposed"], 13)  # normal: median
+        self.assertEqual(reprice(13, sales, [], demand="low")["proposed"], 11.5)
+        self.assertEqual(reprice(13, sales, [], demand="high")["proposed"], 14.5)
+        self.assertEqual(reprice(13, sales, [], demand="high")["demand"], "high")
 
-    def test_the_lower_price_is_offered_separately(self):
-        r = reprice(12.99, plain(4, 5, 6), [], keep_if_lower=True)
-        self.assertEqual(r["lower"], {"price": 5, "over_50": True})
-        self.assertIsNone(reprice(8, plain(10, 12, 14), [], keep_if_lower=True)["lower"])
-        self.assertIsNone(reprice(12.99, plain(4, 5, 6), [])["lower"])
+    def test_a_lower_price_is_proposed_like_any_other(self):
+        r = reprice(12.99, plain(4, 5, 6), [], demand="low")
+        self.assertEqual(r["proposed"], 4.5)
+        self.assertTrue(r["over_50"])
+        self.assertNotIn("lower", r)
 
-    def test_short_name_sales_may_still_raise_it(self):
-        self.assertEqual(reprice(8, plain(10, 12, 14), [], keep_if_lower=True)["proposed"], 12)
+    def test_interest_needs_3_sales_like_the_base(self):
+        self.assertEqual(reprice(12, plain(10, 30), [], demand="high")["proposed"], 12)
 
-    def test_without_the_flag_a_lower_price_is_proposed(self):
-        self.assertEqual(reprice(12.99, plain(4, 5, 6), [])["proposed"], 5)
+    def test_unknown_interest_is_refused(self):
+        with self.assertRaises(ValueError):
+            reprice(12, plain(10, 12, 14), [], demand="huge")
 
 
 class CommandTest(unittest.TestCase):

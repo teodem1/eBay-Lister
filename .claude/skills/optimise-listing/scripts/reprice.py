@@ -1,15 +1,20 @@
 """A listing's price from its stored same-grade sales (CAD item prices).
 
-    reprice(current, items, details)
+    reprice(current, items, details, demand="normal")
       current: the listing's price now (None when it has none)
       items:   the same-grade sold sales (the stored lookup's `filtered.sameGrade`)
       details: edition names confirmed on the seller's copy (by the listing or the seller)
+      demand:  how much interest the CD draws, set by the writer with evidence:
+               high (collected artist or pressing, sought-after edition), low (common,
+               recent, widely available), normal otherwise
 
-Base: the median of the CAD sales; needs 3, else the price stays. A confirmed detail
-counts when its sales' median is above the other sales' median: 2 or more such sales
-set the price (several details: the highest, never added together); exactly 1 is only
-`pending`, applied when the seller accepts it by name. No cap: changes over 50% either
-way are flagged. No detail raises a price without a base.
+Needs 3 CAD sales, else the price stays. Where the price lands in those sales follows
+demand: high = 75th percentile, normal = median, low = 25th percentile (to help it sell).
+A price may go up or down; changes over 50% either way are flagged, and nothing is sent
+without the seller's approval. A confirmed detail counts when its sales' median is above
+the other sales' median: 2 or more such sales set the price when higher (several details:
+the highest, never added together); exactly 1 is only `pending`, applied when the seller
+accepts it by name. No detail raises a price without 3 sales.
 """
 import json
 import re
@@ -19,6 +24,7 @@ import sys
 from pricing import EDITIONS
 
 MIN_BASE = 3
+DEMAND = {"low": 0, "normal": 1, "high": 2}  # index into the quartiles
 MIN_DETAIL = 2
 FLAG_CHANGE = 0.5
 LABEL = {"canadian": "Canadian", "no_barcode": "no-barcode", "early_press": "early press", "promo": "promo",
@@ -39,15 +45,17 @@ def _money(value):
     return f"C${value:.2f}"
 
 
-def reprice(current, items, details, keep_if_lower=False):
-    """keep_if_lower: the sales came from a shortened-name search; buyers search the full name,
-    so the price is never lowered on them (it may still go up)."""
+def reprice(current, items, details, demand="normal"):
+    if demand not in DEMAND:
+        raise ValueError(f"Unknown demand: {demand!r}. Use high, normal or low.")
     unknown = [d for d in details if d not in EDITIONS]
     if unknown:
         raise ValueError(f"Unknown detail: {', '.join(unknown)}")
     sales = _cad(items)
     values = [v for _, v in sales]
     base = round(statistics.median(values), 2) if len(values) >= MIN_BASE else None
+    target = (round(statistics.quantiles(values, n=4, method="inclusive")[DEMAND[demand]], 2)
+              if base is not None else None)
     applied, pending = None, None
     if base is not None:
         for name in dict.fromkeys(details):
@@ -70,31 +78,28 @@ def reprice(current, items, details, keep_if_lower=False):
     elif base is None:
         proposed = round(float(current), 2)
         reason = f"Only {len(values)} CAD sale{'s' if len(values) != 1 else ''} in this grade: price kept."
-    elif applied:
-        proposed = applied[1]
-        reason = (f"{applied[2]} {LABEL[applied[0]]} sales, median {_money(applied[1])} "
-                  f"(all {len(values)} sales: {_money(base)}).")
     else:
-        proposed, reason = base, f"{len(values)} sales in this grade, median {_money(base)}."
-    lower = None
-    if keep_if_lower and current is not None and proposed is not None and proposed < current:
-        reason = (f"{reason} Those sales came from a short name search and went lower, so the price stays at "
-                  f"{_money(float(current))} (buyers search the full name); {_money(proposed)} is offered "
-                  f"as `lower`, sent only if the seller accepts it.")
-        lower = {"price": proposed, "over_50": abs(proposed - current) / current > FLAG_CHANGE}
-        proposed, applied = round(float(current), 2), None
+        where = {"low": "lower quarter", "normal": "median", "high": "upper quarter"}[demand]
+        reason = (f"{len(values)} sales in this grade, median {_money(base)}; {demand} interest, "
+                  f"so the {where}: {_money(target)}.")
+        proposed = target
+        if applied and applied[1] > target:
+            proposed = applied[1]
+            reason += f" {applied[2]} {LABEL[applied[0]]} sales, median {_money(applied[1])}, set it higher."
+        else:
+            applied = None
     if pending and (proposed is None or pending[1] <= proposed):
         pending = None
     over_50 = bool(current and proposed is not None and abs(proposed - current) / current > FLAG_CHANGE)
     return {"base": base, "count": len(values), "proposed": proposed,
             "applied_detail": applied[0] if applied else None,
             "pending": {"detail": pending[0], "price": pending[1]} if pending else None,
-            "lower": lower,
+            "demand": demand,
             "over_50": over_50, "reason": reason}
 
 
 if __name__ == "__main__":
-    # stdin {"current", "data_file" (a listings.py sold file) | "items", "details"}
+    # stdin {"current", "data_file" (a listings.py sold file) | "items", "details", "demand"}
     try:
         data = json.load(sys.stdin)
         items = data.get("items")
@@ -104,6 +109,6 @@ if __name__ == "__main__":
             keep = set(stored["filtered"]["sameGrade"])
             items = [i for i in stored["lookup"]["queries"][-1]["items"] if i.get("itemId") in keep]
         print(json.dumps(reprice(data.get("current"), items, data.get("details") or [],
-                                 keep_if_lower=bool(data.get("keep_if_lower")))))
+                                 demand=data.get("demand") or "normal")))
     except (ValueError, KeyError, TypeError, IndexError, OSError) as err:
         sys.exit(f"reprice.py: {err}")

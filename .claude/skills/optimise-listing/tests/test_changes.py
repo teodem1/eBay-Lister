@@ -63,9 +63,8 @@ class Fake:
         return [urllib.parse.urlsplit(r.full_url).path for r in self.calls if r.get_method() == "POST"]
 
 
-def apply(fake, prop=None, accept_pending=False, snapshot=SNAPSHOT, accept_lower=False):
-    return changes.apply(App(URL, None, opener=fake), snapshot, prop or proposal(), accept_pending=accept_pending,
-                         accept_lower=accept_lower)
+def apply(fake, prop=None, accept_pending=False, snapshot=SNAPSHOT):
+    return changes.apply(App(URL, None, opener=fake), snapshot, prop or proposal(), accept_pending=accept_pending)
 
 
 class CheckTest(unittest.TestCase):
@@ -107,6 +106,9 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(any("grade" in p.lower() for p in changes.check(bare, proposal(title=other))))
         unknown = {**bare, "sellerCondition": None}
         self.assertTrue(any("grade" in p.lower() for p in changes.check(unknown, proposal())))
+
+    def test_a_lower_price_field_is_refused(self):
+        self.assertTrue(any("lower_price" in p for p in changes.check(SNAPSHOT, proposal(lower_price=12.0))))
 
     def test_another_sku_is_refused(self):
         self.assertTrue(changes.check(SNAPSHOT, proposal(sku="OTHER")))
@@ -162,26 +164,6 @@ class ApplyTest(unittest.TestCase):
         apply(fake, proposal(pending_price=30.0), accept_pending=True)
         self.assertEqual(fake.sent("/api/listing/update-details")[0]["after"]["price"], 30.0)
 
-    def test_lower_price_only_when_accepted(self):
-        fake = Fake()
-        out = apply(fake, proposal(title=OLD_TITLE, add_aspects={}, append_html="", price=17.5, lower_price=12.0))
-        self.assertEqual(out["price"], "unchanged")
-        self.assertEqual(fake.sent("/api/listing/update-details"), [])
-        fake = Fake()
-        apply(fake, proposal(title=OLD_TITLE, add_aspects={}, append_html="", price=17.5, lower_price=12.0),
-              accept_lower=True)
-        self.assertEqual(fake.sent("/api/listing/update-details")[0]["after"]["price"], 12.0)
-
-    def test_accepting_both_a_higher_and_a_lower_price_sends_no_price(self):
-        fake = Fake()
-        out = apply(fake, proposal(pending_price=30.0, lower_price=12.0), accept_pending=True, accept_lower=True)
-        self.assertEqual(out["price"], "skipped")
-        self.assertEqual(fake.sent("/api/listing/update-details"), [])
-
-    def test_lower_price_must_be_below_the_proposed_price(self):
-        self.assertTrue(changes.check(SNAPSHOT, proposal(lower_price=25.0)))
-        self.assertTrue(changes.check(SNAPSHOT, proposal(lower_price=0)))
-
     def test_price_error_after_text_reports_both(self):
         fake = Fake(listing_update_details=http_error(502))
         out = apply(fake)
@@ -231,13 +213,6 @@ class BatchTest(unittest.TestCase):
         self.assertEqual([(r["sku"], r["text"]) for r in out], [(SNAPSHOT["sku"], "updated"), ("BC-2", "skipped")])
         self.assertTrue(all(json.loads(r.data)["sku"] == SNAPSHOT["sku"]
                             for r in fake.calls if r.get_method() == "POST"))
-
-    def test_accept_lower_is_per_sku(self):
-        fake = Fake()
-        items = [{"snapshot": SNAPSHOT, "proposal": proposal(lower_price=12.0)}]
-        changes.apply_batch(App(URL, None, opener=fake), items, approved=[SNAPSHOT["sku"]], accept_pending=[],
-                            accept_lower=[SNAPSHOT["sku"]])
-        self.assertEqual(fake.sent("/api/listing/update-details")[0]["after"]["price"], 12.0)
 
     def test_accept_pending_is_per_sku(self):
         fake = Fake()
