@@ -51,3 +51,18 @@ export function toSend(shown: string[], open: Proposal[], skipped: Set<string>):
   const stillOpen = new Set(open.map((p) => p.sku));
   return shown.filter((sku) => stillOpen.has(sku) && !skipped.has(sku));
 }
+
+const NOTE_MAX = 600;
+
+/** The seller's note plus their answers to Claude's questions ("Q: ... A: ..."), within 600 characters; answers win. */
+export function followUpNote(note: string, answers: { question: string; answer: string }[]): string {
+  const extra = answers
+    .filter((a) => a.answer.trim())
+    .map((a) => `Q: ${a.question.trim()} A: ${a.answer.trim()}`)
+    .join("\n")
+    .slice(0, NOTE_MAX);
+  if (!extra) return note.trim().slice(0, NOTE_MAX);
+  const room = NOTE_MAX - extra.length - 1;
+  const kept = room > 0 ? note.trim().slice(0, room) : "";
+  return kept ? `${kept}\n${extra}` : extra;
+}

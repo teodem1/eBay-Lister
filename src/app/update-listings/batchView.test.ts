@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BatchRun, Proposal } from "@/lib/listing/types";
-import { priceChange, proposalRows, request, runLabel, toSend } from "./batchView";
+import { followUpNote, priceChange, proposalRows, request, runLabel, toSend } from "./batchView";
 import { vi } from "vitest";
 
 const NOW = new Date("2026-11-28T12:00:00.000Z");
@@ -71,5 +71,20 @@ describe("request", () => {
     expect(res.ok).toBe(false);
     expect((res.data as { error: string }).error).toMatch(/connection/i);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("followUpNote", () => {
+  it("adds the answered questions to the note, skipping blank answers", () => {
+    expect(
+      followUpNote("LED spine", [
+        { question: "Does the LED still light up?", answer: "Yes, all of it" },
+        { question: "Is the booklet included?", answer: "  " },
+      ]),
+    ).toBe("LED spine\nQ: Does the LED still light up? A: Yes, all of it");
+  });
+
+  it("keeps the note within 600 characters", () => {
+    expect(followUpNote("x".repeat(590), [{ question: "Q?", answer: "a long answer" }]).length).toBeLessThanOrEqual(600);
   });
 });

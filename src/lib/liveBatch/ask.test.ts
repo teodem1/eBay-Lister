@@ -103,6 +103,17 @@ describe("askAboutProposal", () => {
     expect([out.basis, out.target, out.price]).toEqual(["estimate", 45, 45]);
   });
 
+  it("passes on up to 3 questions Claude needs answered for an accurate price", async () => {
+    const out = await askAboutProposal(
+      live,
+      proposal,
+      "LED spine",
+      sales,
+      fakeClient({ answer: "a", matching: [2], basis: "estimate", targetPrice: 45, title: null, questions: ["Does the LED still light up?", " ", "Is the booklet included?", "Which country is on the disc?", "Extra?"] }).client,
+    );
+    expect(out.questions).toEqual(["Does the LED still light up?", "Is the booklet included?", "Which country is on the disc?"]);
+  });
+
   it("keeps the proposal's price when Claude gives no usable price", async () => {
     for (const targetPrice of [0, -3]) {
       const out = await askAboutProposal(live, proposal, "note", [], fakeClient({ answer: "No sales to compare.", matching: [], basis: "estimate", targetPrice, title: null }).client);

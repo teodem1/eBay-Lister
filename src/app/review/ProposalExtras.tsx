@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Icon, Spinner } from "@/components/ui";
 import ComparableSheet from "@/app/listing/ComparableSheet";
 import { formatMoney } from "@/app/listing/priceRequest";
-import { request } from "@/app/update-listings/batchView";
+import { followUpNote, request } from "@/app/update-listings/batchView";
 import type { Comparable } from "@/lib/ebay/types";
 import type { Proposal } from "@/lib/listing/types";
 
@@ -97,18 +97,28 @@ export function AskClaude({
   onUse: (a: Asked) => void;
 }) {
   const [note, setNote] = useState(asked?.note ?? "");
+  const [replies, setReplies] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const money = (n: number | null) => (n === null ? "no change" : formatMoney(n, "CAD"));
 
-  async function ask() {
-    if (!note.trim()) return setError("Write what you know about your copy first.");
+  async function ask(text = note) {
+    if (!text.trim()) return setError("Write what you know about your copy first.");
     setBusy(true);
     setError("");
-    const res = await request<{ asked?: Asked; error?: string }>("/api/batch/ask", { sku, note: note.trim() });
+    const res = await request<{ asked?: Asked; error?: string }>("/api/batch/ask", { sku, note: text.trim() });
     setBusy(false);
-    if (res.ok && res.data.asked) onAnswer(res.data.asked);
-    else setError(res.data.error ?? `Error ${res.status}`);
+    if (res.ok && res.data.asked) {
+      setReplies({});
+      onAnswer(res.data.asked);
+    } else setError(res.data.error ?? `Error ${res.status}`);
+  }
+
+  async function answerAndAsk(questions: string[]) {
+    const next = followUpNote(note, questions.map((q) => ({ question: q, answer: replies[q] ?? "" })));
+    if (next === note.trim()) return setError("Answer at least one question first.");
+    setNote(next);
+    await ask(next);
   }
 
   return (
@@ -117,7 +127,7 @@ export function AskClaude({
         <span className="t-caption text-muted">Ask Claude: add details about your copy (extras, pressing, defects)</span>
         <textarea className="field min-h-16" maxLength={600} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Working LED spine, booklet included" />
       </label>
-      <button type="button" className="btn btn-secondary self-start" disabled={busy} onClick={ask}>
+      <button type="button" className="btn btn-secondary self-start" disabled={busy} onClick={() => ask()}>
         {busy ? <Spinner /> : <Icon name="search" size={18} />} Ask Claude
       </button>
       {error && <p className="notice notice-warn t-small">{error}</p>}
@@ -135,6 +145,25 @@ export function AskClaude({
             <button type="button" className="link t-small self-start px-1 py-1" onClick={() => onUse(asked)}>
               Use this title
             </button>
+          )}
+          {(asked.questions?.length ?? 0) > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="t-caption text-muted">For a more accurate price, Claude needs to know:</p>
+              {asked.questions!.map((q) => (
+                <label key={q} className="flex flex-col gap-1">
+                  <span className="t-small">{q}</span>
+                  <input
+                    className="field"
+                    maxLength={200}
+                    value={replies[q] ?? ""}
+                    onChange={(e) => setReplies({ ...replies, [q]: e.target.value })}
+                  />
+                </label>
+              ))}
+              <button type="button" className="btn btn-secondary self-start" disabled={busy} onClick={() => answerAndAsk(asked.questions!)}>
+                {busy ? <Spinner /> : null} Answer and ask again
+              </button>
+            </div>
           )}
         </div>
       )}

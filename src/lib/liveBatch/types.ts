@@ -49,6 +49,7 @@ export interface Proposal {
     matching: string[];
     basis: "matching" | "estimate";
     previousPrice: number | null;
+    questions?: string[];
     target: number | null;
     price: number | null;
     title: string | null;
